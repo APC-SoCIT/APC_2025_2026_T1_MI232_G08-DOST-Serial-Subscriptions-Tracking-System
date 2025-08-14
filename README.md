@@ -5,5 +5,5 @@ Team Leader:Fracie Princes G. Puyot
 Members:  
   Ren Henry Delgado  
   Mohasien Alingan  
-  Mamadou Djouhe Bah    
-  Jerwin James Bueno   
+  Mamadou Djouhe Bah     
+  Jerwin James Bueno  
