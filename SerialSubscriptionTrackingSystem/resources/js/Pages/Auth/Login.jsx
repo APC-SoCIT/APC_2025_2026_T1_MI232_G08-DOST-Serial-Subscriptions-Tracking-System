@@ -28,11 +28,11 @@ export default function Login({ status, canResetPassword }) {
                 </div>
 
                 {/* Decorative red circle bottom-left */}
-                <div className="absolute bottom-0 left-0">
-                     <img
-                        src="/images/red-circles.png"
-                        alt="Decor"
-                        className="h-64 transform -scale-x-100 translate-x-5 translate-y-6 opacity-90"
+                <div className="absolute bottom-[-17rem] left-[-250px] flex">
+                    <img
+                        src="/images/red-circle.png"
+                        alt="Decor Right"
+                        className="h-[550px] transform scale-x-[-1] opacity-90"
                     />
                 </div>
 

@@ -6,16 +6,12 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-<<<<<<< HEAD
-    return view('login');
-=======
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
     ]);
->>>>>>> 6bc84ecffdf4cf904c156fb8b878c2c792093de2
 });
 
 Route::get('/dashboard', function () {
