@@ -29,9 +29,9 @@ function Sidebar({ active, setActive }) {
     <div style={{
       background: '#004A98',
       color: '#fff',
-      width: 220,
+      width: 160, // smaller sidebar
       minHeight: '100vh',
-      padding: '24px 0',
+      padding: '20px 0',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center'
@@ -39,29 +39,39 @@ function Sidebar({ active, setActive }) {
       <img
         src="/images/dost-logo1.png"
         alt="LOGO"
-        style={{ marginBottom: 32, width: 65, height: 65, borderRadius: 12, marginRight: 100}}
-      />      
-      <nav>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
+        style={{
+          marginBottom: 24,
+          width: 55,
+          height: 55,
+          borderRadius: 12
+        }}
+      />
+      <nav style={{ width: '100%' }}>
+        <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => (
             <li
               key={item.label}
               style={{
-                margin: '20px 0',
+                margin: '10px 0',
                 display: 'flex',
-                font: 'Gotham Bold',
-                fontSize: 21,
                 alignItems: 'center',
                 cursor: 'pointer',
-                background: active === idx ? '#0062f4ff' : 'none',
+                fontSize: 16,
+                fontWeight: 500,
+                color: '#fff',
+                background: active === idx ? '#0062f4ff' : 'transparent',
                 borderRadius: 6,
-                boxShadow: '0 10px 8px rgba(0,0,0,0.1)',
-                padding: '6px 12px'
+                padding: '8px 12px',
+                width: '140px', // narrower clickable area
+                marginLeft: '10px', // leaves space on left
+                transition: 'background 0.2s, transform 0.1s',
+                boxShadow: active === idx ? '0 3px 6px rgba(0,0,0,0.15)' : 'none'
               }}
               onClick={() => setActive(idx)}
             >
-              <Icon>{item.icon}</Icon> {item.label}
-            </li>
+              <Icon>{item.icon}</Icon>
+              <span style={{ fontSize: 15 }}>{item.label}</span>
+          </li>
           ))}
         </ul>
       </nav>
@@ -81,27 +91,31 @@ function TopBar() {
     top: 60,
     right: 20,
     background: '#fff',
-    borderRadius: 8,
-    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+    borderRadius: 12,
+    boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
     padding: 16,
-    width: 250,
-    zIndex: 10
+    width: 260,
+    zIndex: 10,
   };
 
   return (
     <div
       style={{
-        fontSize: 23,
+        fontSize: 22,
         display: 'flex',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
         padding: '16px 32px',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
         background: '#fff',
-        position: 'relative'
+        position: 'sticky',
+        top: 0,
+        zIndex: 9
       }}
     >
-      <div style={{ position: 'relative', marginRight: 16 }}>
+      <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>Serial Subscription System</h2>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('chat')} style={{ cursor: 'pointer' }}>
           <IoChatboxEllipsesOutline />
         </span>
@@ -111,10 +125,7 @@ function TopBar() {
             <p style={{ fontSize: 14, color: '#555' }}>No new messages.</p>
           </div>
         )}
-      </div>
 
-
-      <div style={{ position: 'relative', marginRight: 16 }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
           <MdOutlineNotificationsActive />
         </span>
@@ -124,32 +135,70 @@ function TopBar() {
             <p style={{ fontSize: 14, color: '#555' }}>You’re all caught up!</p>
           </div>
         )}
-      </div>
 
-
-      <div style={{ position: 'relative' }}>
-        <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer' }}>
-          <VscAccount />
-        </span>
-        {activeIcon === 'account' && (
-          <div style={popupStyle}>
-            <h4 style={{ margin: '0 0 8px' }}>Profile</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>User: Admin</p>
-            <button
+        <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
+          <VscAccount size={22} />
+          
+          {activeIcon === 'account' && (
+            <div
               style={{
-                marginTop: 8,
-                background: '#004A98',
-                color: '#fff',
-                border: 'none',
-                padding: '6px 12px',
-                borderRadius: 4,
-                cursor: 'pointer'
+                position: 'absolute',
+                top: '35px',
+                right: 0,
+                background: '#fff',
+                borderRadius: 10,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                width: 200,
+                padding: '16px 18px',
+                zIndex: 100,
+                transition: 'all 0.2s ease',
+                animation: 'fadeIn 0.2s ease',
               }}
             >
-              Logout
-            </button>
-          </div>
-        )}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    background: '#004A98',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    marginRight: 10,
+                  }}
+                >
+                  A
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>Admin</h4>
+                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>System Administrator</p>
+                </div>
+              </div>
+
+              <button
+                style={{
+                  width: '100%',
+                  background: '#004A98',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  transition: 'background 0.2s ease',
+                }}
+                onMouseOver={(e) => (e.target.style.background = '#003C7A')}
+                onMouseOut={(e) => (e.target.style.background = '#004A98')}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -162,18 +211,23 @@ function OverviewCards() {
     { title: 'Most Delivered Title', value: 'Harvard Business Review', info: 'Most frequently delivered serial.' },
     { title: 'Best Performing Supplier', value: 'Manila Bulletin', info: 'Supplier with best delivery record.' },
   ];
+
   const cardStyle = (isHovered) => ({
     background: '#fff',
     borderRadius: 8,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+    boxShadow: isHovered
+      ? '0 4px 16px rgba(0,0,0,0.1)'
+      : '0 2px 8px rgba(0,0,0,0.05)',
     padding: 24,
     marginRight: 24,
     minWidth: 220,
     flex: 1,
     position: 'relative',
-    transition: 'box-shadow 0.2s',
-    boxShadow: isHovered ? '0 4px 16px rgba(21,101,192,0.15)' : '0 2px 8px rgba(0,0,0,0.05)'
+    transition: 'all 0.2s ease',
+    transform: isHovered ? 'translateY(-4px)' : 'none',
+    cursor: 'pointer',
   });
+
   return (
     <div style={{ display: 'flex', margin: '32px 0' }}>
       {cards.map((card, idx) => (
@@ -184,19 +238,32 @@ function OverviewCards() {
           onMouseLeave={() => setHovered(null)}
         >
           <h3>{card.title}</h3>
-          <p style={{ fontSize: card.title === 'Total Serial' ? 32 : 18, fontWeight: 'bold' }}>{card.value}</p>
+          <p
+            style={{
+              fontSize: card.title === 'Total Serial' ? 32 : 18,
+              fontWeight: 'bold',
+            }}
+          >
+            {card.value}
+          </p>
+
           {hovered === idx && (
-            <div style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              background: '#1565c0',
-              color: '#fff',
-              padding: '6px 12px',
-              borderRadius: 6,
-              fontSize: 13,
-              zIndex: 1
-            }}>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-40px', // moved below the card
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#333',
+                color: '#fff',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: 13,
+                whiteSpace: 'nowrap',
+                zIndex: 1,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              }}
+            >
               {card.info}
             </div>
           )}
@@ -205,6 +272,7 @@ function OverviewCards() {
     </div>
   );
 }
+
 
 function SerialReportChart() {
   const data = [290, 450, 250, 130, 140, 310, 150, 330, 140, 120, 180, 260];
@@ -390,3 +458,5 @@ function App() {
 }
 
 export default App;
+
+console.log("Dashboard_TPU loaded ✅");
