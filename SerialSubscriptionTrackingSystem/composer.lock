@@ -1054,8 +1054,6 @@
             "time": "2025-08-22T14:27:06+00:00"
         },
         {
-<<<<<<< HEAD
-=======
             "name": "inertiajs/inertia-laravel",
             "version": "v2.0.10",
             "source": {
@@ -1126,7 +1124,6 @@
             "time": "2025-09-28T21:21:36+00:00"
         },
         {
->>>>>>> 53c12001d3465c33c244c5dfb6c18e6acebf9752
             "name": "laravel/framework",
             "version": "v12.31.1",
             "source": {
