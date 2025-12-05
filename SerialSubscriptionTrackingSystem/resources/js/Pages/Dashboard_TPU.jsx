@@ -5,6 +5,7 @@ import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaTruck } from "react-icons/fa";
 import { MdMarkEmailRead } from "react-icons/md";
+import { router } from '@inertiajs/react';
 import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
@@ -191,6 +192,7 @@ function TopBar() {
                   fontWeight: 500,
                   transition: 'background 0.2s ease',
                 }}
+                onClick={() => router.post('/logout')}
                 onMouseOver={(e) => (e.target.style.background = '#003C7A')}
                 onMouseOut={(e) => (e.target.style.background = '#004A98')}
               >

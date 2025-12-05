@@ -1,0 +1,187 @@
+import React, { useState } from 'react';
+import { GoHome } from "react-icons/go";
+import { HiUsers } from "react-icons/hi";
+import { ImStatsBars } from "react-icons/im";
+import { FaTruck } from "react-icons/fa";
+import { MdMarkEmailRead } from "react-icons/md";
+import { router } from '@inertiajs/react';
+import { VscAccount } from "react-icons/vsc";
+import { MdOutlineNotificationsActive } from "react-icons/md";
+import { IoChatboxEllipsesOutline } from "react-icons/io5";
+import { RiAddLargeFill } from "react-icons/ri";
+
+/* ========================= ICON WRAPPER ========================= */
+const Icon = ({ children }) => (
+  <span style={{ marginRight: 8 }}>{children}</span>
+);
+
+/* ========================= SIDEBAR ITEMS ========================= */
+const sidebarItems = [
+  { icon: <GoHome />, label: 'Dashboard' },
+  { icon: <RiAddLargeFill />, label: 'Add Serial' },
+  { icon: <HiUsers />, label: 'Supplier Info' },
+  { icon: <ImStatsBars />, label: 'Subscription' },
+  { icon: <FaTruck />, label: 'Monitor Delivery' },
+  { icon: <MdMarkEmailRead />, label: 'Received' },
+];
+
+/* ========================= SIDEBAR ========================= */
+function Sidebar({ active, setActive }) {
+  return (
+    <div style={{
+      background: '#004A98',
+      color: '#fff',
+      width: 160,
+      minHeight: '100vh',
+      padding: '20px 0',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center'
+    }}>
+      <img src="/images/dost-logo1.png" alt="LOGO" style={{ width: 55, height: 55, marginBottom: 24, borderRadius: 12 }} />
+      <nav style={{ width: '100%' }}>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          {sidebarItems.map((item, idx) => (
+            <li key={item.label}
+              onClick={() => setActive(idx)}
+              style={{
+                margin: '10px 0',
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                background: active === idx ? '#0062F4' : 'transparent',
+                borderRadius: 6,
+                padding: '8px 12px',
+                width: '140px',
+                marginLeft: '10px',
+                transition: '0.2s',
+                boxShadow: active === idx ? '0 3px 6px rgba(0,0,0,0.2)' : 'none'
+              }}>
+              <Icon>{item.icon}</Icon>
+              <span>{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
+  );
+}
+
+/* ========================= TOP BAR ========================= */
+function TopBar() {
+  const [activeIcon, setActiveIcon] = useState(null);
+
+  const popupStyle = {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    background: '#fff',
+    borderRadius: 12,
+    boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
+    padding: 16,
+    width: 260,
+    zIndex: 10
+  };
+
+  return (
+    <div style={{
+      fontSize: 22,
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '16px 32px',
+      background: '#fff',
+      position: 'sticky',
+      top: 0,
+      zIndex: 9,
+      boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+    }}>
+      <h2 style={{ color: '#004A98', fontWeight: 600 }}>Serial Subscription System</h2>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+        {/* CHAT ICON */}
+        <span onClick={() => setActiveIcon(activeIcon === 'chat' ? null : 'chat')} style={{ cursor: 'pointer' }}>
+          <IoChatboxEllipsesOutline />
+        </span>
+        {activeIcon === 'chat' && (
+          <div style={popupStyle}>
+            <h4>Messages</h4>
+            <p style={{ color: '#555' }}>No new messages.</p>
+          </div>
+        )}
+
+        {/* NOTIFICATION ICON */}
+        <span onClick={() => setActiveIcon(activeIcon === 'notifications' ? null : 'notifications')} style={{ cursor: 'pointer' }}>
+          <MdOutlineNotificationsActive />
+        </span>
+        {activeIcon === 'notifications' && (
+          <div style={popupStyle}>
+            <h4>Notifications</h4>
+            <p style={{ color: '#555' }}>You’re all caught up!</p>
+          </div>
+        )}
+
+        {/* ACCOUNT ICON */}
+        <span onClick={() => setActiveIcon(activeIcon === 'account' ? null : 'account')} style={{ cursor: 'pointer' }}>
+          <VscAccount />
+        </span>
+        {activeIcon === 'account' && (
+          <div style={{
+            position: 'absolute',
+            top: 40,
+            right: 0,
+            background: '#fff',
+            width: 200,
+            padding: 16,
+            borderRadius: 10,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.15)'
+          }}>
+            <h4>Admin</h4>
+            <p style={{ color: '#777' }}>System Administrator</p>
+            <button
+              style={{ width: '100%', marginTop: 12, padding: '8px 0', background: '#004A98', color: '#fff', borderRadius: 6, border: 'none' }}
+              onClick={() => router.post('/logout')}
+            >Logout</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ========================= DASHBOARD PAGE ========================= */
+export default function AdminDashboard() {
+  const [activeSidebar, setActiveSidebar] = useState(0);
+
+  return (
+    <div style={{ display: 'flex', background: '#f0f4f8', minHeight: '100vh' }}>
+      <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
+
+      <div style={{ flex: 1 }}>
+        <TopBar />
+
+        <div style={{ padding: '32px 40px' }}>
+          <h2>Dashboard Overview</h2>
+          <p style={{ color: '#666' }}>Welcome back!</p>
+
+          <div style={{ display: 'flex', gap: 24, marginTop: 32 }}>
+            <div style={{ background: '#fff', padding: 24, borderRadius: 12, flex: 1, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              <h3>Total Users</h3>
+              <p style={{ fontSize: 28, fontWeight: 'bold' }}>1,245</p>
+            </div>
+
+            <div style={{ background: '#fff', padding: 24, borderRadius: 12, flex: 1, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              <h3>Active Sessions</h3>
+              <p style={{ fontSize: 28, fontWeight: 'bold' }}>132</p>
+            </div>
+
+            <div style={{ background: '#fff', padding: 24, borderRadius: 12, flex: 1, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              <h3>Pending Tickets</h3>
+              <p style={{ fontSize: 28, fontWeight: 'bold' }}>8</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
