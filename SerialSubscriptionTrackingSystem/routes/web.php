@@ -22,6 +22,10 @@ Route::get('/dashboard-tpu', function () {
     return Inertia::render('Dashboard_TPU');
 })->name('dashboard-tpu');
 
+Route::get('/dashboard-supplier', function () {
+    return Inertia::render('Dashboard_Supplier');
+})->name('dashboard-supplier');
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
