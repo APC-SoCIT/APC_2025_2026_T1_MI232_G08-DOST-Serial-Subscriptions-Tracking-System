@@ -15,6 +15,14 @@ Route::get('/', function () {
     ]);
 });
 
+Route::get('/account-approval', function () {
+    return Inertia::render('AccountApproval');
+});
+
+Route::get('/list-of-supplier', function () {
+    return Inertia::render('ListofSupplier');
+});
+
 // Default dashboard (fallback)
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
@@ -30,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:tpu')
         ->name('tpu.dashboard');
 
+
+    
     // Add other roles here as needed
     // Route::get('/dashboard-supplier', fn () => Inertia::render('Dashboard_Supplier'))
     //     ->middleware('role:supplier')

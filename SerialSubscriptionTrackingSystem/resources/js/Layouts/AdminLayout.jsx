@@ -9,15 +9,16 @@ import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { RiAddLargeFill } from "react-icons/ri";
+import { usePage } from "@inertiajs/react";
 
 const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/admin-dashboard" },
   { icon: <HiUsers size={18} />, label: "Account Approval", href: "/account-approval" },
-  { icon: <ImStatsBars size={18} />, label: "Supplier Serial", href: "/supplier-serial" },
+  { icon: <ImStatsBars size={18} />, label: "List of Supplier", href: "/list-of-supplier" },
 ];
 
 export default function AdminLayout({ children, header }) {
-  const [active, setActive] = useState(0);
+  const { url } = usePage();
   const [openAccount, setOpenAccount] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openChat, setOpenChat] = useState(false);
@@ -39,12 +40,11 @@ export default function AdminLayout({ children, header }) {
                   href={it.href}
                   onClick={(e) => {
                     e.preventDefault();
-                    setActive(i);
                     router.get(it.href);
                   }}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
-                    active === i ? "bg-[#0b63d6] shadow-lg" : "hover:bg-[#0b63d6]/60"
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
+                    ${url.startsWith(it.href) ? "bg-[#0b63d6] shadow-lg" : "hover:bg-[#0b63d6]/60"}
+                  `}
                 >
                   <div className="text-lg">{it.icon}</div>
                   <span className="text-sm font-medium">{it.label}</span>
