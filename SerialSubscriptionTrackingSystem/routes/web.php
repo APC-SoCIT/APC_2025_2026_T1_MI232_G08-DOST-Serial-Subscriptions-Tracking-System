@@ -18,9 +18,14 @@ Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+// TPU Routes
 Route::get('/dashboard-tpu', function () {
     return Inertia::render('Dashboard_TPU');
 })->name('dashboard-tpu');
+
+Route::get('/dashboard-tpu-chat', function () {
+    return Inertia::render('Dashboard_TPU_Chat');
+})->name('dashboard-tpu-chat');
 
 Route::get('/dashboard-tpu-supplierinfo', function () {
     return Inertia::render('Dashboard_TPU_Supplierinfo');
@@ -34,10 +39,11 @@ Route::get('/dashboard-tpu-monitordelivery', function () {
     return Inertia::render('Dashboard_TPU_Monitordelivery');
 })->name('dashboard-tpu-monitordelivery');
 
-Route::get('/dashboard-tpu-received', function () {
-    return Inertia::render('Dashboard_TPU_Received');
-})->name('dashboard-tpu-received');
+Route::get('/dashboard-tpu-addserial', function () {
+    return Inertia::render('Dashboard_TPU_AddSerial');
+})->name('dashboard-tpu-addserial');
 
+// GSPS Routes
 Route::get('/dashboard-gsps', function () {
     return Inertia::render('Dashboard_GSPS');
 })->name('dashboard-gsps');
@@ -45,6 +51,18 @@ Route::get('/dashboard-gsps', function () {
 Route::get('/dashboard-gsps-supplierinfo', function () {
     return Inertia::render('Dashboard_GSPS_Supplierinfo');
 })->name('dashboard-gsps-supplierinfo');
+
+Route::get('/dashboard-gsps-deliverystatus', function () {
+    return Inertia::render('Dashboard_GSPS_Deliverystatus');
+})->name('dashboard-gsps-deliverystatus');
+
+Route::get('/dashboard-gsps-inspectionstatus', function () {
+    return Inertia::render('Dashboard_GSPS_Inspectionstatus');
+})->name('dashboard-gsps-inspectionstatus');
+
+Route::get('/dashboard-gsps-chat', function () {
+    return Inertia::render('Dashboard_GSPS_Chat');
+})->name('dashboard-gsps-chat');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
