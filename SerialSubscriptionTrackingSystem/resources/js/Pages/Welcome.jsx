@@ -38,30 +38,36 @@ export default function Welcome({ auth, laravelVersion, phpVersion }) {
                                 </svg>
                             </div>
                             <nav className="-mx-3 flex flex-1 justify-end">
-                                {auth.user ? (
+                            {auth.user ? (
+                                <Link
+                                    href={auth.user.roles.includes('admin')
+                                        ? route('admin.dashboard')
+                                        : auth.user.roles.includes('inspection')
+                                        ? route('inspection.dashboard')
+                                        : auth.user.roles.includes('tpu')
+                                        ? route('tpu.dashboard')
+                                        : route('dashboard')}
+                                    className="rounded-md px-3 py-2 text-black ring-1 ring-transparent transition hover:text-black/70 focus:outline-none focus-visible:ring-[#FF2D20] dark:text-white dark:hover:text-white/80 dark:focus-visible:ring-white"
+                                >
+                                    Go to Dashboard
+                                </Link>
+                            ) : (
+                                <>
                                     <Link
-                                        href={route('dashboard')}
+                                        href={route('login')}
                                         className="rounded-md px-3 py-2 text-black ring-1 ring-transparent transition hover:text-black/70 focus:outline-none focus-visible:ring-[#FF2D20] dark:text-white dark:hover:text-white/80 dark:focus-visible:ring-white"
                                     >
-                                        Dashboard
+                                        Log in
                                     </Link>
-                                ) : (
-                                    <>
-                                        <Link
-                                            href={route('login')}
-                                            className="rounded-md px-3 py-2 text-black ring-1 ring-transparent transition hover:text-black/70 focus:outline-none focus-visible:ring-[#FF2D20] dark:text-white dark:hover:text-white/80 dark:focus-visible:ring-white"
-                                        >
-                                            Log in
-                                        </Link>
-                                        <Link
-                                            href={route('register')}
-                                            className="rounded-md px-3 py-2 text-black ring-1 ring-transparent transition hover:text-black/70 focus:outline-none focus-visible:ring-[#FF2D20] dark:text-white dark:hover:text-white/80 dark:focus-visible:ring-white"
-                                        >
-                                            Register
-                                        </Link>
-                                    </>
-                                )}
-                            </nav>
+                                    <Link
+                                        href={route('register')}
+                                        className="rounded-md px-3 py-2 text-black ring-1 ring-transparent transition hover:text-black/70 focus:outline-none focus-visible:ring-[#FF2D20] dark:text-white dark:hover:text-white/80 dark:focus-visible:ring-white"
+                                    >
+                                        Register
+                                    </Link>
+                                </>
+                            )}
+                        </nav>
                         </header>
 
                         <main className="mt-6">
