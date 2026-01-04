@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { GoHomeFill } from "react-icons/go";
+import { GoHome } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaTruck } from "react-icons/fa";
 import { MdMarkEmailRead } from "react-icons/md";
+import { router } from '@inertiajs/react';
 import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
@@ -16,7 +17,7 @@ const Icon = ({ children }) => (
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard' },
+  { icon: <GoHome />, label: 'Dashboard' },
   { icon: <RiAddLargeFill />, label: 'Add Serial' },
   { icon: <HiUsers />, label: 'Supplier Info' },
   { icon: <ImStatsBars />, label: 'Subscription' },
@@ -191,6 +192,7 @@ function TopBar() {
                   fontWeight: 500,
                   transition: 'background 0.2s ease',
                 }}
+                onClick={() => router.post('/logout')}
                 onMouseOver={(e) => (e.target.style.background = '#003C7A')}
                 onMouseOut={(e) => (e.target.style.background = '#004A98')}
               >
@@ -438,25 +440,24 @@ function getGreeting() {
   return 'Good evening,';
 }
 
-function App() {
-  const [activeSidebar, setActiveSidebar] = useState(0);
-  return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
-      <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
-      <div style={{ flex: 1 }}>
-        <TopBar />
-        <div style={{ padding: '32px 40px' }}>
-          <h2 style={{ marginBottom: 8 }}>Dashboard Overview</h2>
-          <p style={{ color: '#666', marginBottom: 32 }}>{getGreeting()} Welcome back!</p>
-          <OverviewCards />
-          <SerialReportChart />
-          <IncomingSerialTable />
+function Dashboard_TPU() {
+    const [activeSidebar, setActiveSidebar] = useState(0);
+
+    return (
+        <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
+            <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
+            <div style={{ flex: 1 }}>
+                <TopBar />
+                <div style={{ padding: '32px 40px' }}>
+                    <h2 style={{ marginBottom: 8 }}>Dashboard Overview</h2>
+                    <p style={{ color: '#666', marginBottom: 32 }}>{getGreeting()} Welcome back!</p>
+                    <OverviewCards />
+                    <SerialReportChart />
+                    <IncomingSerialTable />
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-export default App;
-
-console.log("Dashboard_TPU loaded ✅");
+export default Dashboard_TPU;
