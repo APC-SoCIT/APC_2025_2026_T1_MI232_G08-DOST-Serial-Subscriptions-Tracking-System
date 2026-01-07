@@ -17,7 +17,7 @@ From the `backend` folder, run:
 ```bash
 npm install
 
-```md
+md
 ---
 ## Run
 From the `backend` folder, start the server:
@@ -30,7 +30,7 @@ http://localhost:5001
 ### 🔹 2️⃣ Add the **API Endpoints** section  
 Add this **below the Run section**:
 
-```md
+md
 ---
 ## API Endpoints
 
