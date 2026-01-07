@@ -76,9 +76,6 @@ Route::get('/dashboard-gsps-chat', function () {
 
 
 
-Route::get('/dashboard-tpu', fn () => Inertia::render('Dashboard_TPU'))
-    ->middleware('role:tpu')
-    ->name('tpu.dashboard');
 
 Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'));
 
@@ -96,5 +93,5 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// Auth routes (login, register, etc.)
 require __DIR__.'/auth.php';
+// Auth routes (login, register, etc.)

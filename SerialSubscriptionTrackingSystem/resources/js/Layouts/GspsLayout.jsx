@@ -121,7 +121,7 @@ function TopBar() {
       }}
     >
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        Serial Subscription
+        Serial Subscription Tracking System
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
