@@ -1818,7 +1818,7 @@ ${sortedItems.map((item, index) => `${index+1}. ${item.serialTitle} (${item.date
                     <strong>Status:</strong> {selectedItem.deliveryStatus}
                     {selectedItem.delay !== undefined && selectedItem.delay !== 0 && (
                       <span style={{ marginLeft: '6px', color: selectedItem.delay < 0 ? '#28a745' : '#dc3545' }}>
-                        ({selectedItem.delay > 0 ? `+${item.delay}` : item.delay} days {selectedItem.delay < 0 ? 'early' : 'late'})
+                       ({selectedItem.delay > 0 ? `+${selectedItem.delay}` : selectedItem.delay} days {selectedItem.delay < 0 ? 'early' : 'late'})
                       </span>
                     )}
                   </p>

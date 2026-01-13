@@ -152,7 +152,7 @@ function TopBar() {
         zIndex: 9
       }}
     >
-      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Serial Subscription Tracking System</h2>
+      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier Dashboard</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
@@ -466,7 +466,7 @@ function SerialReportChart({ year }) {
             boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
           }}
         >
-          <h3 style={{ marginBottom: 16, color: '#0B4DA1' }}>Top Performing Suppliers ({year})</h3>
+          <h3 style={{ marginBottom: 16, color: '#0B4DA1' }}>Top Delivered Serials ({year})</h3>
           <div style={{ height: 250 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -576,7 +576,7 @@ function IncomingSerialTable() {
       issue: '0027-8424',
       title: 'Proceedings of the National Academy of Sciences of the United States of America',
       date: '20.09.2025',
-      status: 'Arrived',
+      status: 'Delivered',
       statusColor: '#4CAF50'
     },
     {
@@ -584,7 +584,7 @@ function IncomingSerialTable() {
       issue: '0036-8075',
       title: 'Science',
       date: '18.09.2025',
-      status: 'Arrived',
+      status: 'Delivered',
       statusColor: '#4CAF50'
     },
     {
@@ -592,7 +592,7 @@ function IncomingSerialTable() {
       issue: '0091-7453',
       title: 'Nature',
       date: '22.09.2025',
-      status: 'Arrived',
+      status: 'Delivered',
       statusColor: '#4CAF50'
     },
     {
@@ -600,7 +600,7 @@ function IncomingSerialTable() {
       issue: '0021-9258',
       title: 'Journal of Biological Chemistry',
       date: '19.09.2025',
-      status: 'Arrived',
+      status: 'Delivered',
       statusColor: '#4CAF50'
     }
   ];

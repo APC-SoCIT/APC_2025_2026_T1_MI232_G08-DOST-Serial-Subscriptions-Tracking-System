@@ -14,7 +14,7 @@ const Icon = ({ children }) => (
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard', route: 'dashboard-gsps' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
   { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'dashboard-gsps-chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-gsps-supplierinfo' },
   { icon: <FaTruck />, label: 'Delivery Status', route: 'dashboard-gsps-deliverystatus' },
@@ -22,7 +22,7 @@ const sidebarItems = [
 ];
 
 function Sidebar() {
-  const currentRouteName = usePage().url.split('/').pop() || 'dashboard-gsps';
+  const currentRouteName = usePage().url.split('/').pop() || 'gsps.dashboard';
   
   return (
     <div style={{
@@ -39,7 +39,7 @@ function Sidebar() {
       top: 0,
       zIndex: 100
     }}>
-      <Link href={route('dashboard-gsps')} style={{ textDecoration: 'none' }}>
+      <Link href={route('gsps.dashboard')} style={{ textDecoration: 'none' }}>
         <img
           src="/images/dost-logo1.png"
           alt="LOGO"
@@ -57,7 +57,7 @@ function Sidebar() {
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item) => {
             const isActive = currentRouteName.includes(item.route.replace('dashboard-gsps-', '')) || 
-                           (item.route === 'dashboard-gsps' && currentRouteName === 'dashboard-gsps');
+                           (item.route === 'gsps.dashboard' && currentRouteName === 'gsps.dashboard');
             
             return (
               <li key={item.label}>
@@ -121,7 +121,7 @@ function TopBar() {
       }}
     >
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        Serial Subscription
+        GSPS Dashboard
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
