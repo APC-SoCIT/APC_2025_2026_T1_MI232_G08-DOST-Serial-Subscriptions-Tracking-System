@@ -17,7 +17,7 @@ const Icon = ({ children }) => (
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard', route: 'dashboard-tpu' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: 'tpu.dashboard' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'dashboard-tpu-chat' },
   { icon: <RiAddLargeFill />, label: 'Add Serial', route: 'dashboard-tpu-addserial' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-tpu-supplierinfo' },
@@ -26,7 +26,7 @@ const sidebarItems = [
 ];
 
 function Sidebar({ currentRoute }) {
-  const currentRouteName = usePage().url.split('/').pop() || 'dashboard-tpu';
+  const currentRouteName = usePage().url.split('/').pop() || 'tpu.dashboard';
   
   return (
     <div style={{
@@ -43,7 +43,7 @@ function Sidebar({ currentRoute }) {
       top: 0,
       zIndex: 100
     }}>
-      <Link href={route('dashboard-tpu')} style={{ textDecoration: 'none' }}>
+      <Link href={route('tpu.dashboard')} style={{ textDecoration: 'none' }}>
         <img
           src="/images/dost-logo1.png"
           alt="LOGO"
@@ -61,7 +61,7 @@ function Sidebar({ currentRoute }) {
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
             const isActive = currentRouteName.includes(item.route.replace('dashboard-tpu-', '')) || 
-                           (item.route === 'dashboard-tpu' && currentRouteName === 'dashboard-tpu');
+                           (item.route === 'tpu.dashboard' && currentRouteName === 'tpu.dashboard');
             
             return (
               <li key={item.label}>
@@ -127,7 +127,7 @@ function TopBar() {
       }}
     >
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        Serial Subscription Tracking System
+        TPU Dashboard
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
