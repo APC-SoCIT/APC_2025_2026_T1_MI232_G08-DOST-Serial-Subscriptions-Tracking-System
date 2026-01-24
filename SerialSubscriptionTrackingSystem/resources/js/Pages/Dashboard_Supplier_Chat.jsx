@@ -11,7 +11,7 @@ import { BsThreeDotsVertical } from "react-icons/bs";
 import { BiSearch } from "react-icons/bi";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { LuPlus } from "react-icons/lu";
-import { Link } from "@inertiajs/react";
+import { Link, router } from "@inertiajs/react";
 
 
 
@@ -122,7 +122,7 @@ function TopBar() {
     boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
     padding: 16,
     width: 260,
-    zIndex: 10,
+    zIndex: 10000,
   };
 
   return (
