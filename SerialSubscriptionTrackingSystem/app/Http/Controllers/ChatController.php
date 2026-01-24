@@ -6,6 +6,8 @@ use App\Models\Chat;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use App\Events\MessageSent;
 
 class ChatController extends Controller
 {
@@ -129,38 +131,74 @@ class ChatController extends Controller
     }
 
     /**
-     * Store a new message
+     * Store a message with optional file attachment
      */
     public function storeMessage(Request $request, $chatId)
     {
         $request->validate([
-            'content' => 'required|string|min:1',
+            'content' => 'nullable|string',
+            'attachment' => 'nullable|file|max:102400', // 100MB max
         ]);
 
         $chat = Chat::findOrFail($chatId);
         $userId = Auth::id();
 
         // Verify user is part of this chat
-        if ($chat->user_id_1 !== $userId && $chat->user_id_2 !== $userId) {
+        if ($chat->type === 'private' && $chat->user_id_1 !== $userId && $chat->user_id_2 !== $userId) {
             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $attachmentPath = $file->store('chat-attachments', 'public');
         }
 
         $message = Message::create([
             'chat_id' => $chatId,
             'sender_id' => $userId,
-            'content' => $request->content,
+            'content' => $request->content ?? '',
+            'attachment' => $attachmentPath,
         ]);
 
         // Update chat's last message timestamp
         $chat->update(['last_message_at' => now()]);
 
+        // Broadcast the message
+        broadcast(new MessageSent($message, $chat));
+
         return response()->json([
             'id' => $message->id,
             'sender' => Auth::user()->name,
+            'senderRole' => Auth::user()->roles->first()?->name,
+            'senderId' => $userId,
             'content' => $message->content,
+            'attachment' => $message->attachment ? route('file.download', $message->id) : null,
             'time' => $message->created_at->format('g:i A'),
             'isOwn' => true,
         ]);
+    }
+
+    /**
+     * Download a file attachment
+     */
+    public function downloadAttachment($messageId)
+    {
+        $message = Message::findOrFail($messageId);
+        
+        if (!$message->attachment) {
+            return response()->json(['error' => 'No attachment'], 404);
+        }
+
+        // Verify user has access
+        $chat = $message->chat;
+        $userId = Auth::id();
+
+        if ($chat->type === 'private' && $chat->user_id_1 !== $userId && $chat->user_id_2 !== $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        return Storage::disk('public')->download($message->attachment);
     }
 
     /**

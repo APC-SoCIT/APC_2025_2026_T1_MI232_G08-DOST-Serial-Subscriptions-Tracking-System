@@ -32,8 +32,8 @@ class RouteServiceProvider extends ServiceProvider
         $roleRoutes = [
             'admin' => 'admin.dashboard',
             'supplier' => 'supplier.dashboard',
-            'gsps' => 'gsps.dashboard',
-            'tpu' => 'tpu.dashboard',
+            'gsps' => 'dashboard-gsps',
+            'tpu' => 'dashboard-tpu',
             'inspection' => 'inspection.dashboard',
         ];
 

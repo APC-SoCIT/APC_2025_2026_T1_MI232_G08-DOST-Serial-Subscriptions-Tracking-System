@@ -5,7 +5,7 @@ import {
   MdAddCircle, MdDelete, 
   MdSearch, MdFilterList, MdDescription,
   MdCalendarToday, MdInventory,
-  MdEdit
+  MdEdit, MdVisibility
 } from "react-icons/md";
 
 function AddSerial() {
@@ -15,6 +15,8 @@ function AddSerial() {
   const [showPreview, setShowPreview] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
   
   const [formData, setFormData] = useState({
     supplierName: '',
@@ -96,7 +98,7 @@ function AddSerial() {
       item.issn.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.authorPublisher.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesFilter = filter === 'All';
+    const matchesFilter = filter === 'All' || item.category === filter;
     
     return matchesSearch && matchesFilter;
   });
@@ -110,6 +112,21 @@ function AddSerial() {
   };
 
   const stats = calculateStats();
+
+  // Check if supplier and subscription details are complete
+  const isSupplierInfoComplete = () => {
+    return formData.supplierName.trim() !== '' && 
+           formData.contactPerson.trim() !== '' && 
+           formData.email.trim() !== '';
+  };
+
+  const isSubscriptionComplete = () => {
+    return formData.subscriptionPeriod.trim() !== '';
+  };
+
+  const canAddSerialItems = () => {
+    return isSupplierInfoComplete() && isSubscriptionComplete();
+  };
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -140,6 +157,12 @@ function AddSerial() {
 
   // Add new item
   const handleAddItem = () => {
+    // Check if supplier and subscription details are complete
+    if (!canAddSerialItems()) {
+      alert('Please complete Supplier Information and Subscription Details first before adding serial items.');
+      return;
+    }
+
     if (!currentItem.serialTitle || !currentItem.issn) {
       alert('Please fill in Serial Title and ISSN');
       return;
@@ -183,6 +206,12 @@ function AddSerial() {
       totalPrice: item.totalPrice
     });
     setShowEditModal(true);
+  };
+
+  // Open view modal
+  const handleViewItem = (item) => {
+    setSelectedItem(item);
+    setShowViewModal(true);
   };
 
   // Update item
@@ -236,6 +265,12 @@ function AddSerial() {
     });
   };
 
+  // Close view modal
+  const handleCloseViewModal = () => {
+    setShowViewModal(false);
+    setSelectedItem(null);
+  };
+
   return (
     <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
       {/* Header Section */}
@@ -265,7 +300,13 @@ function AddSerial() {
           
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
-              onClick={() => setShowPreview(!showPreview)}
+              onClick={() => {
+                if (!canAddSerialItems()) {
+                  alert('Please complete Supplier Information and Subscription Details first before previewing.');
+                  return;
+                }
+                setShowPreview(!showPreview);
+              }}
               style={{
                 padding: '10px 20px',
                 background: '#f0f4f8',
@@ -688,6 +729,248 @@ function AddSerial() {
         </div>
       )}
 
+      {/* View Modal */}
+      {showViewModal && selectedItem && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '24px'
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                color: '#004A98', 
+                fontSize: '20px', 
+                fontWeight: '600'
+              }}>
+                Serial Information Details
+              </h2>
+              <button
+                onClick={handleCloseViewModal}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  color: '#666',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Supplier Information Section */}
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ 
+                fontSize: '16px', 
+                color: '#004A98', 
+                margin: '0 0 16px 0',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <MdInventory /> Supplier Information
+              </h3>
+              <div style={{
+                background: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Supplier Name:</strong> {formData.supplierName || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Contact Person:</strong> {formData.contactPerson || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Email:</strong> {formData.email || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Phone:</strong> {formData.phone || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Address:</strong> {formData.address || 'Not provided'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription Details Section */}
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ 
+                fontSize: '16px', 
+                color: '#004A98', 
+                margin: '0 0 16px 0',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <MdCalendarToday /> Subscription Details
+              </h3>
+              <div style={{
+                background: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Subscription Period:</strong> {formData.subscriptionPeriod || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Subscription Year:</strong> {formData.subscriptionYear}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Expected Delivery Date:</strong> {formData.expectedDeliveryDate || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Total Cost:</strong> ₱{stats.totalCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+                {formData.notes && (
+                  <div style={{ marginTop: '16px' }}>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Notes:</strong> {formData.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Serial Item Details Section */}
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ 
+                fontSize: '16px', 
+                color: '#004A98', 
+                margin: '0 0 16px 0',
+                fontWeight: '600'
+              }}>
+                Serial Item Details
+              </h3>
+              <div style={{
+                background: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '8px'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Serial Title:</strong> {selectedItem.serialTitle}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>ISSN:</strong> {selectedItem.issn}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Category:</strong> {selectedItem.category}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Language:</strong> {selectedItem.language}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Author/Publisher:</strong> {selectedItem.authorPublisher}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Abbreviation:</strong> {selectedItem.abbreviation || 'Not provided'}
+                    </p>
+                    <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                      <strong>Frequency:</strong> {selectedItem.frequency}
+                    </p>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(3, 1fr)', 
+                  gap: '16px',
+                  marginTop: '16px',
+                  paddingTop: '16px',
+                  borderTop: '1px solid #dee2e6'
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>Quantity</p>
+                    <p style={{ margin: '4px 0', fontSize: '16px', fontWeight: 'bold' }}>{selectedItem.quantity}</p>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>Unit Price</p>
+                    <p style={{ margin: '4px 0', fontSize: '16px', fontWeight: 'bold', color: '#004A98' }}>
+                      ₱{parseFloat(selectedItem.unitPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>Total Price</p>
+                    <p style={{ margin: '4px 0', fontSize: '16px', fontWeight: 'bold', color: '#28a745' }}>
+                      ₱{parseFloat(selectedItem.totalPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '20px',
+              borderTop: '1px solid #eee'
+            }}>
+              <button
+                onClick={handleCloseViewModal}
+                style={{
+                  padding: '12px 32px',
+                  background: '#004A98',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  transition: 'background 0.2s'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preview Modal */}
       {showPreview && (
         <div style={{
@@ -874,7 +1157,8 @@ function AddSerial() {
             background: '#fff', 
             borderRadius: '12px', 
             padding: '24px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            border: !isSupplierInfoComplete() ? '1px solid #dc3545' : 'none'
           }}>
             <div style={{ 
               display: 'flex', 
@@ -882,11 +1166,25 @@ function AddSerial() {
               gap: '12px', 
               marginBottom: '20px' 
             }}>
-              <MdInventory style={{ color: '#004A98', fontSize: '24px' }} />
-              <h3 style={{ margin: 0, color: '#004A98', fontSize: '18px', fontWeight: '600' }}>
-                Supplier Information
+              <MdInventory style={{ color: !isSupplierInfoComplete() ? '#dc3545' : '#004A98', fontSize: '24px' }} />
+              <h3 style={{ margin: 0, color: !isSupplierInfoComplete() ? '#dc3545' : '#004A98', fontSize: '18px', fontWeight: '600' }}>
+                Supplier Information {!isSupplierInfoComplete() && <span style={{ fontSize: '14px', color: '#dc3545' }}>(Required)</span>}
               </h3>
             </div>
+
+            {!isSupplierInfoComplete() && (
+              <div style={{
+                background: '#fff3cd',
+                border: '1px solid #ffc107',
+                color: '#856404',
+                padding: '12px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                fontSize: '14px'
+              }}>
+                Please complete Supplier Information (Supplier Name, Contact Person, and Email) before adding serial items.
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: '16px' }}>
               <div>
@@ -894,7 +1192,7 @@ function AddSerial() {
                   display: 'block', 
                   marginBottom: '8px', 
                   fontSize: '14px', 
-                  color: '#333',
+                  color: !isSupplierInfoComplete() && !formData.supplierName ? '#dc3545' : '#333',
                   fontWeight: '500'
                 }}>
                   Supplier Name <span style={{ color: '#dc3545' }}>*</span>
@@ -909,7 +1207,7 @@ function AddSerial() {
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: !isSupplierInfoComplete() && !formData.supplierName ? '1px solid #dc3545' : '1px solid #ddd',
                     fontSize: '14px'
                   }}
                 />
@@ -920,7 +1218,7 @@ function AddSerial() {
                   display: 'block', 
                   marginBottom: '8px', 
                   fontSize: '14px', 
-                  color: '#333',
+                  color: !isSupplierInfoComplete() && !formData.contactPerson ? '#dc3545' : '#333',
                   fontWeight: '500'
                 }}>
                   Contact Person <span style={{ color: '#dc3545' }}>*</span>
@@ -935,7 +1233,7 @@ function AddSerial() {
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: !isSupplierInfoComplete() && !formData.contactPerson ? '1px solid #dc3545' : '1px solid #ddd',
                     fontSize: '14px'
                   }}
                 />
@@ -946,7 +1244,7 @@ function AddSerial() {
                   display: 'block', 
                   marginBottom: '8px', 
                   fontSize: '14px', 
-                  color: '#333',
+                  color: !isSupplierInfoComplete() && !formData.email ? '#dc3545' : '#333',
                   fontWeight: '500'
                 }}>
                   Email Address <span style={{ color: '#dc3545' }}>*</span>
@@ -961,7 +1259,7 @@ function AddSerial() {
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: !isSupplierInfoComplete() && !formData.email ? '1px solid #dc3545' : '1px solid #ddd',
                     fontSize: '14px'
                   }}
                 />
@@ -1057,7 +1355,8 @@ function AddSerial() {
             background: '#fff', 
             borderRadius: '12px', 
             padding: '24px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            border: !isSubscriptionComplete() ? '1px solid #dc3545' : 'none'
           }}>
             <div style={{ 
               display: 'flex', 
@@ -1065,11 +1364,25 @@ function AddSerial() {
               gap: '12px', 
               marginBottom: '20px' 
             }}>
-              <MdCalendarToday style={{ color: '#004A98', fontSize: '24px' }} />
-              <h3 style={{ margin: 0, color: '#004A98', fontSize: '18px', fontWeight: '600' }}>
-                Subscription Details
+              <MdCalendarToday style={{ color: !isSubscriptionComplete() ? '#dc3545' : '#004A98', fontSize: '24px' }} />
+              <h3 style={{ margin: 0, color: !isSubscriptionComplete() ? '#dc3545' : '#004A98', fontSize: '18px', fontWeight: '600' }}>
+                Subscription Details {!isSubscriptionComplete() && <span style={{ fontSize: '14px', color: '#dc3545' }}>(Required)</span>}
               </h3>
             </div>
+
+            {!isSubscriptionComplete() && (
+              <div style={{
+                background: '#fff3cd',
+                border: '1px solid #ffc107',
+                color: '#856404',
+                padding: '12px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                fontSize: '14px'
+              }}>
+                Please complete Subscription Details (Subscription Period) before adding serial items.
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: '16px' }}>
               <div>
@@ -1077,7 +1390,7 @@ function AddSerial() {
                   display: 'block', 
                   marginBottom: '8px', 
                   fontSize: '14px', 
-                  color: '#333',
+                  color: !isSubscriptionComplete() ? '#dc3545' : '#333',
                   fontWeight: '500'
                 }}>
                   Subscription Period <span style={{ color: '#dc3545' }}>*</span>
@@ -1093,7 +1406,7 @@ function AddSerial() {
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: !isSubscriptionComplete() ? '1px solid #dc3545' : '1px solid #ddd',
                     fontSize: '14px'
                   }}
                 />
@@ -1284,11 +1597,26 @@ function AddSerial() {
             borderRadius: '8px', 
             padding: '20px', 
             marginBottom: '24px',
-            border: '1px solid #dee2e6'
+            border: '1px solid #dee2e6',
+            opacity: canAddSerialItems() ? 1 : 0.7
           }}>
-            <h4 style={{ margin: '0 0 16px 0', color: '#004A98', fontSize: '16px' }}>
-              Add New Serial Item
-            </h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h4 style={{ margin: 0, color: '#004A98', fontSize: '16px' }}>
+                Add New Serial Item
+              </h4>
+              {!canAddSerialItems() && (
+                <div style={{
+                  background: '#fff3cd',
+                  border: '1px solid #ffc107',
+                  color: '#856404',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  fontSize: '12px'
+                }}>
+                  Complete Supplier and Subscription details first
+                </div>
+              )}
+            </div>
             
             <div style={{ 
               display: 'grid', 
@@ -1307,12 +1635,14 @@ function AddSerial() {
                   onChange={handleItemChange}
                   placeholder="Enter Serial Title"
                   required
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                   }}
                 />
               </div>
@@ -1328,12 +1658,14 @@ function AddSerial() {
                   onChange={handleItemChange}
                   placeholder="e.g., 1234-5678"
                   required
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                   }}
                 />
               </div>
@@ -1346,14 +1678,15 @@ function AddSerial() {
                   name="category"
                   value={currentItem.category}
                   onChange={handleItemChange}
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
-                    background: '#fff',
-                    cursor: 'pointer'
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa',
+                    cursor: canAddSerialItems() ? 'pointer' : 'not-allowed'
                   }}
                 >
                   <option value="">Select Category</option>
@@ -1371,14 +1704,15 @@ function AddSerial() {
                   name="language"
                   value={currentItem.language}
                   onChange={handleItemChange}
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
-                    background: '#fff',
-                    cursor: 'pointer'
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa',
+                    cursor: canAddSerialItems() ? 'pointer' : 'not-allowed'
                   }}
                 >
                   {languageOptions.map(lang => (
@@ -1398,12 +1732,14 @@ function AddSerial() {
                   onChange={handleItemChange}
                   placeholder="Enter Author/Publisher"
                   required
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                   }}
                 />
               </div>
@@ -1418,12 +1754,14 @@ function AddSerial() {
                   value={currentItem.abbreviation}
                   onChange={handleItemChange}
                   placeholder="Enter Abbreviation"
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                   }}
                 />
               </div>
@@ -1436,14 +1774,15 @@ function AddSerial() {
                   name="frequency"
                   value={currentItem.frequency}
                   onChange={handleItemChange}
+                  disabled={!canAddSerialItems()}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '6px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
-                    background: '#fff',
-                    cursor: 'pointer'
+                    background: canAddSerialItems() ? '#fff' : '#f8f9fa',
+                    cursor: canAddSerialItems() ? 'pointer' : 'not-allowed'
                   }}
                 >
                   {frequencyOptions.map(freq => (
@@ -1463,12 +1802,14 @@ function AddSerial() {
                     value={currentItem.quantity}
                     onChange={handleItemChange}
                     min="1"
+                    disabled={!canAddSerialItems()}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       borderRadius: '6px',
                       border: '1px solid #ddd',
                       fontSize: '14px',
+                      background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                     }}
                   />
                 </div>
@@ -1483,12 +1824,14 @@ function AddSerial() {
                     onChange={handleItemChange}
                     min="0"
                     step="0.01"
+                    disabled={!canAddSerialItems()}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       borderRadius: '6px',
                       border: '1px solid #ddd',
                       fontSize: '14px',
+                      background: canAddSerialItems() ? '#fff' : '#f8f9fa'
                     }}
                   />
                 </div>
@@ -1515,20 +1858,22 @@ function AddSerial() {
               <button
                 type="button"
                 onClick={handleAddItem}
+                disabled={!canAddSerialItems()}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   padding: '10px 20px',
-                  background: '#28a745',
+                  background: canAddSerialItems() ? '#28a745' : '#6c757d',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
-                  cursor: 'pointer',
+                  cursor: canAddSerialItems() ? 'pointer' : 'not-allowed',
                   fontSize: '14px',
+                  opacity: canAddSerialItems() ? 1 : 0.7
                 }}
               >
-                <MdAddCircle /> Add Item
+                <MdAddCircle /> Add
               </button>
             </div>
           </div>
@@ -1585,6 +1930,24 @@ function AddSerial() {
                     </td>
                     <td style={{ padding: '16px' }}>
                       <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleViewItem(item)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '6px 12px',
+                            background: '#17a2b8',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          <MdVisibility /> View
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleEditItem(item)}

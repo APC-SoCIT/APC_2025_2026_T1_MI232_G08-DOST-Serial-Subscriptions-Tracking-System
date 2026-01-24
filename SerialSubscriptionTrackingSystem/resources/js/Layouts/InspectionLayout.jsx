@@ -75,7 +75,7 @@ export default function InspectionLayout({ children }) {
         <header className="sticky top-0 z-20 bg-white border-b">
           <div className="flex items-center px-6 py-3">
             <h2 className="text-lg font-semibold text-[#004A98]">
-              Serial Subscription Tracking System
+              Inspection Dashboard
             </h2>
 
             <div className="ml-auto flex items-center gap-3">

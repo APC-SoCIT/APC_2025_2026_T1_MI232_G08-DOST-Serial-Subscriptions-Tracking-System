@@ -73,7 +73,7 @@ export default function AdminLayout({ children, header }) {
         <header className="bg-white shadow-sm sticky top-0 z-20">
           <div className="px-6 py-5 flex items-center justify-between">
             <h2 className="text-[20px] font-semibold text-[#004A98]">
-              {header ?? "Serial Subscription Tracking System"}
+              Admin Dashboard
             </h2>
 
             <div className="flex items-center gap-4">

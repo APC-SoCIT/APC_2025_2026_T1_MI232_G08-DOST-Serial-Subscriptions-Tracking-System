@@ -16,12 +16,16 @@ class Chat extends Model
         'user_2_name',
         'user_2_role',
         'last_message_at',
+        'type',
+        'name',
+        'participants',
     ];
 
     protected $casts = [
         'last_message_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'participants' => 'array',
     ];
 
     public function messages(): HasMany
