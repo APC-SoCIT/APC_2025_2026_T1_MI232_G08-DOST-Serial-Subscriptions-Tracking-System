@@ -107,8 +107,6 @@ Route::get('/dashboard-tpu', fn () => Inertia::render('Dashboard_TPU'))
 
 Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'));
 
-Route::get('/inspection-date', fn () => Inertia::render('View_by_date'));
-
 Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'));
 
     
