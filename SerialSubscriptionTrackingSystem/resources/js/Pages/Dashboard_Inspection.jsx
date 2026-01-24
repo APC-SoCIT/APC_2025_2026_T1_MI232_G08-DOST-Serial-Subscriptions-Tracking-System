@@ -78,11 +78,14 @@ export default function InspectionDashboard() {
   const [selectedSerial, setSelectedSerial] = useState(null);
   const [condition, setCondition] = useState("Good");
   const [inspectorName, setInspectorName] = useState("");
+  const [remark, setRemark] = useState("");
+  const [otherDescription, setOtherDescription] = useState("");
   const [checklist, setChecklist] = useState({
     missingPages: false,
     tornPages: false,
     waterDamage: false,
     misprint: false,
+    other: false,
   });
 
   const [serialsForInspection, setSerialsForInspection] = useState([
@@ -106,15 +109,26 @@ export default function InspectionDashboard() {
 
   const lastUpdated = new Date().toLocaleString();
 
+  const checklistLabels = {
+    missingPages: "Missing Pages",
+    tornPages: "Torn Pages",
+    waterDamage: "Water Damage",
+    misprint: "Misprint",
+    other: "Others",
+  };
+
   // ===================== FUNCTIONS =====================
   const openModal = (serial) => {
     setSelectedSerial(serial);
     setInspectorName("");
+    setRemark("");
+    setOtherDescription("");
     setChecklist({
       missingPages: false,
       tornPages: false,
       waterDamage: false,
       misprint: false,
+      other: false,
     });
     setCondition("Good");
     setShowModal(true);
@@ -315,10 +329,28 @@ export default function InspectionDashboard() {
                         setChecklist({ ...checklist, [key]: e.target.checked })
                       }
                     />
-                    {key.replace(/([A-Z])/g, " $1")}
+                    {checklistLabels[key]}
                   </label>
                 ))}
               </div>
+
+              {checklist.other && (
+                <input
+                  type="text"
+                  placeholder="Please specify"
+                  className="w-full border p-2 rounded mb-4 text-sm"
+                  value={otherDescription}
+                  onChange={(e) => setOtherDescription(e.target.value)}
+                />
+              )}
+
+              <textarea
+                placeholder="Remarks"
+                className="w-full border p-2 rounded mb-4 text-sm"
+                rows="4"
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+              />
 
               <div className="flex justify-end gap-3">
                 <button
