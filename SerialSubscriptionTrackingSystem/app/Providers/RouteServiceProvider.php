@@ -29,18 +29,19 @@ class RouteServiceProvider extends ServiceProvider
             return route('dashboard');
         }
 
-        $roleRoutes = [
-            'admin' => 'admin.dashboard',
-            'supplier' => 'supplier.dashboard',
-            'gsps' => 'dashboard-gsps',
-            'tpu' => 'dashboard-tpu',
-            'inspection' => 'inspection.dashboard',
-        ];
+        // Redirect based on email pattern
+        $email = strtolower($user->email);
 
-        foreach ($roleRoutes as $role => $routeName) {
-            if ($user->hasRole($role)) {
-                return route($routeName);
-            }
+        if (strpos($email, 'admin') !== false) {
+            return route('admin.dashboard');
+        } elseif (strpos($email, 'supplier') !== false) {
+            return route('supplier.dashboard');
+        } elseif (strpos($email, 'gsps') !== false) {
+            return route('gsps.dashboard');
+        } elseif (strpos($email, 'tpu') !== false) {
+            return route('tpu.dashboard');
+        } elseif (strpos($email, 'inspection') !== false) {
+            return route('inspection.dashboard');
         }
 
         return route('dashboard'); // fallback

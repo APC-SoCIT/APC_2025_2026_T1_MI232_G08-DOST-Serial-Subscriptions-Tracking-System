@@ -79,22 +79,31 @@ export default function AdminLayout({ children, header }) {
             <div className="flex items-center gap-4">
 
               {/* Notifications */}
-              <div className="relative">
+              <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => {
                     setOpenNotifications(!openNotifications);
                     setOpenAccount(false);
                   }}
-                  className="p-2 rounded-lg hover:bg-gray-100"
+                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
                 >
                   <MdOutlineNotificationsActive size={20} />
                 </button>
 
                 {openNotifications && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg p-4">
-                    <p className="text-sm text-gray-600">
-                      You’re all caught up!
-                    </p>
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '35px',
+                    background: '#fff',
+                    borderRadius: 10,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                    width: 200,
+                    padding: '16px 18px',
+                    zIndex: 10000,
+                    transition: 'all 0.2s ease',
+                  }}>
+                    <p style={{ margin: 0, fontSize: 14, color: '#555' }}>You're all caught up!</p>
                   </div>
                 )}
               </div>
@@ -119,7 +128,7 @@ export default function AdminLayout({ children, header }) {
                     </p>
 
                     <button
-                      onClick={() => router.post("/logout")}
+                      onClick={() => router.post(route('logout'))}
                       className="w-full bg-[#0f57a3] text-white py-2 rounded-md text-sm"
                     >
                       Logout
