@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { GoHome } from "react-icons/go";
-import { ImStatsBars } from "react-icons/im";
 import { FaClipboardList, FaUserCircle } from "react-icons/fa";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
@@ -9,7 +8,6 @@ import Chat from "@/Components/Chat";
 
 const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
-  { icon: <ImStatsBars size={18} />, label: "View by Date", href: "/inspection-date" },
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
   { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", type: "chat" },
 ];
