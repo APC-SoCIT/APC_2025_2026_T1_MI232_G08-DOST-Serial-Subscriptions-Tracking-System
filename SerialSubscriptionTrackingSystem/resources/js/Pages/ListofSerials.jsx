@@ -3,6 +3,9 @@ import { useState } from "react";
 
 export default function ListOfSerials() {
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterDate, setFilterDate] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const perPage = 4; // number of rows per page
 
   const serials = [
@@ -16,8 +19,19 @@ export default function ListOfSerials() {
     { issueNo: "0094-2383", title: "Machine Learning Digest", cost: 3000, date: "2025-12-19", status: "Rejected" },
   ];
 
-  const totalPages = Math.ceil(serials.length / perPage);
-  const paginatedData = serials.slice((currentPage - 1) * perPage, currentPage * perPage);
+  // Filter serials based on date, month, and year
+  const filteredSerials = serials.filter((item) => {
+    const [year, month, day] = item.date.split("-");
+    
+    if (filterDate && item.date !== filterDate) return false;
+    if (filterMonth && month !== filterMonth) return false;
+    if (filterYear && year !== filterYear) return false;
+    
+    return true;
+  });
+
+  const totalPages = Math.ceil(filteredSerials.length / perPage);
+  const paginatedData = filteredSerials.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   return (
     <InspectionLayout header="List of Serials">
@@ -26,6 +40,84 @@ export default function ListOfSerials() {
       </p>
 
       <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+        {/* Date Filters */}
+        <div className="mb-6 pb-6 border-b border-gray-300">
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">Filter by Date</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">Specific Date</label>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => {
+                  setFilterDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">Month</label>
+              <select
+                value={filterMonth}
+                onChange={(e) => {
+                  setFilterMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Months</option>
+                <option value="01">January</option>
+                <option value="02">February</option>
+                <option value="03">March</option>
+                <option value="04">April</option>
+                <option value="05">May</option>
+                <option value="06">June</option>
+                <option value="07">July</option>
+                <option value="08">August</option>
+                <option value="09">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">Year</label>
+              <select
+                value={filterYear}
+                onChange={(e) => {
+                  setFilterYear(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Years</option>
+                <option value="2020">2020</option>
+                <option value="2021">2021</option>
+                <option value="2022">2022</option>
+                <option value="2023">2023</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+              </select>
+            </div>
+          </div>
+          {(filterDate || filterMonth || filterYear) && (
+            <button
+              onClick={() => {
+                setFilterDate("");
+                setFilterMonth("");
+                setFilterYear("");
+                setCurrentPage(1);
+              }}
+              className="mt-4 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 font-medium"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
         <table className="min-w-full text-base border-collapse">
           <thead>
             <tr className="text-gray-500 border-b border-gray-300">
@@ -62,7 +154,7 @@ export default function ListOfSerials() {
             ) : (
               <tr>
                 <td colSpan={5} className="text-center py-12 text-gray-500">
-                  No serials found
+                  No serials found for the selected filters
                 </td>
               </tr>
             )}
