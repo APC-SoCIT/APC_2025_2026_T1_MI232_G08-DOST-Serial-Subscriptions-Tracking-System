@@ -83,16 +83,11 @@ return [
             ]) : [],
         ],
 
-        'mongodb' => [
-            'driver' => 'mongodb',
-            'dsn' => env('DB_DSN'),
-            'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),
-            'options' => [
-                'connectTimeoutMS' => 10000,
-                'serverSelectionTimeoutMS' => 10000,
-                'socketTimeoutMS' => 60000,
-            ],
-        ],
+       'mongodb' => [
+    'driver' => 'mongodb',
+    'dsn' => env('MONGODB_DSN'),
+],
+
 
         'pgsql' => [
             'driver' => 'pgsql',
