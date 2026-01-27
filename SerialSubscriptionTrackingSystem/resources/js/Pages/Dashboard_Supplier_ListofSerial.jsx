@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Link } from "@inertiajs/react";
+import { Link, router } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { FaTruckFast } from "react-icons/fa6";
@@ -118,7 +118,7 @@ function TopBar() {
     boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
     padding: 16,
     width: 260,
-    zIndex: 10,
+    zIndex: 10000,
   };
 
   return (
@@ -191,6 +191,7 @@ function TopBar() {
               </div>
 
               <button
+                onClick={() => router.post(route('logout'))}
                 style={{
                   width: '100%',
                   background: '#0B4DA1',
