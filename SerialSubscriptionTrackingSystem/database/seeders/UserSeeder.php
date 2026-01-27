@@ -14,58 +14,58 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         // Admin User
-        $admin = User::firstOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@dost.gov.ph'],
             [
                 'name' => 'Admin User',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('admin123'),
                 'email_verified_at' => now(),
+                'role' => 'admin',
             ]
         );
-        $admin->assignRole('admin');
-
-        // Supplier User
-        $supplier = User::firstOrCreate(
-            ['email' => 'supplier@dost.gov.ph'],
-            [
-                'name' => 'Supplier Account',
-                'password' => Hash::make('password123'),
-                'email_verified_at' => now(),
-            ]
-        );
-        $supplier->assignRole('supplier');
 
         // TPU User
-        $tpu = User::firstOrCreate(
+        $tpu = User::updateOrCreate(
             ['email' => 'tpu@dost.gov.ph'],
             [
                 'name' => 'TPU Officer',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('tpu123'),
                 'email_verified_at' => now(),
+                'role' => 'tpu',
             ]
         );
-        $tpu->assignRole('tpu');
 
         // GSPS User
-        $gsps = User::firstOrCreate(
+        $gsps = User::updateOrCreate(
             ['email' => 'gsps@dost.gov.ph'],
             [
                 'name' => 'GSPS Officer',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('gsps123'),
                 'email_verified_at' => now(),
+                'role' => 'gsps',
             ]
         );
-        $gsps->assignRole('gsps');
 
         // Inspection Team User
-        $inspection = User::firstOrCreate(
+        $inspection = User::updateOrCreate(
             ['email' => 'inspection@dost.gov.ph'],
             [
                 'name' => 'Inspection Team',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('inspection123'),
                 'email_verified_at' => now(),
+                'role' => 'inspection',
             ]
         );
-        $inspection->assignRole('inspection');
+
+        // Supplier User
+        $supplier = User::updateOrCreate(
+            ['email' => 'supplier@email.com'],
+            [
+                'name' => 'Supplier Account',
+                'password' => Hash::make('supplier123'),
+                'email_verified_at' => now(),
+                'role' => 'supplier',
+            ]
+        );
     }
 }

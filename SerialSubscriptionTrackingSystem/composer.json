@@ -11,6 +11,8 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "mongodb/laravel-mongodb": "^5.5",
+        "pusher/pusher-php-server": "^7.2",
         "spatie/laravel-permission": "^6.24",
         "tightenco/ziggy": "^2.6"
     },
