@@ -1,18 +1,17 @@
 import React, { useState } from "react";
-import { router, usePage } from "@inertiajs/react";
+import { router, usePage, Link } from "@inertiajs/react";
 import { GoHome } from "react-icons/go";
 import { FaClipboardList, FaUserCircle } from "react-icons/fa";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
-import Chat from "@/Components/Chat";
 
 const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
-  { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", type: "chat" },
+  { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", href: "/inspection-chat" },
 ];
 
-export default function InspectionLayout({ children }) {
+export default function InspectionLayout({ children, title }) {
   const { url } = usePage();
   const [activeView, setActiveView] = useState("content");
   const [openNotifications, setOpenNotifications] = useState(false);
@@ -31,38 +30,18 @@ export default function InspectionLayout({ children }) {
           <ul className="space-y-1">
             {navItems.map((item) => (
               <li key={item.label}>
-                {item.type === "chat" ? (
-                  <button
-                    onClick={() => setActiveView("chat")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm
-                      ${
-                        activeView === "chat"
-                          ? "bg-blue-600"
-                          : "hover:bg-blue-600/70"
-                      }`}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                ) : (
-                  <a
-                    href={item.href}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setActiveView("content");
-                      router.get(item.href);
-                    }}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm
-                      ${
-                        activeView === "content" && url.startsWith(item.href)
-                          ? "bg-blue-600"
-                          : "hover:bg-blue-600/70"
-                      }`}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </a>
-                )}
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm
+                    ${
+                      url.startsWith(item.href)
+                        ? "bg-blue-600"
+                        : "hover:bg-blue-600/70"
+                    }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -75,7 +54,7 @@ export default function InspectionLayout({ children }) {
         <header className="sticky top-0 z-20 bg-white border-b">
           <div className="px-6 py-5 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#004A98]">
-              Inspection Dashboard
+              {title || 'Inspection Dashboard'}
             </h2>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
@@ -207,31 +186,6 @@ export default function InspectionLayout({ children }) {
           {children}
         </main>
       </div>
-
-      {/* ================= FLOATING CHAT MODAL ================= */}
-      {activeView === "chat" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Overlay */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setActiveView("content")}
-          />
-
-          {/* Chat Window */}
-          <div className="relative w-[900px] h-[550px] bg-white rounded-xl shadow-2xl overflow-hidden">
-            <div className="absolute top-3 right-3">
-              <button
-                onClick={() => setActiveView("content")}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            <Chat />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

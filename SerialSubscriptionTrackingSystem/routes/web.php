@@ -43,7 +43,7 @@ Route::get('/dashboard-tpu', function () {
 
 Route::get('/dashboard-tpu-chat', function () {
         return Inertia::render('Dashboard_TPU_Chat');
-    })->name('dashboard-tpu-chat');
+    })->middleware(['auth'])->name('dashboard-tpu-chat');
 
 Route::get('/dashboard-tpu-supplierinfo', function () {
         return Inertia::render('Dashboard_TPU_Supplierinfo');
@@ -82,7 +82,7 @@ Route::get('/dashboard-gsps-inspectionstatus', function () {
 
 Route::get('/dashboard-gsps-chat', function () {
         return Inertia::render('Dashboard_GSPS_Chat');
-    })->name('dashboard-gsps-chat');
+    })->middleware(['auth'])->name('dashboard-gsps-chat');
 
 
 
@@ -109,7 +109,7 @@ Route::get('/dashboard-supplier-delivered', function () {
 
 Route::get('/dashboard-supplier-chat', function () {
         return Inertia::render('Dashboard_Supplier_Chat');
-    })->name('dashboard-supplier-chat');
+    })->middleware(['auth'])->name('dashboard-supplier-chat');
 
 
 
@@ -122,6 +122,8 @@ Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('
 
 Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
 
+Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))->middleware(['auth'])->name('inspection.chat');
+
     
 
 
@@ -133,10 +135,13 @@ Route::middleware('auth')->group(function () {
 
     // Chat routes
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
+    Route::get('/api/users/available', [ChatController::class, 'getAvailableUsers'])->name('users.available');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'getMessages'])->name('chats.messages');
     Route::post('/api/chats/get-or-create', [ChatController::class, 'getOrCreateChat'])->name('chats.getOrCreate');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'storeMessage'])->name('messages.store');
     Route::get('/api/chats/{message}/download', [ChatController::class, 'downloadAttachment'])->name('file.download');
+    Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
+    Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
 });
 
 require __DIR__.'/auth.php';
