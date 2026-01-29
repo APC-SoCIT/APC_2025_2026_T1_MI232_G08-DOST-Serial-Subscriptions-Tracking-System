@@ -4,12 +4,11 @@ import { Link, usePage } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
-import { FaTruck } from "react-icons/fa";
+import { FaTruck, FaUserPlus } from "react-icons/fa";
 import { MdMarkEmailRead } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
-import { RiAddLargeFill } from "react-icons/ri";
 import { BsFillChatTextFill } from "react-icons/bs";
 
 const Icon = ({ children }) => (
@@ -19,10 +18,10 @@ const Icon = ({ children }) => (
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'tpu.dashboard' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'dashboard-tpu-chat' },
-  { icon: <RiAddLargeFill />, label: 'Add Serial', route: 'dashboard-tpu-addserial' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-tpu-supplierinfo' },
   { icon: <ImStatsBars />, label: 'Subscription', route: 'dashboard-tpu-subscriptiontracking' },
   { icon: <FaTruck />, label: 'Monitor Delivery', route: 'dashboard-tpu-monitordelivery' },
+  { icon: <FaUserPlus />, label: 'Add Account', route: 'dashboard-tpu-addaccount' },
 ];
 
 function Sidebar({ currentRoute }) {
@@ -229,23 +228,32 @@ function TopBar() {
 }
 
 export default function TPULayout({ children, title = 'Dashboard' }) {
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning,';
-    if (hour < 18) return 'Good afternoon,';
-    return 'Good evening,';
-  };
-
+  const isChatPage = title === 'TPU Chat';
+  const isFullPage = isChatPage || title === 'Add Account' || title === 'Supplier Information' || title === 'Subscription Tracking' || title === 'Monitor Delivery';
+  
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160 }}>
         <TopBar />
-        <div style={{ padding: '32px 40px' }}>
-          <h2 style={{ marginBottom: 8 }}>{title}</h2>
-          <p style={{ color: '#666', marginBottom: 32 }}>
-            {getGreeting()} Welcome back!
-          </p>
+        <div style={{ 
+          padding: isFullPage ? '0' : '32px 40px',
+          height: isFullPage ? 'calc(100vh - 73px)' : 'auto',
+          overflow: isFullPage ? 'hidden' : 'visible'
+        }}>
+          {!isFullPage && (
+            <>
+              <h2 style={{ marginBottom: 8 }}>{title}</h2>
+              <p style={{ color: '#666', marginBottom: 32 }}>
+                {(() => {
+                  const hour = new Date().getHours();
+                  if (hour < 12) return 'Good morning,';
+                  if (hour < 18) return 'Good afternoon,';
+                  return 'Good evening,';
+                })()} Welcome back!
+              </p>
+            </>
+          )}
           {children}
         </div>
       </div>

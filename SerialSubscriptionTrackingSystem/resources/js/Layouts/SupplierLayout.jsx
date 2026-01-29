@@ -1,26 +1,24 @@
-import React, { useState } from "react";
-import { router, usePage } from "@inertiajs/react";
-import { GoHome } from "react-icons/go";
-import { ImStatsBars } from "react-icons/im";
-import { FaClipboardList, FaUserCircle } from "react-icons/fa";
-import { IoChatboxEllipsesOutline } from "react-icons/io5";
+import React, { useState } from 'react';
+import { Link } from '@inertiajs/react';
+import { GoHomeFill } from "react-icons/go";
+import { HiUsers } from "react-icons/hi";
+import { FaTruckFast } from "react-icons/fa6";
+import { TbTruckOff } from "react-icons/tb";
+import { FaTruckLoading } from "react-icons/fa";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
-
-const Icon = ({ children }) => (
-  <span style={{ marginRight: 8 }}>{children}</span>
-);
+import { BsFillChatTextFill } from "react-icons/bs";
 
 const sidebarItems = [
-  { icon: <GoHome size={18} />, label: 'Dashboard', route: '/inspection-dashboard' },
-  { icon: <IoChatboxEllipsesOutline size={18} />, label: 'Chat', route: '/inspection-chat' },
-  { icon: <ImStatsBars size={18} />, label: 'View by Date', route: '/inspection-date' },
-  { icon: <FaClipboardList size={18} />, label: 'List of Serials', route: '/inspection-serials' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
+  { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
+  { icon: <FaTruckFast />, label: 'Late', route: '/dashboard-supplier-late' },
+  { icon: <TbTruckOff />, label: 'Undelivered', route: '/dashboard-supplier-undelivered' },
+  { icon: <FaTruckLoading />, label: 'Delivered', route: '/dashboard-supplier-delivered' },
 ];
 
-function Sidebar() {
-  const currentRouteName = usePage().url.split('/').pop() || 'inspection-dashboard';
-  
+function Sidebar({ active, setActive }) {
   return (
     <div style={{
       background: '#004A98',
@@ -36,58 +34,64 @@ function Sidebar() {
       top: 0,
       zIndex: 100
     }}>
-      <div style={{ textDecoration: 'none' }}>
+      <div style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 24,
+      }}>
         <img
           src="/images/dost-logo1.png"
           alt="LOGO"
           style={{
-            marginBottom: 24,
             width: 55,
             height: 55,
             borderRadius: 12,
-            cursor: 'pointer'
           }}
         />
+        <div style={{
+          color: "#fff",
+          fontWeight: 600,
+          fontSize: 16,
+          letterSpacing: 1,
+          fontFamily: "Montserrat Bold",
+          textAlign: 'left',
+        }}>
+           <br />
+          
+        </div>
       </div>
-      
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
-          {sidebarItems.map((item) => {
-            const isActive = currentRouteName.includes(item.route.replace('/inspection-', '')) || 
-                           (item.route === '/inspection-dashboard' && currentRouteName === 'inspection-dashboard');
-            
-            return (
-              <li key={item.label}>
-                <a
-                  href={item.route}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    router.get(item.route);
-                  }}
-                  style={{
-                    margin: '10px 0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: '#fff',
-                    background: isActive ? '#0062f4ff' : 'transparent',
-                    borderRadius: 6,
-                    padding: '8px 12px',
-                    width: '140px',
-                    marginLeft: '10px',
-                    transition: 'background 0.2s, transform 0.1s',
-                    boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
-                    textDecoration: 'none',
-                  }}
-                >
-                  <Icon>{item.icon}</Icon>
-                  <span style={{ fontSize: 15 }}>{item.label}</span>
-                </a>
-              </li>
-            );
-          })}
+          {sidebarItems.map((item, idx) => (
+            <li key={item.label}>
+              <Link
+                href={item.route}
+                style={{
+                  margin: '10px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: '#fff',
+                  background: active === idx ? '#0062f4ff' : 'transparent',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  width: '140px',
+                  marginLeft: '10px',
+                  transition: 'background 0.2s, transform 0.1s',
+                  boxShadow: active === idx ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
+                  textDecoration: 'none',
+                }}
+                onClick={() => setActive(idx)}
+              >
+                <span style={{ marginRight: 15 }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            </li>
+          ))}
         </ul>
       </nav>
     </div>
@@ -96,7 +100,6 @@ function Sidebar() {
 
 function TopBar() {
   const [activeIcon, setActiveIcon] = useState(null);
-  const user = usePage().props.auth.user;
 
   const handleIconClick = (icon) => {
     setActiveIcon(activeIcon === icon ? null : icon);
@@ -129,9 +132,7 @@ function TopBar() {
         zIndex: 99
       }}
     >
-      <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        Inspection Dashboard
-      </h2>
+      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier Dashboard</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
@@ -168,7 +169,7 @@ function TopBar() {
                     width: 40,
                     height: 40,
                     borderRadius: '50%',
-                    background: '#004A98',
+                    background: '#0B4DA1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -177,44 +178,18 @@ function TopBar() {
                     marginRight: 10,
                   }}
                 >
-                  {user?.name?.charAt(0) || 'I'}
+                  S
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>
-                    {user?.name || 'Inspection User'}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>
-                    {user?.email || 'Inspection Department'}
-                  </p>
+                  <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>Supplier</h4>
+                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>Supplier Account</p>
                 </div>
               </div>
 
-              <a
-                href="#profile"
-                style={{
-                  width: '100%',
-                  display: 'block',
-                  background: '#f8f9fa',
-                  color: '#333',
-                  border: 'none',
-                  padding: '8px 0',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  textAlign: 'center',
-                  textDecoration: 'none',
-                  marginBottom: 8,
-                }}
-              >
-                Profile
-              </a>
-
               <button
-                onClick={() => window.location.href = '/logout'}
                 style={{
                   width: '100%',
-                  background: '#004A98',
+                  background: '#0B4DA1',
                   color: '#fff',
                   border: 'none',
                   padding: '8px 0',
@@ -224,8 +199,8 @@ function TopBar() {
                   fontWeight: 500,
                   transition: 'background 0.2s ease',
                 }}
-                onMouseOver={(e) => (e.target.style.background = '#003C7A')}
-                onMouseOut={(e) => (e.target.style.background = '#004A98')}
+                onMouseOver={(e) => (e.target.style.background = '#093a7a')}
+                onMouseOut={(e) => (e.target.style.background = '#0B4DA1')}
               >
                 Logout
               </button>
@@ -237,12 +212,12 @@ function TopBar() {
   );
 }
 
-export default function InspectionLayout({ children, title = 'Inspection Dashboard' }) {
-  const isChatPage = title === 'Inspection Chat';
+export default function SupplierLayout({ children, title = 'Supplier Dashboard' }) {
+  const isChatPage = title === 'Supplier Chat';
   
   return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
-      <Sidebar />
+    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#F5F6FA', minHeight: '100vh' }}>
+      <Sidebar active={isChatPage ? 1 : 0} setActive={() => {}} />
       <div style={{ flex: 1, marginLeft: 160 }}>
         <TopBar />
         <div style={{ 

@@ -223,23 +223,32 @@ function TopBar() {
 }
 
 export default function GSPSLayout({ children, title = 'GSPS Dashboard' }) {
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning,';
-    if (hour < 18) return 'Good afternoon,';
-    return 'Good evening,';
-  };
-
+  const isChatPage = title === 'GSPS Chat';
+  const isFullPage = isChatPage || title === 'Supplier Information' || title === 'Delivery Status' || title === 'Inspection Status';
+  
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160 }}>
         <TopBar />
-        <div style={{ padding: '32px 40px' }}>
-          <h2 style={{ marginBottom: 8 }}>{title}</h2>
-          <p style={{ color: '#666', marginBottom: 32 }}>
-            {getGreeting()} Welcome back!
-          </p>
+        <div style={{ 
+          padding: isFullPage ? '0' : '32px 40px',
+          height: isFullPage ? 'calc(100vh - 73px)' : 'auto',
+          overflow: isFullPage ? 'hidden' : 'visible'
+        }}>
+          {!isFullPage && (
+            <>
+              <h2 style={{ marginBottom: 8 }}>{title}</h2>
+              <p style={{ color: '#666', marginBottom: 32 }}>
+                {(() => {
+                  const hour = new Date().getHours();
+                  if (hour < 12) return 'Good morning,';
+                  if (hour < 18) return 'Good afternoon,';
+                  return 'Good evening,';
+                })()} Welcome back!
+              </p>
+            </>
+          )}
           {children}
         </div>
       </div>

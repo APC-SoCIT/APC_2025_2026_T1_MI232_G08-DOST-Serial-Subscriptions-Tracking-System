@@ -78,29 +78,29 @@ function DeliveryStatus() {
   const overallRate = ((totalDelivered / totalExpected) * 100).toFixed(2) + '%';
 
   return (
-    <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
+    <div style={{ background: '#fff', padding: 24, height: 'calc(100vh - 73px)', overflowY: 'auto' }}>
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Expected Issues</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#004A98' }}>{totalExpected}</p>
+        <div style={{ background: '#e3f2fd', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #1976d2' }}>
+          <h3 style={{ fontSize: 14, color: '#1565c0', margin: '0 0 10px 0', fontWeight: 500 }}>Total Expected Issues</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#1976d2' }}>{totalExpected}</p>
         </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Delivered</h3>
+        <div style={{ background: '#e8f5e9', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #28a745' }}>
+          <h3 style={{ fontSize: 14, color: '#2e7d32', margin: '0 0 10px 0', fontWeight: 500 }}>Total Delivered</h3>
           <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#28a745' }}>{totalDelivered}</p>
         </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Pending Delivery</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#ffc107' }}>{totalUndelivered}</p>
+        <div style={{ background: '#fff3e0', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #ff9800' }}>
+          <h3 style={{ fontSize: 14, color: '#e65100', margin: '0 0 10px 0', fontWeight: 500 }}>Pending Delivery</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#ff9800' }}>{totalUndelivered}</p>
         </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Overall Rate</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#17a2b8' }}>{overallRate}</p>
+        <div style={{ background: '#e0f7fa', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #00acc1' }}>
+          <h3 style={{ fontSize: 14, color: '#00838f', margin: '0 0 10px 0', fontWeight: 500 }}>Overall Rate</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#00acc1' }}>{overallRate}</p>
         </div>
       </div>
 
       {/* Main Table Card */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <div style={{ background: '#fff', borderRadius: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Delivery Tracking</h2>

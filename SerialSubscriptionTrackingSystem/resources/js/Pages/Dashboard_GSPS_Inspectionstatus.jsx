@@ -340,60 +340,60 @@ function InspectionStatusGSPS() {
   };
 
   return (
-    <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
+    <div style={{ background: '#fff', padding: 24, height: 'calc(100vh - 73px)', overflowY: 'auto' }}>
       {/* Stats Overview - Updated for new statuses */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: '#e3f2fd', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #1976d2' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#004A98', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#1976d2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <MdAssignment style={{ color: '#fff', fontSize: 20 }} />
             </div>
             <div>
-              <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 4px 0' }}>Total Inspections</h3>
-              <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#004A98' }}>{totalInspections}</p>
+              <h3 style={{ fontSize: 14, color: '#1565c0', margin: '0 0 4px 0', fontWeight: 500 }}>Total Inspections</h3>
+              <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#1976d2' }}>{totalInspections}</p>
             </div>
           </div>
         </div>
         
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: '#e8f5e9', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #28a745' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#28a745', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <MdCheckCircle style={{ color: '#fff', fontSize: 20 }} />
             </div>
             <div>
-              <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 4px 0' }}>No Issues</h3>
+              <h3 style={{ fontSize: 14, color: '#2e7d32', margin: '0 0 4px 0', fontWeight: 500 }}>No Issues</h3>
               <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#28a745' }}>{noIssuesItems}</p>
             </div>
           </div>
         </div>
         
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: '#ffebee', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #dc3545' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#dc3545', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <MdCancel style={{ color: '#fff', fontSize: 20 }} />
             </div>
             <div>
-              <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 4px 0' }}>With Issues</h3>
+              <h3 style={{ fontSize: 14, color: '#c62828', margin: '0 0 4px 0', fontWeight: 500 }}>With Issues</h3>
               <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#dc3545' }}>{withIssuesItems}</p>
             </div>
           </div>
         </div>
         
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: '#fff3e0', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: '4px solid #ff9800' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#ffc107', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#ff9800', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <FiClock style={{ color: '#fff', fontSize: 20 }} />
             </div>
             <div>
-              <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 4px 0' }}>To be Inspected</h3>
-              <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#ffc107' }}>{toBeInspectedItems}</p>
+              <h3 style={{ fontSize: 14, color: '#e65100', margin: '0 0 4px 0', fontWeight: 500 }}>To be Inspected</h3>
+              <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#ff9800' }}>{toBeInspectedItems}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content Card */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <div style={{ background: '#fff', borderRadius: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Inspection Status</h2>

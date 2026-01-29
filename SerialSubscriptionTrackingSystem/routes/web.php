@@ -57,9 +57,9 @@ Route::get('/dashboard-tpu-monitordelivery', function () {
         return Inertia::render('Dashboard_TPU_Monitordelivery');
     })->name('dashboard-tpu-monitordelivery');
 
-Route::get('/dashboard-tpu-addserial', function () {
-        return Inertia::render('Dashboard_TPU_AddSerial');
-    })->name('dashboard-tpu-addserial');
+Route::get('/dashboard-tpu-addaccount', function () {
+        return Inertia::render('Dashboard_TPU_Addaccount');
+    })->name('dashboard-tpu-addaccount');
 
 
 // GSPS Routes - Main dashboard without role middleware, sub-routes with middleware
@@ -113,6 +113,12 @@ Route::get('/dashboard-supplier-chat', function () {
 
 
 
+// Add this route in the Inspection Routes section
+Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))
+    ->middleware(['auth', 'verified'])
+    ->name('inspection.chat');
+
+
 
 // Inspection Routes - Main dashboard without role middleware, sub-routes with middleware
 Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified'])->name('inspection.dashboard');
@@ -122,7 +128,7 @@ Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('
 
 Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
 
-    
+
 
 
 // Authenticated profile routes

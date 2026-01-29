@@ -127,39 +127,9 @@ function MonitorDelivery() {
   };
 
   return (
-    <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
-        {stats.map((stat, index) => (
-          <div
-            key={index}
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: 24,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-              textAlign: 'center',
-              borderTop: `4px solid ${stat.color}`,
-            }}
-          >
-            <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0', fontWeight: 500 }}>
-              {stat.title}
-            </h3>
-            <p style={{
-              fontSize: 32,
-              fontWeight: 'bold',
-              margin: 0,
-              color: stat.title === 'Delivery Rate' ? (deliveryRate >= 90 ? '#28a745' : deliveryRate >= 70 ? '#ffc107' : '#dc3545') : '#2c3e50'
-            }}>
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Main Content Card */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ background: '#fff', padding: 24, height: 'calc(100vh - 73px)', overflowY: 'auto' }}>
+      {/* Main Content */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h2 style={{ color: '#004A98', margin: 0, fontSize: 20 }}>Delivery Monitoring</h2>
           
           <div style={{ display: 'flex', gap: 12 }}>
@@ -264,8 +234,6 @@ function MonitorDelivery() {
             <thead>
               <tr style={{ background: '#f5f5f5' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Contact Person</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Email</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Phone</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Address</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Delivery Status</th>
@@ -276,8 +244,6 @@ function MonitorDelivery() {
               {filteredDeliveries.map((delivery) => (
                 <tr key={delivery.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '16px' }}>{delivery.supplierName}</td>
-                  <td style={{ padding: '16px' }}>{delivery.contactPerson}</td>
-                  <td style={{ padding: '16px', color: '#004A98' }}>{delivery.email}</td>
                   <td style={{ padding: '16px' }}>{delivery.phone}</td>
                   <td style={{ padding: '16px' }}>{delivery.address}</td>
                   <td style={{ padding: '16px' }}>
@@ -312,10 +278,21 @@ function MonitorDelivery() {
         </div>
 
         {/* Table Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, color: '#666', fontSize: 14 }}>
-          <div>
+        <div style={{ 
+          marginTop: 30, 
+          paddingTop: 20, 
+          borderTop: '1px solid #eee',
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          alignItems: 'center' 
+        }}>
+          <div style={{ color: '#666', fontSize: 14 }}>
             Showing {filteredDeliveries.length} of {deliveryData.length} results
           </div>
+        </div>
+
+        {/* Pagination */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={{ 
               padding: '8px 16px', 
@@ -353,6 +330,15 @@ function MonitorDelivery() {
               border: '1px solid #ddd', 
               background: '#fff', 
               borderRadius: 6, 
+              cursor: 'pointer' 
+            }}>
+              3
+            </button>
+            <button style={{ 
+              padding: '8px 16px', 
+              border: '1px solid #ddd', 
+              background: '#fff', 
+              borderRadius: 6, 
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -362,7 +348,6 @@ function MonitorDelivery() {
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 }
