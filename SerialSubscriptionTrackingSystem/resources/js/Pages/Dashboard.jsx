@@ -353,10 +353,9 @@ const pieData = [
   
   {/* STORY TEXT */}
   <div className="max-w-3xl">
-    <p className="text-sm text-gray-700 leading-relaxed">
-  <span className="font-medium">
+ 
+    <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
     This dashboard provides a clear overview of user account approvals
-  </span>{" "}
   for the selected year. It shows how many accounts have been approved, how many remain pending,
   and how approval activity changes month by month. These insights help administrators assess
   processing efficiency, identify approval backlogs, and improve response time.
