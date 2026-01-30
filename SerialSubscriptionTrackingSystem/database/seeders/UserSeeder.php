@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
             ['email' => 'admin@dost.gov.ph'],
             [
                 'name' => 'Admin User',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('Password123'),
                 'email_verified_at' => now(),
             ]
         );
@@ -29,7 +29,7 @@ class UserSeeder extends Seeder
             ['email' => 'supplier@dost.gov.ph'],
             [
                 'name' => 'Supplier Account',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('Password123'),
                 'email_verified_at' => now(),
             ]
         );
@@ -40,7 +40,7 @@ class UserSeeder extends Seeder
             ['email' => 'tpu@dost.gov.ph'],
             [
                 'name' => 'TPU Officer',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('Password123'),
                 'email_verified_at' => now(),
             ]
         );
@@ -51,7 +51,7 @@ class UserSeeder extends Seeder
             ['email' => 'gsps@dost.gov.ph'],
             [
                 'name' => 'GSPS Officer',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('Password123'),
                 'email_verified_at' => now(),
             ]
         );
@@ -62,7 +62,7 @@ class UserSeeder extends Seeder
             ['email' => 'inspection@dost.gov.ph'],
             [
                 'name' => 'Inspection Team',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('Password123'),
                 'email_verified_at' => now(),
             ]
         );

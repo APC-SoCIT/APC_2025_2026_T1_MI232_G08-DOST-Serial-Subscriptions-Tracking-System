@@ -23,6 +23,14 @@ class LoginResponse implements LoginResponseContract
             return redirect()->route('tpu.dashboard');
         }
 
+        if ($user->hasRole('gsps')) {
+            return redirect()->route('gsps.dashboard');
+        }
+
+        if ($user->hasRole('supplier')) {
+            return redirect()->route('supplier.dashboard');
+        }
+
         abort(403);
     }
 }

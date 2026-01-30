@@ -265,20 +265,20 @@ export default function InspectionDashboard() {
           <table className="w-full border rounded">
             <thead className="bg-gray-100">
               <tr>
-                {["Issue", "Title", "Supplier", "Date", "Status", "Action"].map((h) => (
-                  <th key={h} className="p-3">{h}</th>
+                {["Issue", "Title", "Supplier", "Date Received", "Status", "Action"].map((h) => (
+                  <th key={h} className="p-3 text-left font-semibold">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {serialsForInspection.map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="p-3">{s.issueNo}</td>
-                  <td className="p-3">{s.title}</td>
-                  <td className="p-3">{s.supplier}</td>
-                  <td className="p-3">{s.deliveryDate}</td>
-                  <td className="p-3">{s.status}</td>
-                  <td className="p-3">
+                <tr key={s.id} className="border-t hover:bg-gray-50">
+                  <td className="p-3 align-middle">{s.issueNo}</td>
+                  <td className="p-3 align-middle">{s.title}</td>
+                  <td className="p-3 align-middle">{s.supplier}</td>
+                  <td className="p-3 align-middle">{s.deliveryDate}</td>
+                  <td className="p-3 align-middle">{s.status}</td>
+                  <td className="p-3 align-middle">
                     {s.status === "Pending" && (
                       <button
                         onClick={() => openModal(s)}
@@ -314,7 +314,6 @@ export default function InspectionDashboard() {
                 value={condition}
                 onChange={(e) => setCondition(e.target.value)}
               >
-                <option>Good</option>
                 <option>Acceptable</option>
                 <option>Damaged</option>
               </select>
@@ -361,9 +360,15 @@ export default function InspectionDashboard() {
                 </button>
                 <button
                   onClick={submitInspection}
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
+                  className="px-4 py-2 bg-red-600 text-white rounded"
                 >
-                  Submit
+                  For Return
+                </button>
+                <button
+                  onClick={submitInspection}
+                  className="px-4 py-2 bg-green-600 text-white rounded"
+                >
+                  Mark as Inspected
                 </button>
               </div>
             </div>

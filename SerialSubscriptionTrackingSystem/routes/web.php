@@ -34,10 +34,10 @@ Route::get('/dashboard-admin', function () {
     return Inertia::render('Dashboard_Admin');
 })->middleware(['auth', 'verified', 'role:admin'])->name('admin.dashboard');
 
-// TPU Routes - Main dashboard without role middleware, sub-routes with middleware
+// TPU Routes - Main dashboard with role middleware
 Route::get('/dashboard-tpu', function () {
     return Inertia::render('Dashboard_TPU');
-})->middleware(['auth', 'verified'])->name('tpu.dashboard');
+})->middleware(['auth', 'verified', 'role:tpu'])->name('tpu.dashboard');
 
 
 
@@ -62,10 +62,10 @@ Route::get('/dashboard-tpu-addserial', function () {
     })->name('dashboard-tpu-addserial');
 
 
-// GSPS Routes - Main dashboard without role middleware, sub-routes with middleware
+// GSPS Routes - Main dashboard with role middleware
 Route::get('/dashboard-gsps', function () {
     return Inertia::render('Dashboard_GSPS');
-})->middleware(['auth', 'verified'])->name('gsps.dashboard');
+})->middleware(['auth', 'verified', 'role:gsps'])->name('gsps.dashboard');
 
 
 Route::get('/dashboard-gsps-supplierinfo', function () {
@@ -88,7 +88,7 @@ Route::get('/dashboard-gsps-chat', function () {
 
 Route::get('/dashboard-supplier', function () {
     return Inertia::render('Dashboard_Supplier');
-})->middleware(['auth', 'verified'])->name('supplier.dashboard');
+})->middleware(['auth', 'verified', 'role:supplier'])->name('supplier.dashboard');
 
 
 Route::get('/dashboard-supplier-listofserial', function () {
@@ -114,8 +114,8 @@ Route::get('/dashboard-supplier-chat', function () {
 
 
 
-// Inspection Routes - Main dashboard without role middleware, sub-routes with middleware
-Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified'])->name('inspection.dashboard');
+// Inspection Routes - Main dashboard with role middleware
+Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified', 'role:inspection'])->name('inspection.dashboard');
 
 
 Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('inspection.date');
@@ -124,6 +124,24 @@ Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->na
 
     
 
+
+Route::middleware(['auth'])->group(function () {
+
+    Route::get('/admin/dashboard', fn () => view('dashboards.admin'))
+        ->middleware('role:admin');
+
+    Route::get('/inspection/dashboard', fn () => view('dashboards.inspection'))
+        ->middleware('role:inspection');
+
+    Route::get('/supplier/dashboard', fn () => view('dashboards.supplier'))
+        ->middleware('role:supplier');
+
+    Route::get('/gsps/dashboard', fn () => view('dashboards.gsps'))
+        ->middleware('role:gsps');
+
+    Route::get('/tpu/dashboard', fn () => view('dashboards.tpu'))
+        ->middleware('role:tpu');
+});
 
 // Authenticated profile routes
 Route::middleware('auth')->group(function () {
