@@ -18,6 +18,7 @@ return [
 
     'default' => env('DB_CONNECTION', 'mongodb'),
 
+
     /*
     |--------------------------------------------------------------------------
     | Database Connections
@@ -83,10 +84,16 @@ return [
             ]) : [],
         ],
 
-       'mongodb' => [
-    'driver' => 'mongodb',
-    'dsn' => env('MONGODB_DSN'),
-],
+       'mongodb' => [ 
+            'driver' => 'mongodb', 
+            'dsn' => env('DB_DSN'), 
+            'database' => env('DB_DATABASE','dost_serial_subscriptions'), 
+            'options' => [ 
+                'connectionTimeoutMS' => 10000,
+                'serverSelectionTimeoutMS' => 10000,
+                'socketTimeoutMS' => 60000,
+            ],
+        ],
 
 
         'pgsql' => [
