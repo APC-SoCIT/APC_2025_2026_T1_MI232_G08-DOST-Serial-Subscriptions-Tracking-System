@@ -247,9 +247,10 @@ function TopBar() {
   );
 }
 
-export default function TPULayout({ children, title = 'Dashboard' }) {
+export default function TPULayout({ children, title = '' }) {
   const getGreeting = () => {
     const hour = new Date().getHours();
+    
     if (hour < 12) return 'Good morning,';
     if (hour < 18) return 'Good afternoon,';
     return 'Good evening,';
@@ -262,7 +263,7 @@ export default function TPULayout({ children, title = 'Dashboard' }) {
         <TopBar />
         <div style={{ padding: '32px 40px' }}>
           <h2 style={{ marginBottom: 8 }}>{title}</h2>
-          <p style={{ color: '#666', marginBottom: 32 }}>
+          <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
             {getGreeting()} Welcome back!
           </p>
           {children}

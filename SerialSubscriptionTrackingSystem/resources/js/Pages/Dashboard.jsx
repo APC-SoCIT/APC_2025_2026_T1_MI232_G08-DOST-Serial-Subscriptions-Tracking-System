@@ -6,6 +6,8 @@ import { Listbox } from "@headlessui/react";
 import {
   AreaChart,
   Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -353,10 +355,9 @@ const pieData = [
   
   {/* STORY TEXT */}
   <div className="max-w-3xl">
-    <p className="text-sm text-gray-700 leading-relaxed">
-  <span className="font-medium">
+ 
+    <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
     This dashboard provides a clear overview of user account approvals
-  </span>{" "}
   for the selected year. It shows how many accounts have been approved, how many remain pending,
   and how approval activity changes month by month. These insights help administrators assess
   processing efficiency, identify approval backlogs, and improve response time.
@@ -367,7 +368,7 @@ const pieData = [
   {/* YEAR FILTER */}
 <div className="flex justify-end">
   <div className="w-56">
-    <label className="block text-sm font-medium text-gray-900 mb-2">
+    <label className="text-lg font-bold text-gray-700 mb-2">
   Select Year
 </label>
 
@@ -458,7 +459,7 @@ const pieData = [
         {/* AREA CHART */}
        {/* TOP CHARTS – SIDE BY SIDE */}
 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* ACCOUNT APPROVAL TREND */}
+        {/* ACCOUNT APPROVAL TREND */}
 <div className="bg-white rounded-xl p-6 shadow-md">
   <h3 className="text-lg font-semibold text-gray-800 mb-4">
     Account Approval Trend
@@ -466,21 +467,26 @@ const pieData = [
 
   <div style={{ height: 320 }}>
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={currentApprovalData}>
+      <LineChart data={currentApprovalData}>
+        <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="month" />
         <YAxis />
         <Tooltip />
-        <Area
+        <Legend />
+
+        <Line
           type="monotone"
           dataKey="approved"
-          stroke="#16a34a"
-          fill="#86efac"
-          name="Approved"
+          stroke="#22c55e"
+          strokeWidth={3}
+          dot={{ r: 4 }}
+          name="Approved Accounts"
         />
-      </AreaChart>
+      </LineChart>
     </ResponsiveContainer>
   </div>
 </div>
+
 {/* APPROVAL VS PENDING (STACKED) */}
 <div className="bg-white rounded-xl p-6 shadow-md">
   <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -581,51 +587,6 @@ const pieData = [
             </div>
           </div>
 
-        </div>
-
-        {/* ================================= */}
-        {/*           INCOMING TABLE          */}
-        {/* ================================= */}
-        <div className="bg-white rounded-2xl p-6 shadow-md overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">
-              New Account Approval
-            </h3>
-            <div className="text-sm text-gray-500">VoguePh • 06.20.2025</div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left">Name</th>
-                  <th className="px-6 py-3 text-left">Email</th>
-                  <th className="px-6 py-3 text-left">Contact</th>
-                  <th className="px-6 py-3 text-left">Date</th>
-                </tr>
-              </thead>
-
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm">Vol 2</td>
-                  <td className="px-6 py-4 text-sm">0027-8424</td>
-                  <td className="px-6 py-4 text-sm">
-                    Proceedings of the National Academy of Sciences
-                  </td>
-                  <td className="px-6 py-4 text-sm">20.09.2025</td>
-                </tr>
-
-                <tr className="bg-blue-50 hover:bg-blue-100">
-                  <td className="px-6 py-4 text-sm">Vol 1</td>
-                  <td className="px-6 py-4 text-sm">0042-9686</td>
-                  <td className="px-6 py-4 text-sm">
-                    Bulletin of the World Health Organization
-                  </td>
-                  <td className="px-6 py-4 text-sm">19.09.2025</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
 
       </div>

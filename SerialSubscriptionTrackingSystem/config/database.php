@@ -84,12 +84,21 @@ return [
             ]) : [],
         ],
 
+<<<<<<< HEAD
        'mongodb' => [ 
             'driver' => 'mongodb', 
             'dsn' => env('DB_DSN'), 
             'database' => env('DB_DATABASE','dost_serial_subscriptions'), 
             'options' => [ 
                 'connectionTimeoutMS' => 10000,
+=======
+      'mongodb' => [
+            'driver' => 'mongodb',
+            'dsn' => env('DB_DSN'),
+            'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),
+            'options' => [
+                'connectTimeoutMS' => 10000,
+>>>>>>> c54527f06ccf9890ab2dcd9987a0cb19543c7890
                 'serverSelectionTimeoutMS' => 10000,
                 'socketTimeoutMS' => 60000,
             ],
