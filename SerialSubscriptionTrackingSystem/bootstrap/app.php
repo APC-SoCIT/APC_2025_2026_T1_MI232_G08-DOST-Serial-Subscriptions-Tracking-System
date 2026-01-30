@@ -17,7 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        // Exclude chat API routes from CSRF verification (they use auth middleware)
+        $middleware->validateCsrfTokens(except: [
+            'api/chats/*',
+            'api/users/*',
+            'api/messages/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
