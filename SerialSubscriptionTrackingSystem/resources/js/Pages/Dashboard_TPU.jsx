@@ -1,379 +1,391 @@
-import React, { useState } from "react";
-import { useRef, useEffect } from "react";
-import TPULayout from "@/Layouts/TPULayout";
-
+import React, { useState, useMemo, useEffect } from "react";
+import AdminLayout from "@/Layouts/AdminLayout";
+import { Head } from "@inertiajs/react";
+import { Listbox } from "@headlessui/react";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  LabelList, // ✅ ADD THIS LINE (DO NOT REMOVE OTHERS)
+  LineChart, Line,
+  AreaChart, Area,
+  BarChart, Bar, LabelList,   // 👈 ADD THIS
+  PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, Legend,
+  ResponsiveContainer
 } from "recharts";
 
+/* ================= CONSTANTS ================= */
 
-
-/* ===============================
-   YEAR OPTIONS (LIKE ADMIN)
-================================ */
 const YEARS = [2022, 2023, 2024, 2025];
 
-/* ===============================
-   KPI DATA (ANNUAL TOTALS)
-================================ */
-const yearlyKPI = {
-  2022: { encoded: 120, delivered: 85, pending: 20, overdue: 15, inspected: 80 },
-  2023: { encoded: 180, delivered: 140, pending: 25, overdue: 15, inspected: 135 },
-  2024: { encoded: 240, delivered: 190, pending: 30, overdue: 20, inspected: 185 },
-  2025: { encoded: 320, delivered: 260, pending: 35, overdue: 25, inspected: 250 },
-};
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
 
-/* ===============================
-   MONTHLY MOCK DATA (ALL CHARTS)
-================================ */
-const monthlyData = {
-  2025: [
-    { month: "Jan", draft: 8, awarded: 20, delivery: 18, delivered: 15, inspected: 12, returned: 2 },
-    { month: "Feb", draft: 7, awarded: 22, delivery: 20, delivered: 17, inspected: 14, returned: 2 },
-    { month: "Mar", draft: 9, awarded: 25, delivery: 22, delivered: 18, inspected: 16, returned: 3 },
-    { month: "Apr", draft: 10, awarded: 26, delivery: 23, delivered: 20, inspected: 18, returned: 3 },
-    { month: "May", draft: 12, awarded: 28, delivery: 25, delivered: 22, inspected: 20, returned: 4 },
-    { month: "Jun", draft: 10, awarded: 27, delivery: 24, delivered: 21, inspected: 19, returned: 4 },
-    { month: "Jul", draft: 11, awarded: 29, delivery: 26, delivered: 23, inspected: 21, returned: 4 },
-    { month: "Aug", draft: 12, awarded: 30, delivery: 28, delivered: 25, inspected: 22, returned: 5 },
-    { month: "Sep", draft: 14, awarded: 32, delivery: 30, delivered: 27, inspected: 24, returned: 5 },
-    { month: "Oct", draft: 15, awarded: 34, delivery: 32, delivered: 29, inspected: 26, returned: 6 },
-    { month: "Nov", draft: 13, awarded: 33, delivery: 31, delivered: 28, inspected: 25, returned: 6 },
-    { month: "Dec", draft: 14, awarded: 35, delivery: 33, delivered: 30, inspected: 27, returned: 6 },
-  ],
-};
-
-monthlyData[2024] = monthlyData[2025].map(m => ({ ...m, delivered: m.delivered - 4 }));
-monthlyData[2023] = monthlyData[2025].map(m => ({ ...m, delivered: m.delivered - 8 }));
-monthlyData[2022] = monthlyData[2025].map(m => ({ ...m, delivered: m.delivered - 12 }));
-
-/* ===============================
-   ADMIN DASHBOARD COLORS
-================================ */
 const COLORS = {
-  blue: "#2563eb",
-  green: "#22c55e",
-  yellow: "#facc15",
-  red: "#ef4444",
-  purple: "#a855f7",
-  teal: "#14b8a6",
+  awarded: "#2563eb",
+  delivered: "#22c55e",
+  forDelivery: "#fde047",
+  inspected: "#a855f7",
+  returned: "#ef4444"
 };
 
-/* ===============================
-   COMPONENT
-================================ */
-export default function Dashboard_TPU() {
-  const [selectedYear, setSelectedYear] = useState(2025);
-  const renderPercentageLabel = ({value, percent }) =>
-  `${name} ${value} (${(percent * 100).toFixed(0)}%)`;
-  const pipelineData = monthlyData[selectedYear] || [];
-  const renderInsideLabel = ({
-  cx,
-  cy,
-  midAngle,
-  innerRadius,
-  outerRadius,
-  percent,
-  value,
-}) => {
+/* ================= HELPERS ================= */
+const dateSpanFactor = (startDate, endDate) => {
+  if (!startDate || !endDate) return 1;
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (end <= start) return 0.1;
+
+  const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+  return Math.min(diffDays / 365, 1); // normalize to year
+};
+
+
+const monthIndex = (m) => MONTHS.indexOf(m);
+
+const monthRange = (start, end) =>
+  MONTHS.slice(monthIndex(start), monthIndex(end) + 1);
+
+const firstDayOfMonth = (year, month) =>
+  `${year}-${String(monthIndex(month) + 1).padStart(2, "0")}-01`;
+
+const lastDayOfMonth = (year, month) =>
+  new Date(year, monthIndex(month) + 1, 0).toISOString().split("T")[0];
+
+const yearWeight = (year) =>
+  ({ 2022: 0.85, 2023: 0.95, 2024: 1.0, 2025: 1.1 }[year] || 1);
+
+/* ================= PIE LABEL ================= */
+
+const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
   const RADIAN = Math.PI / 180;
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  const r = innerRadius + (outerRadius - innerRadius) * 0.6;
+  const x = cx + r * Math.cos(-midAngle * RADIAN);
+  const y = cy + r * Math.sin(-midAngle * RADIAN);
 
   return (
     <text
       x={x}
       y={y}
-      fill="#ffffff"
+      fill="#fff"
+      fontSize={14}
+      fontWeight="700"
       textAnchor="middle"
       dominantBaseline="central"
-      fontSize={14}
-      fontWeight="bold"
     >
-      {`${value} (${Math.round(percent * 100)}%)`}
+      {(percent * 100).toFixed(0)}%
     </text>
   );
 };
 
+/* ================= COMPONENT ================= */
+
+export default function TPUDashboard() {
+  
+  const [year, setYear] = useState(2025);
+  const [startMonth, setStartMonth] = useState("January");
+  const [endMonth, setEndMonth] = useState("December");
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2025, "January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2025, "December"));
+
+  useEffect(() => {
+    setStartDate(firstDayOfMonth(year, startMonth));
+  }, [year, startMonth]);
+
+  useEffect(() => {
+    setEndDate(lastDayOfMonth(year, endMonth));
+  }, [year, endMonth]);
+
+  const months = monthRange(startMonth, endMonth);
+  const yFactor = yearWeight(year);
+  const dFactor = dateSpanFactor(startDate, endDate);
+
+
+  /* ================= KPI DATA ================= */
+
+const total = Math.round(320 * yFactor * dFactor);
+const delivered = Math.round(260 * yFactor * dFactor);
+
+const kpis = {
+  total,
+  delivered,
+  awaiting: Math.round(35 * yFactor * dFactor),
+  returned: Math.round(25 * yFactor * dFactor),
+  inspected: Math.round(250 * yFactor * dFactor),
+  success: Math.round((delivered / Math.max(total, 1)) * 100),
+};
+
+  /* ================= CHART DATA ================= */
+
+  const pipelineData = months.map((m, i) => ({
+  month: m,
+  awarded: Math.round((30 + i * 2) * yFactor * dFactor),
+  delivered: Math.round((25 + i * 2) * yFactor * dFactor),
+  forDelivery: Math.round((15 + i) * yFactor * dFactor),
+  inspected: Math.round((10 + i) * yFactor * dFactor),
+  returned: Math.round((5 + i * 0.5) * yFactor * dFactor),
+}));
+
+
+ const deliveryTrend = months.map((m, i) => ({
+  month: m,
+  delivered: Math.round(
+    (15 + i * 1.5 + (i % 2 ? -1 : 1)) * yFactor * dFactor
+  ),
+}));
+
+
+const supplierRanking = useMemo(() => {
+  const scale = months.length / 12;
+  const weight = yearWeight(year);
+
+  const cap = (v) => Math.min(100, Math.round(v));
+
+  return [
+    { name: "ABC Books", value: cap(95 * scale * weight) },
+    { name: "Med Pub Ltd", value: cap(88 * scale * weight) },
+    { name: "Global Periodicals", value: cap(72 * scale * weight) },
+    { name: "Nat Geo", value: cap(65 * scale * weight) },
+  ];
+}, [year, months]);
 
 
 
 
-  const kpi = yearlyKPI[selectedYear];
-  const deliveryRate = Math.round((kpi.delivered / kpi.encoded) * 100);
+ const inspectionPie = useMemo(() => {
+  const scale = months.length / 12;
+  const weight = yearWeight(year) * dFactor;
+
+  const baseReturnRate = {
+    2022: 0.12,
+    2023: 0.10,
+    2024: 0.09,
+    2025: 0.07,
+  }[year] || 0.1;
+
+  const totalInspections = Math.round(275 * scale * weight);
+  const returned = Math.round(totalInspections * baseReturnRate);
+  const inspected = Math.max(totalInspections - returned, 0);
+
+  return [
+    { name: "Inspected", value: inspected },
+    { name: "Returned", value: returned },
+  ];
+}, [year, months, dFactor]);
+
+
+
+
+  /* ================= RENDER ================= */
 
   return (
-    <TPULayout>
+    <AdminLayout>
+      <Head title="TPU Dashboard" />
+
       <div className="space-y-6">
 
-        {/* HEADER */}
-       {/* HEADER + STORY + YEAR FILTER */}
-<div className="flex justify-between items-start gap-6">
-  
-  {/* LEFT: TITLE + STORY TEXT */}
-  <div>
-    <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
-  This dashboard provides a consolidated overview of serial subscriptions handled by the TPU for the selected year. 
-  It highlights total workload, delivery progress, inspection outcomes, and supplier reliability to help 
-  identify bottlenecks and support operational decision-making.
-</p>
-
-  </div>
-
-  <div className="flex flex-col items-end">
-  <label className="text-lg font-bold text-gray-700 mb-2">
-  Select Year
-</label>
-
-
-
-  <select
-    value={selectedYear}
-    onChange={(e) => setSelectedYear(Number(e.target.value))}
-    className="
-      border 
-      rounded-lg 
-      px-6 
-      py-3 
-      text-lg 
-      font-semibold
-      shadow-sm
-      focus:outline-none
-      focus:ring-2
-      focus:ring-blue-500
-      w-36
-    "
-  >
-    {YEARS.map((y) => (
-      <option key={y} value={y}>
-        {y}
-      </option>
-    ))}
-  </select>
-</div>
-
-
-</div>
-
-
-        {/* KPI CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <KPI title="Total Serials Encoded" value={kpi.encoded} color={COLORS.blue} />
-          <KPI title="Delivered to GSPS" value={kpi.delivered} color={COLORS.green} />
-          <KPI title="Awaiting Delivery" value={kpi.pending} color={COLORS.yellow} />
-          <KPI title="Overdue / Returned" value={kpi.overdue} color={COLORS.red} />
-          <KPI title="Inspected" value={kpi.inspected} color={COLORS.purple} />
-          <KPI title="Delivery Success Rate" value={`${deliveryRate}%`} color={COLORS.teal} />
+        {/* FILTERS */}
+        <div className="bg-white p-6 rounded-xl shadow">
+          <h2 className="text-xl font-bold mb-4">Dashboard Filters</h2>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <SmallSelect label="Year" value={year} onChange={setYear} options={YEARS} />
+            <SmallSelect label="Start Month" value={startMonth} onChange={setStartMonth} options={MONTHS} />
+            <SmallSelect label="End Month" value={endMonth} onChange={setEndMonth} options={MONTHS} />
+            <SmallInput label="Start Date" value={startDate} onChange={setStartDate} />
+            <SmallInput label="End Date" value={endDate} onChange={setEndDate} />
+          </div>
         </div>
 
-        {/* CHART 1: SERIAL PIPELINE (STACKED BAR) */}
-      {/* ===============================
-   CHARTS – 2 x 2 GRID (ADMIN STYLE)
-================================ */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <KPI title="Total Serials Encoded" value={kpis.total} />
+          <KPI title="Delivered to GSPS" value={kpis.delivered} color="text-green-600" />
+          <KPI title="Awaiting Delivery" value={kpis.awaiting} color="text-yellow-500" />
+          <KPI title="Overdue / Returned" value={kpis.returned} color="text-red-500" />
+          <KPI title="Inspected" value={kpis.inspected} color="text-purple-500" />
+          <KPI title="Delivery Success Rate" value={`${kpis.success}%`} color="text-teal-600" />
+        </div>
 
-  {/* CHART 1: SERIAL PIPELINE – STACKED AREA */}
-<Card title="Serial Pipeline Status">
-  <ResponsiveContainer width="100%" height={300}>
-    <AreaChart data={pipelineData}>
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="month" />
-      <YAxis />
-      <Tooltip />
-      <Legend />
+        {/* CHARTS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <Area
-        type="monotone"
-        dataKey="draft"
-        stackId="1"
-        stroke="#94a3b8"
-        fill="#cbd5e1"
-        name="Draft"
+          {/* SERIAL PIPELINE */}
+          <Chart title="Serial Pipeline Status">
+            <ResponsiveContainer height={300}>
+             <AreaChart data={pipelineData}>
+  <XAxis dataKey="month" tick={{ fontSize: 14, fontWeight: 600 }} />
+  tickFormatter={(m) => m.slice(0, 3)} // Jan, Feb, Mar
+  <YAxis tick={{ fontSize: 14, fontWeight: 600 }} />
+  <Tooltip />
+  <Legend
+  verticalAlign="bottom"
+  align="center"
+  wrapperStyle={{ paddingTop: 10 }}
+/>
+
+  <Area
+    dataKey="awarded"
+    name="Awarded"
+    stackId="1"
+    fill={COLORS.awarded}
+    stroke={COLORS.awarded}
+  />
+
+  <Area
+    dataKey="delivered"
+    name="Delivered"
+    stackId="1"
+    fill={COLORS.delivered}
+    stroke={COLORS.delivered}
+  />
+
+  <Area
+    dataKey="forDelivery"
+    name="For Delivery"
+    stackId="1"
+    fill={COLORS.forDelivery}
+    stroke={COLORS.forDelivery}
+  />
+
+  <Area
+    dataKey="inspected"
+    name="Inspected"
+    stackId="1"
+    fill={COLORS.inspected}
+    stroke={COLORS.inspected}
+  />
+
+  <Area
+    dataKey="returned"
+    name="Returned"
+    stackId="1"
+    fill={COLORS.returned}
+    stroke={COLORS.returned}
+  />
+</AreaChart>
+
+            </ResponsiveContainer>
+          </Chart>
+
+          {/* DELIVERY TREND */}
+          <Chart title="Delivery Performance Trend">
+            <ResponsiveContainer height={300}>
+              <LineChart data={deliveryTrend}>
+                <XAxis dataKey="month" tick={{ fontSize: 14, fontWeight: 600 }} />
+                <YAxis tick={{ fontSize: 14, fontWeight: 600 }} />
+                <Tooltip />
+                <Legend />
+                <Line dataKey="delivered" stroke="#0e06eaff" strokeWidth={4} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Chart>
+
+          {/* SUPPLIER RANKING */}
+<Chart title="Supplier Reliability Ranking">
+  <ResponsiveContainer height={300}>
+    <BarChart data={supplierRanking} layout="vertical">
+      <XAxis
+        type="number"
+        domain={[0, 100]}
+        tickFormatter={(value) => value + "%"}
       />
 
-      <Area
-        type="monotone"
-        dataKey="awarded"
-        stackId="1"
-        stroke="#2563eb"
-        fill="#3b82f6"
-        name="Awarded"
+      <YAxis
+        type="category"
+        dataKey="name"
+        tick={{ fontSize: 14, fontWeight: 600 }}
       />
 
-      <Area
-        type="monotone"
-        dataKey="delivery"
-        stackId="1"
-        stroke="#facc15"
-        fill="#fde047"
-        name="For Delivery"
-      />
+      <Tooltip formatter={(value) => value + "%"} />
 
-      <Area
-        type="monotone"
-        dataKey="delivered"
-        stackId="1"
-        stroke="#22c55e"
-        fill="#4ade80"
-        name="Delivered"
-      />
-
-      <Area
-        type="monotone"
-        dataKey="inspected"
-        stackId="1"
-        stroke="#a855f7"
-        fill="#c084fc"
-        name="Inspected"
-      />
-
-      <Area
-        type="monotone"
-        dataKey="returned"
-        stackId="1"
-        stroke="#ef4444"
-        fill="#f87171"
-        name="Returned"
-      />
-    </AreaChart>
-  </ResponsiveContainer>
-</Card>
-
-
-  {/* CHART 2: DELIVERY PERFORMANCE TREND */}
-  <Card title="Delivery Performance Trend">
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={monthlyData[selectedYear]}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        <Line
-          type="monotone"
-          dataKey="delivered"
-          stroke={COLORS.green}
-          strokeWidth={3}
-          dot={{ r: 4 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  </Card>
-
-{/* CHART 3: SUPPLIER RELIABILITY */}
-<Card title="Supplier Reliability Ranking">
-  <ResponsiveContainer width="100%" height={300}>
-    <BarChart
-      data={[
-        { name: "ABC Books", rate: 95 },
-        { name: "Med Pub Ltd", rate: 88 },
-        { name: "Global Periodicals", rate: 72 },
-        { name: "Nat Geo", rate: 65 },
-      ]}
-      layout="vertical"
-      margin={{ left: 40, right: 40 }}
-    >
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis type="number" tickFormatter={(v) => `${v}%`} />
-      <YAxis type="category" dataKey="name" />
-      <Tooltip formatter={(value) => `${value}%`} />
-
-      <Bar dataKey="rate" fill={COLORS.blue}>
+      <Bar dataKey="value" fill="#2563eb">
         <LabelList
-          dataKey="rate"
+          dataKey="value"
           position="right"
-          formatter={(value) => `${value}%`}
-          style={{ fontWeight: "bold", fill: "#111827" }}
+          formatter={(value) => value + "%"}
         />
       </Bar>
     </BarChart>
   </ResponsiveContainer>
-</Card>
+</Chart>
 
-  {/* CHART 4: INSPECTION OUTCOMES */}
-<Card title="Inspection Outcomes">
-  <ResponsiveContainer width="100%" height={300}>
+
+
+          {/* INSPECTION PIE */}
+        <Chart title="Inspection Outcomes">
+  <ResponsiveContainer height={300}>
     <PieChart>
       <Pie
-        data={[
-          { name: "Inspected", value: kpi.inspected },
-          { name: "Returned", value: kpi.overdue },
-        ]}
-        dataKey="value"
-        cx="50%"
-        cy="50%"
-        innerRadius={40}
-        outerRadius={120}
-        label={renderInsideLabel}
-        labelLine={false}
-      >
-        <Cell fill={COLORS.green} />
-        <Cell fill={COLORS.red} />
-      </Pie>
+  data={inspectionPie}
+  dataKey="value"
+  innerRadius={45}
+  outerRadius={100}
+  label={renderPieLabel}
+  labelLine={false}
+>
+  {inspectionPie.map((entry, index) => (
+    <Cell
+      key={`cell-${index}`}
+      fill={index === 0 ? "#22c55e" : "#ef4444"}
+    />
+  ))}
+</Pie>
 
-      <Tooltip formatter={(value) => `${value} items`} />
       <Legend />
     </PieChart>
   </ResponsiveContainer>
-</Card>
+</Chart>
 
 
-
-</div>
-
-
+        </div>
       </div>
-    </TPULayout>
+    </AdminLayout>
   );
 }
 
-/* ===============================
-   SMALL COMPONENTS
-================================ */
-function KPI({ title, value, color }) {
-  return (
-    <div
-      className="bg-white rounded-xl shadow-md p-5 border-l-4"
-      style={{ borderColor: color }}
-    >
-      {/* KPI TITLE */}
-      <p className="text-base font-semibold text-gray-600 tracking-wide">
-        {title}
-      </p>
+/* ================= UI COMPONENTS ================= */
 
-      {/* KPI VALUE */}
-      <p
-        className="text-3xl font-extrabold mt-1"
-        style={{ color }}
-      >
+const KPI = ({ title, value, color = "text-blue-600" }) => (
+  <div className="bg-white p-5 rounded-xl shadow">
+    <p className="text-sm font-semibold text-gray-600">{title}</p>
+    <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
+  </div>
+);
+
+const Chart = ({ title, children }) => (
+  <div className="bg-white p-6 rounded-xl shadow">
+    <h3 className="text-lg font-bold mb-4">{title}</h3>
+    {children}
+  </div>
+);
+
+const SmallSelect = ({ label, value, onChange, options }) => (
+  <div>
+    <label className="text-lg font-bold">{label}</label>
+    <Listbox value={value} onChange={onChange}>
+      <Listbox.Button className="w-full border rounded px-3 py-2 font-semibold">
         {value}
-      </p>
-    </div>
-  );
-}
+      </Listbox.Button>
+      <Listbox.Options className="absolute bg-white border rounded shadow z-10 w-48">
+        {options.map(o => (
+          <Listbox.Option key={o} value={o} className="px-3 py-2 hover:bg-blue-100 cursor-pointer">
+            {o}
+          </Listbox.Option>
+        ))}
+      </Listbox.Options>
+    </Listbox>
+  </div>
+);
 
-
-function Card({ title, children }) {
-  return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="font-semibold mb-4">{title}</h3>
-      {children}
-    </div>
-  );
-}
+const SmallInput = ({ label, value, onChange }) => (
+  <div>
+    <label className="text-lg font-bold">{label}</label>
+    <input
+      type="date"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full border rounded px-3 py-2 font-semibold"
+    />
+  </div>
+);

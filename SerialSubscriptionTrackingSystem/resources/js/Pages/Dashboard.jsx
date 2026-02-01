@@ -1,287 +1,38 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Head } from "@inertiajs/react";
 import { Listbox } from "@headlessui/react";
-
 import {
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
+  LineChart, Line,
+  AreaChart, Area,
+  BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, Legend,
+  ResponsiveContainer
 } from "recharts";
 
-const years = ["2022", "2023", "2024", "2025"];
+/* ================= CONSTANTS ================= */
 
-const data = [
-  { month: "Jan", value: 560 },
-  { month: "Feb", value: 420 },
-  { month: "Mar", value: 150 },
-  { month: "Apr", value: 180 },
-  { month: "May", value: 210 },
-  { month: "Jun", value: 120 },
-  { month: "Jul", value: 100 },
-  { month: "Aug", value: 150 },
-  { month: "Sep", value: 220 },
-  { month: "Oct", value: 430 },
-  { month: "Nov", value: 360 },
-  { month: "Dec", value: 520 },
+const YEARS = [2022, 2023, 2024, 2025];
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
 ];
 
-// Dashboard 2 – Bar Chart
-const subscriptionData = [
-  { month: "Jan", subs: 40 },
-  { month: "Feb", subs: 35 },
-  { month: "Mar", subs: 25 },
-  { month: "Apr", subs: 20 },
-  { month: "May", subs: 30 },
-  { month: "Jun", subs: 28 },
-];
+const COLORS = ["#2563eb", "#22c55e", "#facc15", "#ef4444"];
 
-// Dashboard 3 – Pie Chart
-// Account Status Distribution (renamed labels only)
-const categoryData = [
-  { name: "Approved", value: 400 },   // was Science
-  { name: "Pending", value: 300 },    // was Health
-  { name: "Rejected", value: 250 },   // was Engineering
-  { name: "Disabled", value: 200 },   // was Business
-];
-// ===== ACCOUNT APPROVAL TREND (CHART DATA) =====
-const approvalTrendData = [
-  { year: "2022", approved: 45 },
-  { year: "2023", approved: 78 },
-  { year: "2024", approved: 112 },
-  { year: "2025", approved: 156 },
-];
-// ===== SUPPLIER ACCOUNT CREATION (DERIVED FROM APPROVALS) =====
-const supplierAccountData = approvalTrendData.map(item => ({
-  year: item.year,
-  suppliers: Math.round(item.approved * 0.9), // 90% of approved become suppliers
-}));
-
-
-
-// ===== ADMIN KPI DATA (YEARLY) =====
-const yearlyUserStats = [
-  { year: "2022", total: 156, approved: 45 },
-  { year: "2023", total: 180, approved: 78 },
-  { year: "2024", total: 210, approved: 112 },
-  { year: "2025", total: 240, approved: 156 },
-];
-
-// Fixed system-wide total users
-const TOTAL_USERS = 156;
-
-// ===== MONTHLY APPROVAL DATA (SOURCE OF TRUTH) =====
-const monthlyApprovalData = {
-  "2022": [
-    { month: "Jan", approved: 4 },
-    { month: "Feb", approved: 5 },
-    { month: "Mar", approved: 6 },
-    { month: "Apr", approved: 7 },
-    { month: "May", approved: 8 },
-    { month: "Jun", approved: 7 },
-    { month: "Jul", approved: 8 },
-    { month: "Aug", approved: 9 },
-    { month: "Sep", approved: 10 },
-    { month: "Oct", approved: 11 },
-    { month: "Nov", approved: 10 },
-    { month: "Dec", approved: 10 },
-  ],
-  "2023": [
-    { month: "Jan", approved: 6 },
-    { month: "Feb", approved: 7 },
-    { month: "Mar", approved: 8 },
-    { month: "Apr", approved: 9 },
-    { month: "May", approved: 10 },
-    { month: "Jun", approved: 9 },
-    { month: "Jul", approved: 10 },
-    { month: "Aug", approved: 11 },
-    { month: "Sep", approved: 12 },
-    { month: "Oct", approved: 13 },
-    { month: "Nov", approved: 11 },
-    { month: "Dec", approved: 12 },
-  ],
-  "2024": [
-    { month: "Jan", approved: 8 },
-    { month: "Feb", approved: 9 },
-    { month: "Mar", approved: 10 },
-    { month: "Apr", approved: 11 },
-    { month: "May", approved: 12 },
-    { month: "Jun", approved: 11 },
-    { month: "Jul", approved: 12 },
-    { month: "Aug", approved: 13 },
-    { month: "Sep", approved: 14 },
-    { month: "Oct", approved: 15 },
-    { month: "Nov", approved: 14 },
-    { month: "Dec", approved: 13 },
-  ],
-  "2025": [
-    { month: "Jan", approved: 12 },
-    { month: "Feb", approved: 13 },
-    { month: "Mar", approved: 14 },
-    { month: "Apr", approved: 15 },
-    { month: "May", approved: 16 },
-    { month: "Jun", approved: 15 },
-    { month: "Jul", approved: 16 },
-    { month: "Aug", approved: 17 },
-    { month: "Sep", approved: 18 },
-    { month: "Oct", approved: 19 },
-    { month: "Nov", approved: 18 },
-    { month: "Dec", approved: 18 },
-  ],
+const BASE_YEAR_DATA = {
+  2022: { approved: 140, pending: 40, disabled: 20, rejected: 10 },
+  2023: { approved: 145, pending: 65, disabled: 18, rejected: 12 },
+  2024: { approved: 160, pending: 55, disabled: 22, rejected: 15 },
+  2025: { approved: 180, pending: 70, disabled: 30, rejected: 20 },
 };
 
-// ===== MONTHLY SUPPLIER DATA (DERIVED) =====
-const monthlySupplierData = Object.fromEntries(
-  Object.entries(monthlyApprovalData).map(([year, months]) => [
-    year,
-    months.map(m => ({
-      month: m.month,
-      suppliers: Math.round(m.approved * 0.4),
-    })),
-  ])
-);
-// ===== ACCOUNT STATUS DATA (PER YEAR) =====
-const yearlyStatusData = {
-  "2022": {
-    approved: 45,
-    pending: 30,
-    rejected: 15,
-    disabled: 10,
-  },
-  "2023": {
-    approved: 78,
-    pending: 40,
-    rejected: 22,
-    disabled: 15,
-  },
-  "2024": {
-    approved: 112,
-    pending: 55,
-    rejected: 28,
-    disabled: 15,
-  },
-  "2025": {
-    approved: 156,
-    pending: 84,
-    rejected: 32,
-    disabled: 18,
-  },
-};
+/* ================= HELPERS ================= */
 
-
-
-
-// ===== YEAR-BASED MOCK DATA (ADMIN DASHBOARD) =====
-const yearlyChartData = {
-  "2022": {
-    area: [
-      { month: "Jan", value: 120 },
-      { month: "Feb", value: 140 },
-      { month: "Mar", value: 110 },
-      { month: "Apr", value: 130 },
-      { month: "May", value: 150 },
-      { month: "Jun", value: 160 },
-    ],
-    bar: [
-      { month: "Jan", subs: 10 },
-      { month: "Feb", subs: 15 },
-      { month: "Mar", subs: 12 },
-      { month: "Apr", subs: 18 },
-      { month: "May", subs: 20 },
-      { month: "Jun", subs: 22 },
-    ],
-  },
-
-  "2023": {
-    area: [
-      { month: "Jan", value: 180 },
-      { month: "Feb", value: 200 },
-      { month: "Mar", value: 170 },
-      { month: "Apr", value: 190 },
-      { month: "May", value: 220 },
-      { month: "Jun", value: 240 },
-    ],
-    bar: [
-      { month: "Jan", subs: 18 },
-      { month: "Feb", subs: 22 },
-      { month: "Mar", subs: 20 },
-      { month: "Apr", subs: 25 },
-      { month: "May", subs: 28 },
-      { month: "Jun", subs: 30 },
-    ],
-  },
-
-  "2024": {
-    area: [
-      { month: "Jan", value: 260 },
-      { month: "Feb", value: 280 },
-      { month: "Mar", value: 250 },
-      { month: "Apr", value: 270 },
-      { month: "May", value: 300 },
-      { month: "Jun", value: 320 },
-    ],
-    bar: [
-      { month: "Jan", subs: 25 },
-      { month: "Feb", subs: 30 },
-      { month: "Mar", subs: 28 },
-      { month: "Apr", subs: 35 },
-      { month: "May", subs: 38 },
-      { month: "Jun", subs: 40 },
-    ],
-  },
-
-  "2025": {
-    area: data,               // reuse your EXISTING data
-    bar: subscriptionData,    // reuse your EXISTING data
-  },
-};
-
-
-
-
-const colors = ["#1f6feb", "#34c759", "#fbc02d", "#ef5350"];
-
-// Fake Chat Box inside sidebar
-function ChatBox() {
-  return (
-    <div className="p-4 bg-white shadow rounded-lg mt-6">
-      <h3 className="font-semibold text-gray-700 mb-2">Live Chat Support</h3>
-      <div className="text-sm text-gray-500">
-        This is where your chat UI will go.
-      </div>
-    </div>
-  );
-}
-
-export default function Dashboard() {
-  const [selectedYear, setSelectedYear] = useState("2025");
-
-  // KPI logic
-  const statsForYear =
-    yearlyUserStats.find(item => item.year === selectedYear) || {
-      total: 0,
-      approved: 0,
-    };
-    const renderCustomizedLabel = ({
-  cx,
-  cy,
-  midAngle,
-  innerRadius,
-  outerRadius,
-  percent,
-}) => {
+const monthIndex = (month) => MONTHS.indexOf(month);
+const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
   const RADIAN = Math.PI / 180;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -291,305 +42,295 @@ export default function Dashboard() {
     <text
       x={x}
       y={y}
-      fill="white"
-      textAnchor={x > cx ? "start" : "end"}
+      fill="#fff"
+      textAnchor="middle"
       dominantBaseline="central"
       fontSize={12}
-      fontWeight="bold"
+      fontWeight="600"
     >
-      {(percent * 100).toFixed(0)}%
+      {`${(percent * 100).toFixed(0)}%`}
     </text>
   );
 };
 
 
-  const totalUsersForYear = statsForYear.total;
-  const approvedUsersForYear = statsForYear.approved;
-  const pendingUsersForYear =
-    totalUsersForYear - approvedUsersForYear;
+const firstDayOfMonth = (year, month) =>
+  `${year}-${String(monthIndex(month) + 1).padStart(2, "0")}-01`;
 
-  const currentApprovalData =
-  monthlyApprovalData[selectedYear] || [];
+const lastDayOfMonth = (year, month) =>
+  new Date(year, monthIndex(month) + 1, 0).toISOString().split("T")[0];
 
-  const approvalVsPendingData = currentApprovalData.map((item) => ({
-  month: item.month,
-  approved: item.approved,
-  pending: Math.max(0, Math.round(
-    pendingUsersForYear / 12
-  )),
-}));
-
-
-const currentSupplierData =
-  monthlySupplierData[selectedYear] || [];
-
-  const statusForYear = yearlyStatusData[selectedYear] || {
-  approved: 0,
-  pending: 0,
-  rejected: 0,
-  disabled: 0,
+const monthRange = (start, end) => {
+  const s = monthIndex(start);
+  const e = monthIndex(end);
+  return MONTHS.slice(s, e + 1);
 };
 
-const pieData = [
-  { name: "Approved", value: statusForYear.approved },
-  { name: "Pending", value: statusForYear.pending },
-  { name: "Rejected", value: statusForYear.rejected },
-  { name: "Disabled", value: statusForYear.disabled },
-];
+const yearWeight = (year) => {
+  switch (year) {
+    case 2022: return 0.8;
+    case 2023: return 0.9;
+    case 2024: return 1.0;
+    case 2025: return 1.1;
+    default: return 1.0;
+  }
+};
 
-  
+const dateFactor = (date) =>
+  date ? new Date(date).getDate() + new Date(date).getMonth() : 1;
+
+/* ================= COMPONENT ================= */
+
+export default function Dashboard() {
+  const [year, setYear] = useState(2024);
+  const [startMonth, setStartMonth] = useState("January");
+  const [endMonth, setEndMonth] = useState("December");
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2024, "January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2024, "December"));
+
+  /* AUTO-SYNC DATES WHEN MONTH/YEAR CHANGES */
+  useEffect(() => {
+    setStartDate(firstDayOfMonth(year, startMonth));
+  }, [year, startMonth]);
+
+  useEffect(() => {
+    setEndDate(lastDayOfMonth(year, endMonth));
+  }, [year, endMonth]);
+
+  const months = monthRange(startMonth, endMonth);
+  const yFactor = yearWeight(year);
+  const dFactor = dateFactor(startDate) + dateFactor(endDate);
+
+  /* ================= KPI DATA ================= */
+
+  const stats = useMemo(() => {
+    const base = BASE_YEAR_DATA[year];
+    const scale = months.length / 12;
+
+    return {
+      approved: Math.round(base.approved * scale),
+      pending: Math.round(base.pending * scale),
+      disabled: Math.round(base.disabled * scale),
+      rejected: Math.round(base.rejected * scale),
+      total: Math.round((base.approved + base.pending) * scale),
+    };
+  }, [year, months]);
+
+  /* ================= CHART DATA ================= */
+
+  const approvalTrend = months.map((m, i) => ({
+    month: m,
+    approved: Math.round((10 + i + dFactor / 6) * yFactor),
+  }));
+
+  const approvalVsPending = months.map((m, i) => ({
+    month: m,
+    approved: Math.round((15 + i) * yFactor),
+    pending: Math.max(0, 12 - i), // 🔒 NEVER negative
+  }));
+
+  const supplierCreation = months.map((m, i) => ({
+    month: m,
+    created: Math.round((15 + i * 2 + dFactor / 8) * yFactor),
+  }));
+
+  const pieData = [
+    { name: "Approved", value: stats.approved },
+    { name: "Pending", value: stats.pending },
+    { name: "Disabled", value: stats.disabled },
+    { name: "Rejected", value: stats.rejected },
+  ];
+
   return (
-    <AdminLayout header="Serial Subscription Tracking System" sidebarExtra={<ChatBox />}>
+    <AdminLayout>
       <Head title="Admin Dashboard" />
 
       <div className="space-y-6">
 
-        {/* TEXT INTRO */}
-        <p className="text-gray-700 font-semibold">
-  Welcome back! Here’s what’s happening with your account approvals
-</p>
-
-
-       {/* STORY + YEAR FILTER ROW */}
-<div className="flex items-start justify-between gap-6 mb-4">
-  
-  {/* STORY TEXT */}
-  <div className="max-w-3xl">
- 
-    <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
-    This dashboard provides a clear overview of user account approvals
-  for the selected year. It shows how many accounts have been approved, how many remain pending,
-  and how approval activity changes month by month. These insights help administrators assess
-  processing efficiency, identify approval backlogs, and improve response time.
-</p>
-
-  </div>
-
-  {/* YEAR FILTER */}
-<div className="flex justify-end">
-  <div className="w-56">
-    <label className="text-lg font-bold text-gray-700 mb-2">
-  Select Year
-</label>
-
-    <Listbox value={selectedYear} onChange={setSelectedYear}>
-      <div className="relative">
-        <Listbox.Button className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          {selectedYear}
-        </Listbox.Button>
-
-        <Listbox.Options className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
-          {years.map((year) => (
-            <Listbox.Option
-              key={year}
-              value={year}
-              className={({ active }) =>
-                `cursor-pointer px-4 py-2 ${
-                  active
-                    ? "bg-blue-100 text-blue-900"
-                    : "text-gray-700"
-                }`
-              }
-            >
-              {year}
-            </Listbox.Option>
-          ))}
-        </Listbox.Options>
-      </div>
-    </Listbox>
-  </div>
-</div>
-
-
-
-
-</div>
-
-
-
-        {/* STAT CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl p-6 shadow-md flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-900">Total Users</p>
-              <p className="mt-2 text-3xl font-extrabold text-gray-900">
-  {totalUsersForYear}
-</p>
-
-            </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" fill="#8BB8DF" />
-                <path d="M21 21a9 9 0 10-18 0" fill="#CDE6FA" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-md flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-700">Approved Users</p>
-              <p className="mt-2 text-3xl font-extrabold text-gray-900">
-  {approvedUsersForYear}
-</p>
-
-            </div>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                <path d="M20 6L9 17l-5-5" stroke="#3C8A6B" strokeWidth="2" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-md flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-700">Pending Users</p>
-              <p className="mt-2 text-3xl font-extrabold text-gray-900">
-  {pendingUsersForYear}
-</p>
-
-            </div>
-            <div className="bg-yellow-50 p-3 rounded-lg">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                <path d="M12 6v6l4 2" stroke="#C8A93C" strokeWidth="2" />
-              </svg>
-            </div>
+        {/* FILTERS */}
+        <div className="bg-white p-5 rounded-xl shadow">
+          <h2 className="font-semibold mb-4">Dashboard Filters</h2>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <SmallSelect label="Year" value={year} onChange={setYear} options={YEARS} />
+            <SmallSelect label="Start Month" value={startMonth} onChange={setStartMonth} options={MONTHS} />
+            <SmallSelect label="End Month" value={endMonth} onChange={setEndMonth} options={MONTHS} />
+            <SmallInput label="Start Date" value={startDate} onChange={setStartDate} />
+            <SmallInput label="End Date" value={endDate} onChange={setEndDate} />
           </div>
         </div>
 
-        {/* AREA CHART */}
-       {/* TOP CHARTS – SIDE BY SIDE */}
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ACCOUNT APPROVAL TREND */}
-<div className="bg-white rounded-xl p-6 shadow-md">
-  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-    Account Approval Trend
-  </h3>
-
-  <div style={{ height: 320 }}>
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={currentApprovalData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-
-        <Line
-          type="monotone"
-          dataKey="approved"
-          stroke="#22c55e"
-          strokeWidth={3}
-          dot={{ r: 4 }}
-          name="Approved Accounts"
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  </div>
-</div>
-
-{/* APPROVAL VS PENDING (STACKED) */}
-<div className="bg-white rounded-xl p-6 shadow-md">
-  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-    Approval vs Pending
-  </h3>
-
-  <div style={{ height: 320 }}>
-    <ResponsiveContainer width="100%" height={300}>
-  <AreaChart data={approvalVsPendingData}>
-    <CartesianGrid strokeDasharray="3 3" />
-    <XAxis dataKey="month" />
-    <YAxis />
-    <Tooltip />
-    <Legend />
-
-    <Area
-      type="monotone"
-      dataKey="approved"
-      stackId="1"
-      stroke="#16a34a"
-      fill="#86efac"
-      name="Approved"
-    />
-
-    <Area
-      type="monotone"
-      dataKey="pending"
-      stackId="1"
-      stroke="#f59e0b"
-      fill="#fde68a"
-      name="Pending"
-    />
-  </AreaChart>
-</ResponsiveContainer>
-
-  </div>
-</div>
-</div>
-
-
-
-        {/* ================================ */}
-        {/* DASHBOARD 2 + 3 SIDE BY SIDE     */}
-        {/* ================================ */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* BAR CHART */}
-          <div className="bg-white rounded-2xl p-6 shadow-md">
-            <h3 className="text-lg font-semibold text-gray-800">
-  Supplier Account Creation per Month
-</h3>
-
-
-            <div style={{ height: 300 }}>
-              <ResponsiveContainer width="100%" height={300}>
-  <BarChart data={currentSupplierData}>
-  <CartesianGrid strokeDasharray="3 3" />
-  <XAxis dataKey="month" />
-  <YAxis />
-  <Tooltip />
-  <Bar dataKey="suppliers" fill="#1d4ed8" />
-</BarChart>
-
-
-</ResponsiveContainer>
-
-            </div>
-          </div>
-
-          {/* PIE CHART */}
-          <div className="bg-white rounded-2xl p-6 shadow-md">
-            <h3 className="text-lg font-semibold text-gray-800">
-  Account Status Distribution
-</h3>
-
-
-            <div style={{ height: 320 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-  data={pieData}
-  dataKey="value"
-  nameKey="name"
-  cx="50%"
-  cy="50%"
-  outerRadius={80}
-  label={renderCustomizedLabel}
-  labelLine={false}
->
-  {pieData.map((entry, index) => (
-    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-  ))}
-</Pie>
-                  <Legend />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
+        {/* KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KPI title="Total Users" value={stats.total} />
+          <KPI title="Approved Users" value={stats.approved} />
+          <KPI title="Pending Users" value={stats.pending} />
         </div>
 
+        {/* CHARTS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <Chart title="Account Approval Trend">
+            <ResponsiveContainer height={280}>
+              <LineChart data={approvalTrend}>
+               <XAxis
+  dataKey="month"
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+                <YAxis
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+                <Tooltip />
+                <Legend />
+                <Line
+  type="monotone"
+  dataKey="approved"
+  stroke="#2563eb"
+  strokeWidth={4}
+  dot={{ r: 4 }}
+/>
+              </LineChart>
+            </ResponsiveContainer>
+          </Chart>
+
+          <Chart title="Approval vs Pending">
+  <ResponsiveContainer height={280}>
+    <AreaChart data={approvalVsPending}>
+      <XAxis
+  dataKey="month"
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+                <YAxis
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+
+      <Tooltip />
+      <Legend />
+      <Area
+        type="monotone"
+        dataKey="approved"
+        fill="#0514e9ff"
+        stroke="#0717efff"
+      />
+      <Area
+        type="monotone"
+        dataKey="pending"
+        fill="#0acaecff"
+        stroke="#0be2f1ff"
+      />
+    </AreaChart>
+  </ResponsiveContainer>
+</Chart>
+
+
+          <Chart title="Supplier Account Creation">
+            <ResponsiveContainer height={280}>
+              <BarChart data={supplierCreation}>
+                <XAxis
+  dataKey="month"
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+                <YAxis
+  tick={{ fontSize: 20, fontWeight: 600 }}
+/>
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="created" fill="#2563eb" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Chart>
+
+          <Chart title="Account Status Distribution">
+  <ResponsiveContainer height={280}>
+    <PieChart>
+      <Pie
+        data={pieData}
+        dataKey="value"
+        cx="50%"
+        cy="50%"
+        innerRadius={35}
+        outerRadius={95}
+        label={renderPieLabel}
+        labelLine={false}
+      >
+        {pieData.map((_, i) => (
+          <Cell key={i} fill={COLORS[i]} />
+        ))}
+      </Pie>
+      <Legend />
+    </PieChart>
+  </ResponsiveContainer>
+</Chart>
+
+
+        </div>
       </div>
     </AdminLayout>
   );
 }
+
+/* ================= UI COMPONENTS ================= */
+
+const KPI = ({ title, value }) => (
+  <div className="bg-white p-6 rounded-xl shadow">
+    <p className="text-base md:text-lg font-semibold text-gray-600">
+      {title}
+    </p>
+    <p className="text-3xl md:text-4xl font-extrabold text-gray-900 mt-1">
+      {value}
+    </p>
+  </div>
+);
+
+
+const Chart = ({ title, children }) => (
+  <div className="bg-white p-6 rounded-xl shadow">
+    <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-4">
+      {title}
+    </h3>
+    {children}
+  </div>
+);
+
+
+const SmallSelect = ({ label, value, onChange, options }) => (
+  <div>
+    <label className="text-lg font-bold">
+      {label}
+    </label>
+
+    <Listbox value={value} onChange={onChange}>
+      <Listbox.Button className="w-full border rounded px-3 py-2 text-left text-base font-semibold">
+        {value}
+      </Listbox.Button>
+
+      <Listbox.Options className="absolute z-10 bg-white border rounded shadow max-h-48 overflow-auto w-48 text-base font-medium">
+        {options.map(o => (
+          <Listbox.Option
+            key={o}
+            value={o}
+            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+          >
+            {o}
+          </Listbox.Option>
+        ))}
+      </Listbox.Options>
+    </Listbox>
+  </div>
+);
+
+
+const SmallInput = ({ label, value, onChange }) => (
+  <div>
+    <label className="text-lg font-bold">
+
+      {label}
+    </label>
+
+    <input
+      type="date"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full border rounded px-3 py-2 text-base font-semibold"
+    />
+  </div>
+);
