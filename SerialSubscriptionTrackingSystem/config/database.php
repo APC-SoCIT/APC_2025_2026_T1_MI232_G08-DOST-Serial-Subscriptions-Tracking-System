@@ -85,6 +85,7 @@ return [
         ],
 
 <<<<<<< HEAD
+<<<<<<< HEAD
        'mongodb' => [ 
             'driver' => 'mongodb', 
             'dsn' => env('DB_DSN'), 
@@ -93,6 +94,9 @@ return [
                 'connectionTimeoutMS' => 10000,
 =======
       'mongodb' => [
+=======
+       'mongodb' => [
+>>>>>>> 8cccb39a44fb2cb2c72fdc475c901683ce9beed5
             'driver' => 'mongodb',
             'dsn' => env('DB_DSN'),
             'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),
