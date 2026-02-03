@@ -84,7 +84,7 @@ return [
             ]) : [],
         ],
 
-      'mongodb' => [
+       'mongodb' => [
             'driver' => 'mongodb',
             'dsn' => env('DB_DSN'),
             'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),

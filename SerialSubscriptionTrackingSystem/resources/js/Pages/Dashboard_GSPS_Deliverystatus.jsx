@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import GSPSLayout from '@/Layouts/GSPSLayout';
 import { MdSearch, MdFilterList } from "react-icons/md";
 
@@ -7,95 +8,97 @@ function DeliveryStatus() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('All');
   const [showFilter, setShowFilter] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ show: false, item: null });
+  
+  // API data state
+  const [deliveryData, setDeliveryData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // EXACT DATA FROM YOUR IMAGE
-  const deliveryData = [
-    {
-      id: 1,
-      serialTitle: 'Nature',
-      supplierName: 'ABC Books Supplier',
-      totalIssuesExpected: 12,
-      totalIssuesDelivered: 10,
-      totalIssuesUndelivered: 2,
-      deliveryRate: '83.33%'
-    },
-    {
-      id: 2,
-      serialTitle: 'The Lancet',
-      supplierName: 'MedJournal Suppliers Inc.',
-      totalIssuesExpected: 24,
-      totalIssuesDelivered: 24,
-      totalIssuesUndelivered: 0,
-      deliveryRate: '100%'
-    },
-    {
-      id: 3,
-      serialTitle: 'Science',
-      supplierName: 'Global Periodicals Co.',
-      totalIssuesExpected: 12,
-      totalIssuesDelivered: 11,
-      totalIssuesUndelivered: 1,
-      deliveryRate: '91.66%'
-    },
-    {
-      id: 4,
-      serialTitle: 'Asian Economic Review',
-      supplierName: 'EastAsia Books & Journals',
-      totalIssuesExpected: 4,
-      totalIssuesDelivered: 4,
-      totalIssuesUndelivered: 0,
-      deliveryRate: '100%'
-    },
-    {
-      id: 5,
-      serialTitle: 'Medical Digest',
-      supplierName: 'MedJournal Suppliers Inc.',
-      totalIssuesExpected: 24,
-      totalIssuesDelivered: 22,
-      totalIssuesUndelivered: 2,
-      deliveryRate: '91.66%'
+  // Fetch delivery serials from API
+  useEffect(() => {
+    fetchDeliverySerials();
+  }, []);
+
+  const fetchDeliverySerials = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await axios.get('/api/subscriptions/delivery-serials');
+      
+      if (response.data.success) {
+        setDeliveryData(response.data.serials || []);
+      }
+    } catch (err) {
+      console.error('Error fetching delivery serials:', err);
+      setError('Failed to load delivery data. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  // Handle confirm receipt
+  const handleConfirmReceipt = async () => {
+    if (!confirmModal.item) return;
+    
+    try {
+      const response = await axios.put(`/api/subscriptions/${confirmModal.item.subscription_id}/serial-received`, {
+        serial_issn: confirmModal.item.issn
+      });
+      
+      if (response.data.success) {
+        // Update local state with received date
+        setDeliveryData(prev => prev.map(item => 
+          item.id === confirmModal.item.id 
+            ? { ...item, status: 'received', receivedDate: response.data.receivedDate }
+            : item
+        ));
+      } else {
+        alert('Failed to confirm receipt. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error confirming receipt:', err);
+      alert('Failed to confirm receipt. Please try again.');
+    }
+    
+    setConfirmModal({ show: false, item: null });
+  };
 
   // Filter data
   const filteredData = deliveryData.filter(item => {
     const matchesSearch = 
-      item.serialTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.supplierName.toLowerCase().includes(searchTerm.toLowerCase());
+      (item.serialTitle && item.serialTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.supplierName && item.supplierName.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesFilter = 
       filter === 'All' || 
-      (filter === 'Complete' && item.deliveryRate === '100%') ||
-      (filter === 'Pending' && item.deliveryRate !== '100%');
+      (filter === 'Received' && item.status === 'received') ||
+      (filter === 'For Delivery' && item.status === 'for_delivery');
     
     return matchesSearch && matchesFilter;
   });
 
   // Calculate totals
-  const totalExpected = deliveryData.reduce((sum, item) => sum + item.totalIssuesExpected, 0);
-  const totalDelivered = deliveryData.reduce((sum, item) => sum + item.totalIssuesDelivered, 0);
-  const totalUndelivered = deliveryData.reduce((sum, item) => sum + item.totalIssuesUndelivered, 0);
-  const overallRate = ((totalDelivered / totalExpected) * 100).toFixed(2) + '%';
+  const totalForDelivery = deliveryData.filter(item => item.status === 'for_delivery').length;
+  const totalReceived = deliveryData.filter(item => item.status === 'received').length;
+  const totalItems = deliveryData.length;
 
   return (
     <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Expected Issues</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#004A98' }}>{totalExpected}</p>
+          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Deliveries</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#004A98' }}>{totalItems}</p>
         </div>
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Delivered</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#28a745' }}>{totalDelivered}</p>
+          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>For Delivery</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#17a2b8' }}>{totalForDelivery}</p>
         </div>
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Pending Delivery</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#ffc107' }}>{totalUndelivered}</p>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Overall Rate</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#17a2b8' }}>{overallRate}</p>
+          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Received</h3>
+          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#28a745' }}>{totalReceived}</p>
         </div>
       </div>
 
@@ -159,7 +162,7 @@ function DeliveryStatus() {
                 marginTop: 8,
               }}>
                 <p style={{ margin: '0 0 12px 0', fontWeight: 500, fontSize: 14 }}>Filter Status</p>
-                {['All', 'Complete', 'Pending'].map(option => (
+                {['All', 'For Delivery', 'Received'].map(option => (
                   <label key={option} style={{ display: 'block', marginBottom: 10, cursor: 'pointer', fontSize: 14 }}>
                     <input
                       type="radio"
@@ -188,62 +191,101 @@ function DeliveryStatus() {
               }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Total Issues Expected</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Total Issues Delivered</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Total Issues Undelivered</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Delivery Rate</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Delivery Date</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Confirmation</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Received Date</th>
               </tr>
             </thead>
             <tbody>
-              {filteredData.map((item, index) => (
-                <tr 
-                  key={item.id} 
-                  style={{ 
-                    borderBottom: '1px solid #eee',
-                    background: index % 2 === 0 ? '#fff' : '#f9f9f9'
-                  }}
-                >
-                  <td style={{ padding: '16px', fontWeight: 500 }}>{item.serialTitle}</td>
-                  <td style={{ padding: '16px' }}>{item.supplierName}</td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>{item.totalIssuesExpected}</td>
-                  <td style={{ 
-                    padding: '16px', 
-                    textAlign: 'center',
-                    color: item.totalIssuesDelivered === item.totalIssuesExpected ? '#28a745' : '#333',
-                    fontWeight: item.totalIssuesDelivered === item.totalIssuesExpected ? 600 : 400
-                  }}>
-                    {item.totalIssuesDelivered}
-                  </td>
-                  <td style={{ 
-                    padding: '16px', 
-                    textAlign: 'center',
-                    color: item.totalIssuesUndelivered > 0 ? '#dc3545' : '#666'
-                  }}>
-                    {item.totalIssuesUndelivered}
-                  </td>
-                  <td style={{ 
-                    padding: '16px', 
-                    textAlign: 'center',
-                    fontWeight: 600,
-                    color: item.deliveryRate === '100%' ? '#28a745' : 
-                           parseFloat(item.deliveryRate) > 90 ? '#17a2b8' : '#ffc107'
-                  }}>
-                    {item.deliveryRate}
-                    {item.deliveryRate === '100%' && (
-                      <span style={{ 
-                        marginLeft: 8,
-                        fontSize: 12,
-                        background: '#d4edda',
-                        color: '#155724',
-                        padding: '2px 8px',
-                        borderRadius: 10
-                      }}>
-                        ✓
-                      </span>
-                    )}
+              {loading ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                    Loading delivery data...
                   </td>
                 </tr>
-              ))}
+              ) : error ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
+                    {error}
+                    <button 
+                      onClick={fetchDeliverySerials}
+                      style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : filteredData.length > 0 ? (
+                filteredData.map((item, index) => (
+                  <tr 
+                    key={item.id} 
+                    style={{ 
+                      borderBottom: '1px solid #eee',
+                      background: index % 2 === 0 ? '#fff' : '#f9f9f9'
+                    }}
+                  >
+                    <td style={{ padding: '16px', fontWeight: 500 }}>{item.serialTitle}</td>
+                    <td style={{ padding: '16px' }}>{item.supplierName}</td>
+                    <td style={{ 
+                      padding: '16px', 
+                      textAlign: 'center',
+                      color: '#555'
+                    }}>
+                      {item.deliveryDate 
+                        ? new Date(item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                        : '-'
+                      }
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      {item.status === 'received' ? (
+                        <span
+                          style={{
+                            padding: '8px 20px',
+                            borderRadius: 20,
+                            background: '#28a745',
+                            color: '#fff',
+                            fontSize: 13,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Received
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmModal({ show: true, item: item })}
+                          style={{
+                            padding: '8px 20px',
+                            borderRadius: 6,
+                            border: 'none',
+                            background: '#004A98',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => e.target.style.background = '#003875'}
+                          onMouseOut={(e) => e.target.style.background = '#004A98'}
+                        >
+                          Confirm
+                        </button>
+                      )}
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center', color: '#555' }}>
+                      {item.receivedDate 
+                        ? new Date(item.receivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                        : '-'
+                      }
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                    {searchTerm ? `No deliveries found matching "${searchTerm}"` : 'No deliveries awaiting confirmation yet.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -254,7 +296,7 @@ function DeliveryStatus() {
           paddingTop: 20,
           borderTop: '1px solid #eee',
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
           alignItems: 'center',
           color: '#666',
           fontSize: 14
@@ -263,27 +305,89 @@ function DeliveryStatus() {
             Showing {filteredData.length} of {deliveryData.length} deliveries
             {filter !== 'All' && ` (${filter} only)`}
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span>Total Items: {deliveryData.length}</span>
-            <div style={{ 
-              width: 10, 
-              height: 10, 
-              borderRadius: '50%', 
-              background: '#28a745',
-              marginRight: 4
-            }}></div>
-            <span>Complete: {deliveryData.filter(d => d.deliveryRate === '100%').length}</span>
-            <div style={{ 
-              width: 10, 
-              height: 10, 
-              borderRadius: '50%', 
-              background: '#ffc107',
-              marginRight: 4
-            }}></div>
-            <span>Pending: {deliveryData.filter(d => d.deliveryRate !== '100%').length}</span>
-          </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setConfirmModal({ show: false, item: null })}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: '32px 40px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              textAlign: 'center',
+              maxWidth: 400,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px', fontSize: 20, color: '#222' }}>
+              Confirm Receipt
+            </h3>
+            <p style={{ margin: '0 0 8px', fontSize: 15, color: '#666' }}>
+              Are you sure you have received this delivery?
+            </p>
+            {confirmModal.item && (
+              <p style={{ margin: '0 0 24px', fontSize: 14, color: '#004A98', fontWeight: 600 }}>
+                "{confirmModal.item.serialTitle}" from {confirmModal.item.supplierName}
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button
+                onClick={handleConfirmReceipt}
+                style={{
+                  padding: '10px 32px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#28a745',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => e.target.style.background = '#218838'}
+                onMouseOut={(e) => e.target.style.background = '#28a745'}
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setConfirmModal({ show: false, item: null })}
+                style={{
+                  padding: '10px 32px',
+                  borderRadius: 6,
+                  border: '1px solid #dc3545',
+                  background: '#fff',
+                  color: '#dc3545',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => { e.target.style.background = '#dc3545'; e.target.style.color = '#fff'; }}
+                onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#dc3545'; }}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
