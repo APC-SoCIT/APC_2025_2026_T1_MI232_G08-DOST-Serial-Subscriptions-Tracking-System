@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import TPULayout from '@/Layouts/TPULayout';
 import { MdSearch, MdFilterList, MdRefresh } from "react-icons/md";
+import { FiTrendingUp, FiTrendingDown, FiPackage, FiCheckCircle, FiAlertCircle } from "react-icons/fi";
 
 // Monitor Delivery Component
 function MonitorDelivery() {
@@ -13,8 +14,6 @@ function MonitorDelivery() {
     {
       id: 1,
       supplierName: 'ABC Books Supplier',
-      contactPerson: 'Maria Santos',
-      email: 'abcbooks@email.com',
       phone: '+63 912 345 6789',
       address: 'Makati City',
       status: 'Active',
@@ -26,8 +25,6 @@ function MonitorDelivery() {
     {
       id: 2,
       supplierName: 'MedJournal Suppliers Inc.',
-      contactPerson: 'Leo Cruz',
-      email: 'medjournal@email.com',
       phone: '+63 912 345 7777',
       address: 'Pasig City',
       status: 'Active',
@@ -39,8 +36,6 @@ function MonitorDelivery() {
     {
       id: 3,
       supplierName: 'Global Periodicals Co.',
-      contactPerson: 'Leo Cruz',
-      email: 'globalperiodic@gmail.com',
       phone: '+63 912 345 7777',
       address: 'Pasig City',
       status: 'Active',
@@ -52,8 +47,6 @@ function MonitorDelivery() {
     {
       id: 4,
       supplierName: 'EastAsia Books & Journals',
-      contactPerson: 'J. Ramos',
-      email: 'eastasia@gmail.com',
       phone: '+63 945 567 8901',
       address: 'Manila City',
       status: 'Active',
@@ -65,8 +58,6 @@ function MonitorDelivery() {
     {
       id: 5,
       supplierName: 'MedJournal Suppliers Inc.',
-      contactPerson: 'K. Dela Rosa',
-      email: 'medjournal@email.com',
       phone: '+63 956 678 9012',
       address: 'Makati City',
       status: 'Active',
@@ -80,9 +71,7 @@ function MonitorDelivery() {
   // Filter deliveries
   const filteredDeliveries = deliveryData.filter(delivery => {
     const matchesSearch = 
-      delivery.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.email.toLowerCase().includes(searchTerm.toLowerCase());
+      delivery.supplierName.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'All' || delivery.deliveryStatus === statusFilter;
     
@@ -98,10 +87,34 @@ function MonitorDelivery() {
   const deliveryRate = Math.round((totalDelivered / totalExpected) * 100);
 
   const stats = [
-    { title: 'Total Expected', value: totalExpected, color: '#004A98' },
-    { title: 'Total Delivered', value: totalDelivered, color: '#28a745' },
-    { title: 'Undelivered', value: undelivered, color: '#dc3545' },
-    { title: 'Delivery Rate', value: `${deliveryRate}%`, color: '#ffc107' },
+    { 
+      title: 'Total Expected', 
+      value: totalExpected, 
+      icon: <FiPackage />,
+      color: '#004A98',
+      bgColor: '#E8F1FA'
+    },
+    { 
+      title: 'Total Delivered', 
+      value: totalDelivered, 
+      icon: <FiCheckCircle />,
+      color: '#0D9488',
+      bgColor: '#E6F7F5'
+    },
+    { 
+      title: 'Undelivered', 
+      value: undelivered, 
+      icon: <FiAlertCircle />,
+      color: '#DC2626',
+      bgColor: '#FEE2E2'
+    },
+    { 
+      title: 'Delivery Rate', 
+      value: `${deliveryRate}%`, 
+      icon: deliveryRate >= 90 ? <FiTrendingUp /> : <FiTrendingDown />,
+      color: deliveryRate >= 90 ? '#059669' : deliveryRate >= 70 ? '#D97706' : '#DC2626',
+      bgColor: deliveryRate >= 90 ? '#D1FAE5' : deliveryRate >= 70 ? '#FEF3C7' : '#FEE2E2'
+    },
   ];
 
   const getDeliveryStatusColor = (status) => {
@@ -127,61 +140,49 @@ function MonitorDelivery() {
   };
 
   return (
-    <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
+    <div style={{ background: '#fff', minHeight: 'calc(100vh - 73px)', padding: '24px 32px' }}>
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 24 }}>
         {stats.map((stat, index) => (
           <div
             key={index}
             style={{
-              background: '#fff',
+              background: stat.bgColor,
               borderRadius: 12,
               padding: 24,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-              textAlign: 'center',
-              borderTop: `4px solid ${stat.color}`,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              borderLeft: `4px solid ${stat.color}`,
+              position: 'relative',
             }}
           >
-            <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0', fontWeight: 500 }}>
-              {stat.title}
-            </h3>
-            <p style={{
-              fontSize: 32,
-              fontWeight: 'bold',
-              margin: 0,
-              color: stat.title === 'Delivery Rate' ? (deliveryRate >= 90 ? '#28a745' : deliveryRate >= 70 ? '#ffc107' : '#dc3545') : '#2c3e50'
-            }}>
-              {stat.value}
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0', fontWeight: 500 }}>
+                  {stat.title}
+                </h3>
+                <p style={{
+                  fontSize: 28,
+                  fontWeight: 'bold',
+                  margin: 0,
+                  color: stat.color
+                }}>
+                  {stat.value}
+                </p>
+              </div>
+              <div style={{
+                color: stat.color,
+                fontSize: 24,
+                opacity: 0.8
+              }}>
+                {stat.icon}
+              </div>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Main Content Card */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2 style={{ color: '#004A98', margin: 0, fontSize: 20 }}>Delivery Monitoring</h2>
-          
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button
-              onClick={handleRefresh}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 16px',
-                background: '#f8f9fa',
-                border: '1px solid #ddd',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 14,
-                color: '#004A98',
-              }}
-            >
-              <MdRefresh /> Refresh
-            </button>
-          </div>
-        </div>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
 
         {/* Search and Filter Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
@@ -264,8 +265,6 @@ function MonitorDelivery() {
             <thead>
               <tr style={{ background: '#f5f5f5' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Contact Person</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Email</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Phone</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Address</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Delivery Status</th>
@@ -276,8 +275,6 @@ function MonitorDelivery() {
               {filteredDeliveries.map((delivery) => (
                 <tr key={delivery.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '16px' }}>{delivery.supplierName}</td>
-                  <td style={{ padding: '16px' }}>{delivery.contactPerson}</td>
-                  <td style={{ padding: '16px', color: '#004A98' }}>{delivery.email}</td>
                   <td style={{ padding: '16px' }}>{delivery.phone}</td>
                   <td style={{ padding: '16px' }}>{delivery.address}</td>
                   <td style={{ padding: '16px' }}>
@@ -369,7 +366,7 @@ function MonitorDelivery() {
 
 export default function DashboardTPUMonitorDelivery() {
   return (
-    <TPULayout title="Monitor Delivery">
+    <TPULayout hideTitle={true}>
       <MonitorDelivery />
     </TPULayout>
   );
