@@ -129,6 +129,7 @@ function TopBar() {
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
         TPU Dashboard
       </h2>
+      
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer', position: 'relative' }}>
@@ -257,6 +258,7 @@ export default function TPULayout({ children, title = '' }) {
   };
 
   return (
+    
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160 }}>
@@ -270,5 +272,6 @@ export default function TPULayout({ children, title = '' }) {
         </div>
       </div>
     </div>
+    
   );
 }

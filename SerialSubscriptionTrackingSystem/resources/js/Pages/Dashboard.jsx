@@ -45,8 +45,8 @@ const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent })
       fill="#fff"
       textAnchor="middle"
       dominantBaseline="central"
-      fontSize={12}
-      fontWeight="600"
+      fontSize={14}
+      fontWeight="700"
     >
       {`${(percent * 100).toFixed(0)}%`}
     </text>
@@ -76,8 +76,21 @@ const yearWeight = (year) => {
   }
 };
 
-const dateFactor = (date) =>
-  date ? new Date(date).getDate() + new Date(date).getMonth() : 1;
+// 🔑 NEW helper — reacts to Start Date + End Date
+const dateRangeFactor = (startDate, endDate) => {
+  if (!startDate || !endDate) return 1;
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (end <= start) return 0.1;
+
+  const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+  // normalize vs full year
+  return Math.min(diffDays / 365, 1);
+};
+
 
 /* ================= COMPONENT ================= */
 
@@ -98,41 +111,70 @@ export default function Dashboard() {
   }, [year, endMonth]);
 
   const months = monthRange(startMonth, endMonth);
-  const yFactor = yearWeight(year);
-  const dFactor = dateFactor(startDate) + dateFactor(endDate);
+const yFactor = yearWeight(year);
+
+// ✅ THIS is what makes KPIs react to Start Date / End Date
+const dFactor = dateRangeFactor(startDate, endDate);
+
 
   /* ================= KPI DATA ================= */
 
-  const stats = useMemo(() => {
-    const base = BASE_YEAR_DATA[year];
-    const scale = months.length / 12;
+const stats = useMemo(() => {
+  const base = BASE_YEAR_DATA[year];
+  const monthScale = months.length / 12;
 
-    return {
-      approved: Math.round(base.approved * scale),
-      pending: Math.round(base.pending * scale),
-      disabled: Math.round(base.disabled * scale),
-      rejected: Math.round(base.rejected * scale),
-      total: Math.round((base.approved + base.pending) * scale),
-    };
-  }, [year, months]);
+  return {
+    approved: Math.round(base.approved * monthScale * dFactor),
+    pending: Math.round(base.pending * monthScale * dFactor),
+    disabled: Math.round(base.disabled * monthScale * dFactor),
+    rejected: Math.round(base.rejected * monthScale * dFactor),
+    total: Math.round(
+      (base.approved + base.pending) * monthScale * dFactor
+    ),
+  };
+}, [year, months, dFactor]);
+
+
+// Approval backlog (>7 days)
+const approvalBacklog = Math.max(
+  1,
+  Math.round(stats.pending * 0.25 * dFactor)
+);
+
+// Average approval time (days)
+const avgApprovalTime = Math.max(
+  0.5,
+  Number((2.5 * (1 - dFactor + 0.2)).toFixed(1))
+);
+
+// Inactive approved suppliers
+const inactiveSuppliers = Math.max(
+  1,
+  Math.round(stats.approved * 0.07 * dFactor)
+);
+
+
 
   /* ================= CHART DATA ================= */
 
-  const approvalTrend = months.map((m, i) => ({
-    month: m,
-    approved: Math.round((10 + i + dFactor / 6) * yFactor),
-  }));
+ const approvalTrend = months.map((m, i) => ({
+  month: m,
+  approved: Math.round((10 + i) * yFactor * dFactor),
+}));
 
-  const approvalVsPending = months.map((m, i) => ({
-    month: m,
-    approved: Math.round((15 + i) * yFactor),
-    pending: Math.max(0, 12 - i), // 🔒 NEVER negative
-  }));
+
+ const approvalVsPending = months.map((m, i) => ({
+  month: m,
+  approved: Math.round((15 + i) * yFactor * dFactor),
+  pending: Math.max(1, Math.round((12 - i) * dFactor)),
+}));
+
 
   const supplierCreation = months.map((m, i) => ({
-    month: m,
-    created: Math.round((15 + i * 2 + dFactor / 8) * yFactor),
-  }));
+  month: m,
+  created: Math.round((15 + i * 2) * yFactor * dFactor),
+}));
+
 
   const pieData = [
     { name: "Approved", value: stats.approved },
@@ -149,7 +191,7 @@ export default function Dashboard() {
 
         {/* FILTERS */}
         <div className="bg-white p-5 rounded-xl shadow">
-          <h2 className="font-semibold mb-4">Dashboard Filters</h2>
+          <h2 className="text-xl font-bold mb-4">Dashboard Filters</h2>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <SmallSelect label="Year" value={year} onChange={setYear} options={YEARS} />
             <SmallSelect label="Start Month" value={startMonth} onChange={setStartMonth} options={MONTHS} />
@@ -160,11 +202,28 @@ export default function Dashboard() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <KPI title="Total Users" value={stats.total} />
-          <KPI title="Approved Users" value={stats.approved} />
-          <KPI title="Pending Users" value={stats.pending} />
-        </div>
+        {/* ================= KPIs ================= */}
+<div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+  <KPI title="Total Users" value={stats.total} />
+  <KPI title="Approved Users" value={stats.approved} />
+  <KPI title="Pending Users" value={stats.pending} />
+
+  <KPI
+    title="Approval Backlog (>7 days)"
+    value={approvalBacklog}
+  />
+
+  <KPI
+    title="Avg Approval Time (days)"
+    value={avgApprovalTime}
+  />
+
+  <KPI
+    title="Inactive Approved Suppliers"
+    value={inactiveSuppliers}
+  />
+</div>
+
 
         {/* CHARTS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

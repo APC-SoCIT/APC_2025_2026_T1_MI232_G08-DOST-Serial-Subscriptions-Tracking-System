@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import AdminLayout from "@/Layouts/AdminLayout";
+import TPULayout from "@/Layouts/TPULayout";
 import { Head } from "@inertiajs/react";
 import { Listbox } from "@headlessui/react";
 import {
@@ -180,13 +180,13 @@ const supplierRanking = useMemo(() => {
   /* ================= RENDER ================= */
 
   return (
-    <AdminLayout>
-      <Head title="TPU Dashboard" />
+    <TPULayout>
+      
 
       <div className="space-y-6">
 
         {/* FILTERS */}
-        <div className="bg-white p-6 rounded-xl shadow">
+        <div className="bg-white p-5 rounded-xl shadow">
           <h2 className="text-xl font-bold mb-4">Dashboard Filters</h2>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <SmallSelect label="Year" value={year} onChange={setYear} options={YEARS} />
@@ -216,6 +216,7 @@ const supplierRanking = useMemo(() => {
              <AreaChart data={pipelineData}>
   <XAxis dataKey="month" tick={{ fontSize: 14, fontWeight: 600 }} />
   tickFormatter={(m) => m.slice(0, 3)} // Jan, Feb, Mar
+
   <YAxis tick={{ fontSize: 14, fontWeight: 600 }} />
   <Tooltip />
   <Legend
@@ -340,7 +341,7 @@ const supplierRanking = useMemo(() => {
 
         </div>
       </div>
-    </AdminLayout>
+    </TPULayout>
   );
 }
 
@@ -362,14 +363,22 @@ const Chart = ({ title, children }) => (
 
 const SmallSelect = ({ label, value, onChange, options }) => (
   <div>
-    <label className="text-lg font-bold">{label}</label>
+    <label className="text-lg font-bold">
+      {label}
+    </label>
+
     <Listbox value={value} onChange={onChange}>
-      <Listbox.Button className="w-full border rounded px-3 py-2 font-semibold">
+      <Listbox.Button className="w-full border rounded px-3 py-2 text-left text-base font-semibold">
         {value}
       </Listbox.Button>
-      <Listbox.Options className="absolute bg-white border rounded shadow z-10 w-48">
+
+      <Listbox.Options className="absolute z-10 bg-white border rounded shadow max-h-48 overflow-auto w-48 text-base font-medium">
         {options.map(o => (
-          <Listbox.Option key={o} value={o} className="px-3 py-2 hover:bg-blue-100 cursor-pointer">
+          <Listbox.Option
+            key={o}
+            value={o}
+            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+          >
             {o}
           </Listbox.Option>
         ))}
@@ -378,14 +387,19 @@ const SmallSelect = ({ label, value, onChange, options }) => (
   </div>
 );
 
+
 const SmallInput = ({ label, value, onChange }) => (
   <div>
-    <label className="text-lg font-bold">{label}</label>
+    <label className="text-lg font-bold">
+
+      {label}
+    </label>
+
     <input
       type="date"
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full border rounded px-3 py-2 font-semibold"
+      className="w-full border rounded px-3 py-2 text-base font-semibold"
     />
   </div>
 );
