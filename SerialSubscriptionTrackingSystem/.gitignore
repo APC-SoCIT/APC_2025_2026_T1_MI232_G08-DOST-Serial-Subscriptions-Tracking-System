@@ -19,6 +19,7 @@
 /storage/*.key
 /storage/pail
 /storage/framework/sessions/
+/storage/framework/views/
 /vendor
 Homestead.json
 Homestead.yaml
