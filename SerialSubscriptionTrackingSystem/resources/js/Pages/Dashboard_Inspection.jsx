@@ -157,19 +157,23 @@ export default function InspectionDashboard() {
     <InspectionLayout header="Dashboard Overview">
       <div className="max-w-[1600px] mx-auto px-4">
 
-        
+        {/* DASHBOARD OVERVIEW & GREETING */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-[#004A98] mb-2">Dashboard Overview</h2>
+          <p className="text-sm text-gray-600">Good Evening, Welcome back!</p>
+        </div>
 
         {/* KPI CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           {[ 
             { title: "Total Serials", value: "568", icon: <FaBoxOpen /> },
             { title: "Best Supplier", value: "Manila Bulletin", icon: <FaChartLine /> },
             { title: "Most Delivered", value: "Harvard Business Review", icon: <FaTruck /> },
           ].map((item, i) => (
-            <div key={i} className="bg-white p-8 rounded-2xl shadow flex justify-between items-center">
+            <div key={i} className="bg-white p-6 rounded-2xl shadow flex justify-between items-center">
               <div>
-                <p className="text-gray-500">{item.title}</p>
-                <h3 className="text-xl font-semibold">{item.value}</h3>
+                <p className="text-gray-500 text-sm">{item.title}</p>
+                <h3 className="text-lg font-semibold">{item.value}</h3>
               </div>
               <div className="text-blue-600 text-3xl">{item.icon}</div>
             </div>
@@ -177,9 +181,9 @@ export default function InspectionDashboard() {
         </div>
 
         {/* LINE CHART */}
-        <div className="bg-white rounded-2xl shadow p-8 mb-10">
-          <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
-            <h4 className="text-xl font-semibold text-[#004A98]">
+        <div className="bg-white rounded-2xl shadow p-6 mb-6">
+          <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+            <h4 className="text-lg font-semibold text-[#004A98]">
               Serials Over Time
             </h4>
 
@@ -209,7 +213,7 @@ export default function InspectionDashboard() {
             </div>
           </div>
 
-          <div className="h-[380px]">
+          <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={timeData[timeFilter]}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -229,13 +233,13 @@ export default function InspectionDashboard() {
         </div>
 
         {/* BAR CHARTS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {[ 
             { title: "Serials by Category", data: serialCategoryData, width: 140 },
             { title: "Top Suppliers", data: topSuppliers, width: 180 },
           ].map((chart, i) => (
-            <div key={i} className="bg-white p-8 rounded-2xl shadow">
-              <h4 className="text-xl font-semibold text-[#004A98] mb-6">
+            <div key={i} className="bg-white p-6 rounded-2xl shadow">
+              <h4 className="text-lg font-semibold text-[#004A98] mb-4">
                 {chart.title}
               </h4>
               <ResponsiveContainer width="100%" height={360}>
@@ -257,8 +261,8 @@ export default function InspectionDashboard() {
         </div>
 
         {/* INSPECTION TABLE */}
-        <div className="bg-white p-6 rounded-2xl shadow mb-10">
-          <h4 className="flex items-center gap-2 text-xl font-semibold text-[#004A98] mb-4">
+        <div className="bg-white p-6 rounded-2xl shadow mb-4">
+          <h4 className="flex items-center gap-2 text-lg font-semibold text-[#004A98] mb-4">
             <FaClipboardCheck /> Serials for Inspection
           </h4>
 
@@ -266,19 +270,19 @@ export default function InspectionDashboard() {
             <thead className="bg-gray-100">
               <tr>
                 {["Issue", "Title", "Supplier", "Date Received", "Status", "Action"].map((h) => (
-                  <th key={h} className="p-3 text-left font-semibold">{h}</th>
+                  <th key={h} className="p-2 text-left font-semibold text-sm">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {serialsForInspection.map((s) => (
                 <tr key={s.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3 align-middle">{s.issueNo}</td>
-                  <td className="p-3 align-middle">{s.title}</td>
-                  <td className="p-3 align-middle">{s.supplier}</td>
-                  <td className="p-3 align-middle">{s.deliveryDate}</td>
-                  <td className="p-3 align-middle">{s.status}</td>
-                  <td className="p-3 align-middle">
+                  <td className="p-2 align-middle text-sm">{s.issueNo}</td>
+                  <td className="p-2 align-middle text-sm">{s.title}</td>
+                  <td className="p-2 align-middle text-sm">{s.supplier}</td>
+                  <td className="p-2 align-middle text-sm">{s.deliveryDate}</td>
+                  <td className="p-2 align-middle text-sm">{s.status}</td>
+                  <td className="p-2 align-middle">
                     {s.status === "Pending" && (
                       <button
                         onClick={() => openModal(s)}

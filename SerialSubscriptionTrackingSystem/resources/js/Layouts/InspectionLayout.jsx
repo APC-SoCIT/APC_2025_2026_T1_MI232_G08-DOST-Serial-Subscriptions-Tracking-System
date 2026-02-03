@@ -6,9 +6,9 @@ import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 
 const navItems = [
-  { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
-  { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
-  { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", href: "/inspection-chat" },
+  { icon: <GoHome size={25} />, label: "Dashboard", href: "/inspection-dashboard" },
+  { icon: <FaClipboardList size={25} />, label: "List of Serials", href: "/inspection-serials" },
+  { icon: <IoChatboxEllipsesOutline size={25} />, label: "Chat", href: "/inspection-chat" },
 ];
 
 export default function InspectionLayout({ children, title }) {
@@ -27,12 +27,12 @@ export default function InspectionLayout({ children, title }) {
         </div>
 
         <nav className="mt-4 px-2">
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {navItems.map((item) => (
               <li key={item.label}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium
                     ${
                       url.startsWith(item.href)
                         ? "bg-blue-600"
@@ -52,12 +52,12 @@ export default function InspectionLayout({ children, title }) {
       <div className="ml-52 flex flex-col min-h-screen">
         {/* ================= TOPBAR ================= */}
         <header className="sticky top-0 z-20 bg-white border-b">
-          <div className="px-6 py-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#004A98]">
+          <div className="px-6 py-4 flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-[#004A98]">
               {title || 'Inspection Dashboard'}
             </h2>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, position: 'relative' }}>
               {/* Notifications */}
               <div style={{ position: 'relative' }}>
                 <button
@@ -65,9 +65,9 @@ export default function InspectionLayout({ children, title }) {
                     setOpenNotifications(!openNotifications);
                     setOpenAccount(false);
                   }}
-                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
+                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, display: 'flex', alignItems: 'center' }}
                 >
-                  <MdOutlineNotificationsActive size={20} />
+                  <MdOutlineNotificationsActive size={28} />
                 </button>
 
                 {openNotifications && (
@@ -96,9 +96,9 @@ export default function InspectionLayout({ children, title }) {
                     setOpenAccount(!openAccount);
                     setOpenNotifications(false);
                   }}
-                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
+                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, display: 'flex', alignItems: 'center' }}
                 >
-                  <FaUserCircle size={22} />
+                  <FaUserCircle size={28} />
                 </button>
 
                 {openAccount && (
@@ -182,7 +182,7 @@ export default function InspectionLayout({ children, title }) {
         </header>
 
         {/* ================= PAGE CONTENT ================= */}
-        <main className="flex-1 bg-[#eef2f5] px-6 py-6">
+        <main className="flex-1 bg-[#eef2f5] px-6 py-4">
           {children}
         </main>
       </div>

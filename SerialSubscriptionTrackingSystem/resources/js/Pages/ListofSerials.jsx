@@ -35,6 +35,7 @@ export default function ListOfSerials() {
 
   return (
     <InspectionLayout header="List of Serials">
+      <h2 className="text-2xl font-bold text-[#004A98] mb-2">List of Serials</h2>
       <p className="text-sm text-gray-500 mb-6">
         Complete list of all serials in the system.
       </p>
@@ -118,25 +119,25 @@ export default function ListOfSerials() {
           )}
         </div>
 
-        <table className="min-w-full text-base border-collapse">
-          <thead>
-            <tr className="text-gray-500 border-b border-gray-300">
-              <th className="text-left px-6 py-4">ISSUE NO.</th>
-              <th className="text-left px-6 py-4">SERIAL TITLE</th>
-              <th className="text-left px-6 py-4">COST</th>
-              <th className="text-left px-6 py-4">DATE</th>
-              <th className="text-left px-6 py-4">STATUS</th>
+        <table className="w-full border rounded">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-2 text-left font-semibold text-sm w-40">ISSUE NO.</th>
+              <th className="p-2 text-left font-semibold text-sm flex-1">SERIAL TITLE</th>
+              <th className="p-2 text-left font-semibold text-sm w-40">COST</th>
+              <th className="p-2 text-left font-semibold text-sm w-40">DATE</th>
+              <th className="p-2 text-left font-semibold text-sm w-40">STATUS</th>
             </tr>
           </thead>
           <tbody>
             {paginatedData.length > 0 ? (
               paginatedData.map((item) => (
-                <tr key={item.issueNo} className="border-b border-gray-200 last:border-0">
-                  <td className="px-6 py-6 font-medium">{item.issueNo}</td>
-                  <td className="px-6 py-6">{item.title}</td>
-                  <td className="px-6 py-6">₱{item.cost.toLocaleString()}</td>
-                  <td className="px-6 py-6">{item.date}</td>
-                  <td className="px-6 py-6">
+                <tr key={item.issueNo} className="border-t hover:bg-gray-50">
+                  <td className="p-2 align-middle text-sm w-40">{item.issueNo}</td>
+                  <td className="p-2 align-middle text-sm flex-1">{item.title}</td>
+                  <td className="p-2 align-middle text-sm w-40">₱{item.cost.toLocaleString()}</td>
+                  <td className="p-2 align-middle text-sm w-40">{item.date}</td>
+                  <td className="p-2 align-middle text-sm w-40">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-semibold ${
                         item.status === "Approved"
@@ -146,7 +147,7 @@ export default function ListOfSerials() {
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {item.status}
+                      {item.status === "Approved" ? "Accepted" : item.status === "Rejected" ? "For Return" : item.status}
                     </span>
                   </td>
                 </tr>

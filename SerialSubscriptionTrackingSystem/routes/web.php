@@ -1,18 +1,11 @@
 <?php
-
+ 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'auth' => null,
-    ]);
-});
-
-
+ 
 // Public welcome page
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -22,142 +15,124 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
+ 
 Route::get('/account-approval', function () {
     return Inertia::render('AccountApproval');
 });
-
+ 
 Route::get('/list-of-supplier', function () {
     return Inertia::render('ListofSupplier');
 });
-
+ 
 //Default dashboard (fallback)
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
-
+ 
 // Admin dashboard
 Route::get('/dashboard-admin', function () {
     return Inertia::render('Dashboard_Admin');
 })->middleware(['auth', 'verified', 'role:admin'])->name('admin.dashboard');
-
-// TPU Routes - Main dashboard with role middleware
+ 
+// TPU Routes - Main dashboard without role middleware, sub-routes with middleware
 Route::get('/dashboard-tpu', function () {
     return Inertia::render('Dashboard_TPU');
-})->middleware(['auth', 'verified', 'role:tpu'])->name('tpu.dashboard');
-
-
-
+})->middleware(['auth', 'verified'])->name('tpu.dashboard');
+ 
+ 
+ 
 Route::get('/dashboard-tpu-chat', function () {
         return Inertia::render('Dashboard_TPU_Chat');
     })->middleware(['auth'])->name('dashboard-tpu-chat');
-
+ 
 Route::get('/dashboard-tpu-supplierinfo', function () {
         return Inertia::render('Dashboard_TPU_Supplierinfo');
     })->name('dashboard-tpu-supplierinfo');
-
+ 
 Route::get('/dashboard-tpu-subscriptiontracking', function () {
         return Inertia::render('Dashboard_TPU_Subscriptiontracking');
     })->name('dashboard-tpu-subscriptiontracking');
-
+ 
 Route::get('/dashboard-tpu-monitordelivery', function () {
         return Inertia::render('Dashboard_TPU_Monitordelivery');
     })->name('dashboard-tpu-monitordelivery');
-
+ 
 Route::get('/dashboard-tpu-addserial', function () {
         return Inertia::render('Dashboard_TPU_AddSerial');
     })->name('dashboard-tpu-addserial');
-
-
-// GSPS Routes - Main dashboard with role middleware
+ 
+ 
+// GSPS Routes - Main dashboard without role middleware, sub-routes with middleware
 Route::get('/dashboard-gsps', function () {
     return Inertia::render('Dashboard_GSPS');
-})->middleware(['auth', 'verified', 'role:gsps'])->name('gsps.dashboard');
-
-
+})->middleware(['auth', 'verified'])->name('gsps.dashboard');
+ 
+ 
 Route::get('/dashboard-gsps-supplierinfo', function () {
         return Inertia::render('Dashboard_GSPS_Supplierinfo');
     })->name('dashboard-gsps-supplierinfo');
-
+ 
 Route::get('/dashboard-gsps-deliverystatus', function () {
         return Inertia::render('Dashboard_GSPS_Deliverystatus');
     })->name('dashboard-gsps-deliverystatus');
-
+ 
 Route::get('/dashboard-gsps-inspectionstatus', function () {
         return Inertia::render('Dashboard_GSPS_Inspectionstatus');
     })->name('dashboard-gsps-inspectionstatus');
-
+ 
 Route::get('/dashboard-gsps-chat', function () {
         return Inertia::render('Dashboard_GSPS_Chat');
     })->middleware(['auth'])->name('dashboard-gsps-chat');
-
-
-
+ 
+ 
+ 
 Route::get('/dashboard-supplier', function () {
     return Inertia::render('Dashboard_Supplier');
-})->middleware(['auth', 'verified', 'role:supplier'])->name('supplier.dashboard');
-
-
+})->middleware(['auth', 'verified'])->name('supplier.dashboard');
+ 
+ 
 Route::get('/dashboard-supplier-listofserial', function () {
         return Inertia::render('Dashboard_Supplier_ListofSerial');
     })->name('dashboard-supplier-listofserial');
-
+ 
 Route::get('/dashboard-supplier-late', function () {
         return Inertia::render('Dashboard_Supplier_Late');
     })->name('dashboard-supplier-late');
-
+ 
 Route::get('/dashboard-supplier-undelivered', function () {
         return Inertia::render('Dashboard_Supplier_Undelivered');
     })->name('dashboard-supplier-undelivered');
-
+ 
 Route::get('/dashboard-supplier-delivered', function () {
         return Inertia::render('Dashboard_Supplier_Delivered');
     })->name('dashboard-supplier-delivered');
-
+ 
 Route::get('/dashboard-supplier-chat', function () {
         return Inertia::render('Dashboard_Supplier_Chat');
     })->middleware(['auth'])->name('dashboard-supplier-chat');
-
-
-
-
-// Inspection Routes - Main dashboard with role middleware
-Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified', 'role:inspection'])->name('inspection.dashboard');
-
-
+ 
+ 
+ 
+ 
+// Inspection Routes - Main dashboard without role middleware, sub-routes with middleware
+Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified'])->name('inspection.dashboard');
+ 
+ 
 Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('inspection.date');
-
+ 
 Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
-
+ 
 Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))->middleware(['auth'])->name('inspection.chat');
-
-    
-
-
-Route::middleware(['auth'])->group(function () {
-
-    Route::get('/admin/dashboard', fn () => view('dashboards.admin'))
-        ->middleware('role:admin');
-
-    Route::get('/inspection/dashboard', fn () => view('dashboards.inspection'))
-        ->middleware('role:inspection');
-
-    Route::get('/supplier/dashboard', fn () => view('dashboards.supplier'))
-        ->middleware('role:supplier');
-
-    Route::get('/gsps/dashboard', fn () => view('dashboards.gsps'))
-        ->middleware('role:gsps');
-
-    Route::get('/tpu/dashboard', fn () => view('dashboards.tpu'))
-        ->middleware('role:tpu');
-});
-
+ 
+   
+ 
+ 
 // Authenticated profile routes
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
+ 
     // Chat routes
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::get('/api/users/available', [ChatController::class, 'getAvailableUsers'])->name('users.available');
@@ -168,6 +143,6 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
     Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
 });
-
+ 
 require __DIR__.'/auth.php';
 // Auth routes (login, register, etc.)
