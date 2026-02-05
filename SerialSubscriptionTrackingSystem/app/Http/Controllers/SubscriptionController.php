@@ -157,6 +157,10 @@ class SubscriptionController extends Controller
             'serials' => 'nullable|array',
             'transactions' => 'nullable|array',
             'note' => 'nullable|string',
+            'issn' => 'nullable|string|max:50',
+            'frequency' => 'nullable|string|max:50',
+            'author_publisher' => 'nullable|string|max:255',
+            'category' => 'nullable|string|max:100',
         ]);
 
         $subscription->fill($validated);

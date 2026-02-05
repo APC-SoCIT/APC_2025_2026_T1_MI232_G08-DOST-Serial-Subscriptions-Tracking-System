@@ -21,6 +21,29 @@ function SubscriptionTracking() {
   // View Details Modal state
   const [showViewDetailsModal, setShowViewDetailsModal] = useState(false);
   const [viewDetailsSubscription, setViewDetailsSubscription] = useState(null);
+  
+  // Edit Modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSubscription, setEditSubscription] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    serialTitle: '',
+    supplierName: '',
+    period: '',
+    awardCost: '',
+    status: 'Active',
+    note: '',
+    issn: '',
+    frequency: 'Monthly',
+    authorPublisher: '',
+    category: ''
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  
+  // Delete Modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteSubscription, setDeleteSubscription] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  
   const [serialFormData, setSerialFormData] = useState({
     serialTitle: '',
     issn: '',
@@ -79,6 +102,11 @@ function SubscriptionTracking() {
           paymentStatus: sub.payment_status || 'Pending',
           progress: sub.progress || 0,
           note: sub.note,
+          issn: sub.issn,
+          frequency: sub.frequency,
+          authorPublisher: sub.author_publisher,
+          author_publisher: sub.author_publisher,
+          category: sub.category,
           serials: sub.serials || [],
           transactions: sub.transactions || [],
         }));
@@ -194,6 +222,113 @@ function SubscriptionTracking() {
   const handleCloseViewDetailsModal = () => {
     setShowViewDetailsModal(false);
     setViewDetailsSubscription(null);
+  };
+
+  // Edit subscription handlers
+  const handleEditSubscription = (subscription) => {
+    setEditSubscription(subscription);
+    setEditFormData({
+      serialTitle: subscription.serialTitle || '',
+      supplierName: subscription.supplierName || '',
+      period: subscription.period || '',
+      awardCost: subscription.awardCost ? subscription.awardCost.replace(/[^0-9.]/g, '') : '',
+      status: subscription.status || 'Active',
+      note: subscription.note || '',
+      issn: subscription.issn || subscription.serials?.[0]?.issn || '',
+      frequency: subscription.frequency || subscription.serials?.[0]?.frequency || 'Monthly',
+      authorPublisher: subscription.authorPublisher || subscription.author_publisher || '',
+      category: subscription.category || subscription.serials?.[0]?.category || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditSubscription(null);
+    setEditFormData({
+      serialTitle: '',
+      supplierName: '',
+      period: '',
+      awardCost: '',
+      status: 'Active',
+      note: '',
+      issn: '',
+      frequency: 'Monthly',
+      authorPublisher: '',
+      category: ''
+    });
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData({ ...editFormData, [name]: value });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editFormData.serialTitle || !editFormData.supplierName) {
+      alert('Please fill in Serial Title and Supplier Name');
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const response = await axios.put(`/api/subscriptions/${editSubscription.id}`, {
+        serial_title: editFormData.serialTitle,
+        supplier_name: editFormData.supplierName,
+        period: editFormData.period,
+        award_cost: parseFloat(editFormData.awardCost) || 0,
+        status: editFormData.status,
+        note: editFormData.note,
+        issn: editFormData.issn,
+        frequency: editFormData.frequency,
+        author_publisher: editFormData.authorPublisher,
+        category: editFormData.category
+      });
+
+      if (response.data.success) {
+        setSuccessMessage('Subscription updated successfully!');
+        await fetchSubscriptions(); // Refresh data to reflect changes across dashboards
+        handleCloseEditModal();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+      alert('Failed to update subscription. Please try again.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // Delete subscription handlers
+  const handleDeleteSubscription = (subscription) => {
+    setDeleteSubscription(subscription);
+    setShowDeleteModal(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteSubscription(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteSubscription) return;
+
+    setDeleteSubmitting(true);
+    try {
+      const response = await axios.delete(`/api/subscriptions/${deleteSubscription.id}`);
+
+      if (response.data.success) {
+        setSuccessMessage('Subscription removed successfully!');
+        await fetchSubscriptions(); // Refresh data to reflect changes across dashboards
+        handleCloseDeleteModal();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error deleting subscription:', error);
+      alert('Failed to remove subscription. Please try again.');
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   const getSerialStatusColor = (status) => {
@@ -612,30 +747,86 @@ function SubscriptionTracking() {
                     </span>
                   </td>
                   <td style={{ padding: '16px' }}>
-                    <button
-                      onClick={() => handleViewDetails(subscription)}
-                      style={{
-                        background: 'transparent',
-                        border: '1px solid #004A98',
-                        color: '#004A98',
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.background = '#004A98';
-                        e.currentTarget.style.color = '#fff';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = '#004A98';
-                      }}
-                    >
-                      View Details
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => handleViewDetails(subscription)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #004A98',
+                          color: '#004A98',
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = '#004A98';
+                          e.currentTarget.style.color = '#fff';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = '#004A98';
+                        }}
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => handleEditSubscription(subscription)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #E67E22',
+                          color: '#E67E22',
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = '#E67E22';
+                          e.currentTarget.style.color = '#fff';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = '#E67E22';
+                        }}
+                      >
+                        <MdEdit size={14} /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubscription(subscription)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #dc3545',
+                          color: '#dc3545',
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = '#dc3545';
+                          e.currentTarget.style.color = '#fff';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = '#dc3545';
+                        }}
+                      >
+                        <MdDelete size={14} /> Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1240,10 +1431,10 @@ function SubscriptionTracking() {
               </div>
             </div>
 
-            {/* Transaction History Section */}
+            {/*  History Section */}
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#004A98' }}>
-                Transaction History
+                 History
               </h3>
               {viewDetailsSubscription.transactions && viewDetailsSubscription.transactions.length > 0 ? (
                 <div style={{ overflowX: 'auto' }}>
@@ -1308,6 +1499,428 @@ function SubscriptionTracking() {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Subscription Modal */}
+      {showEditModal && editSubscription && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '85vh',
+            overflowY: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '8px'
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                color: '#E67E22', 
+                fontSize: '22px', 
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <MdEdit size={24} /> Edit Subscription
+              </h2>
+              <button
+                onClick={handleCloseEditModal}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  color: '#666',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <MdClose />
+              </button>
+            </div>
+            <p style={{ margin: '0 0 24px 0', color: '#666', fontSize: '14px' }}>
+              Update the subscription details below
+            </p>
+
+            {/* Edit Form */}
+            <div style={{
+              background: '#f8f9fa',
+              borderRadius: '8px',
+              padding: '24px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Serial Title *</label>
+                  <input
+                    type="text"
+                    name="serialTitle"
+                    value={editFormData.serialTitle}
+                    onChange={handleEditInputChange}
+                    placeholder="Enter serial title"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>ISSN</label>
+                  <input
+                    type="text"
+                    name="issn"
+                    value={editFormData.issn}
+                    onChange={handleEditInputChange}
+                    placeholder="e.g., 0028-0836"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Supplier Name *</label>
+                  <select
+                    name="supplierName"
+                    value={editFormData.supplierName}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="">Select Supplier</option>
+                    {supplierOptions.map(supplier => (
+                      <option key={supplier} value={supplier}>{supplier}</option>
+                    ))}
+                    {/* Keep current supplier if not in list */}
+                    {editFormData.supplierName && !supplierOptions.includes(editFormData.supplierName) && (
+                      <option value={editFormData.supplierName}>{editFormData.supplierName}</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Author/Publisher</label>
+                  <input
+                    type="text"
+                    name="authorPublisher"
+                    value={editFormData.authorPublisher}
+                    onChange={handleEditInputChange}
+                    placeholder="Enter author/publisher"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Frequency</label>
+                  <select
+                    name="frequency"
+                    value={editFormData.frequency}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    {frequencyOptions.map(freq => (
+                      <option key={freq} value={freq}>{freq}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Category</label>
+                  <select
+                    name="category"
+                    value={editFormData.category}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Delivery Date</label>
+                  <input
+                    type="date"
+                    name="period"
+                    value={editFormData.period}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Award Cost (₱)</label>
+                  <input
+                    type="number"
+                    name="awardCost"
+                    value={editFormData.awardCost}
+                    onChange={handleEditInputChange}
+                    placeholder="0.00"
+                    step="0.01"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Status</label>
+                  <select
+                    name="status"
+                    value={editFormData.status}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: 'span 3' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Notes</label>
+                  <textarea
+                    name="note"
+                    value={editFormData.note}
+                    onChange={handleEditInputChange}
+                    placeholder="Add any notes about this subscription..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '20px',
+              borderTop: '1px solid #eee'
+            }}>
+              <button
+                onClick={handleCloseEditModal}
+                style={{
+                  padding: '12px 28px',
+                  background: '#fff',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  color: '#333'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSubmitting}
+                style={{
+                  padding: '12px 28px',
+                  background: editSubmitting ? '#ccc' : '#E67E22',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: editSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {editSubmitting ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deleteSubscription && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '100%',
+            textAlign: 'center'
+          }}>
+            {/* Warning Icon */}
+            <div style={{
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: '#fee2e2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px auto'
+            }}>
+              <MdDelete size={32} style={{ color: '#dc3545' }} />
+            </div>
+
+            {/* Modal Header */}
+            <h2 style={{ 
+              margin: '0 0 12px 0', 
+              color: '#dc3545', 
+              fontSize: '22px', 
+              fontWeight: '600'
+            }}>
+              Remove Subscription
+            </h2>
+            <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
+              Are you sure you want to remove this subscription?
+            </p>
+            <p style={{ 
+              margin: '0 0 24px 0', 
+              color: '#333', 
+              fontSize: '16px',
+              fontWeight: '600',
+              padding: '12px',
+              background: '#f8f9fa',
+              borderRadius: '6px'
+            }}>
+              "{deleteSubscription.serialTitle}"
+            </p>
+            <p style={{ margin: '0 0 24px 0', color: '#999', fontSize: '13px' }}>
+              This action cannot be undone. The subscription will be permanently removed from all dashboards.
+            </p>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px'
+            }}>
+              <button
+                onClick={handleCloseDeleteModal}
+                disabled={deleteSubmitting}
+                style={{
+                  padding: '12px 28px',
+                  background: '#fff',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: deleteSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  color: '#333'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteSubmitting}
+                style={{
+                  padding: '12px 28px',
+                  background: deleteSubmitting ? '#ccc' : '#dc3545',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: deleteSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <MdDelete size={16} />
+                {deleteSubmitting ? 'Removing...' : 'Yes, Remove'}
               </button>
             </div>
           </div>

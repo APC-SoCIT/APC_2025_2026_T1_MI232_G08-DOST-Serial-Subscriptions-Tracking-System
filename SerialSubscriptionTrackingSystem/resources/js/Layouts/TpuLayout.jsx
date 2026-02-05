@@ -1,6 +1,6 @@
 // resources/js/Layouts/TPULayout.jsx
 import React, { useState } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
@@ -107,7 +107,7 @@ function TopBar() {
   };
 
   const handleLogout = () => {
-    window.location.href = route('logout');
+    router.post(route('logout'));
   };
 
   return (

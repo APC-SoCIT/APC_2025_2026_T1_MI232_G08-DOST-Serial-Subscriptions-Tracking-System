@@ -490,7 +490,7 @@ function Dashboard_Supplier_ListofSerial() {
               ></div>
 
               {/* === SEARCH BAR === */}
-              <div style={{ padding: "20px 24px", display: "flex", alignItems: "center" }}>
+              <div style={{ padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                  {/* Search Input */}
                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <IoSearchOutline style={{ position: 'absolute', left: 12, color: '#666', fontSize: 18 }} />
@@ -511,6 +511,25 @@ function Dashboard_Supplier_ListofSerial() {
                       }}
                     />
                   </div>
+                  {/* Refresh Button */}
+                  <button
+                    onClick={fetchSerials}
+                    disabled={loading}
+                    style={{
+                      background: '#004A98',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '10px 20px',
+                      borderRadius: 6,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      opacity: loading ? 0.7 : 1,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {loading ? 'Loading...' : 'Refresh'}
+                  </button>
               </div>
 
               <table
