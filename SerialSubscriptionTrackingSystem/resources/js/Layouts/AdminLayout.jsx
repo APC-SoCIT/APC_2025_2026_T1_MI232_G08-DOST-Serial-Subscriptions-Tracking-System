@@ -10,6 +10,7 @@ const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/dashboard" },
   { icon: <HiUsers size={18} />, label: "Account Approval", href: "/account-approval" },
   { icon: <ImStatsBars size={18} />, label: "List of Supplier", href: "/list-of-supplier" },
+  { icon: <HiUsers size={18} />, label: "List of User", href: "/list-of-user" },
 ];
 
 export default function AdminLayout({ children, header }) {
