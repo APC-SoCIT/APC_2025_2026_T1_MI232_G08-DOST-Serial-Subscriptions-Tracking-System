@@ -9,12 +9,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'auth' => null,
-    ]);
-});
-
 
 // Public welcome page
 Route::get('/', function () {
