@@ -261,12 +261,12 @@ export default function TPULayout({ children, title = '' }) {
     
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160 }}>
+      <div style={{ flex: 1, marginLeft: 140 }}>
         <TopBar />
-        <div style={{ padding: '32px 40px' }}>
+        <div style={{ padding: '16px 40px' }}>
           <h2 style={{ marginBottom: 8 }}>{title}</h2>
           <p className="text-lg font-semibold text-gray-700 leading-relaxed max-w-4xl">
-            {getGreeting()} Welcome back!
+            
           </p>
           {children}
         </div>

@@ -269,7 +269,7 @@ export default function SupplierDashboard() {
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="volume" fill={COLORS.forDelivery} />
+                <Bar dataKey="volume" fill="#2563eb" />
               </BarChart>
             </ResponsiveContainer>
           </Chart>
@@ -321,14 +321,22 @@ const Chart = ({ title, children }) => (
 
 const SmallSelect = ({ label, value, onChange, options }) => (
   <div>
-    <label className="text-lg font-bold">{label}</label>
+    <label className="text-lg font-bold">
+      {label}
+    </label>
+
     <Listbox value={value} onChange={onChange}>
-      <Listbox.Button className="w-full border rounded px-3 py-2 font-semibold">
+      <Listbox.Button className="w-full border rounded px-3 py-2 text-left text-base font-semibold">
         {value}
       </Listbox.Button>
-      <Listbox.Options className="absolute bg-white border rounded shadow z-10 w-48">
+
+      <Listbox.Options className="absolute z-10 bg-white border rounded shadow max-h-48 overflow-auto w-48 text-base font-medium">
         {options.map(o => (
-          <Listbox.Option key={o} value={o} className="px-3 py-2 hover:bg-blue-100 cursor-pointer">
+          <Listbox.Option
+            key={o}
+            value={o}
+            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+          >
             {o}
           </Listbox.Option>
         ))}
@@ -337,14 +345,20 @@ const SmallSelect = ({ label, value, onChange, options }) => (
   </div>
 );
 
+
 const SmallInput = ({ label, value, onChange }) => (
   <div>
-    <label className="text-lg font-bold">{label}</label>
+    <label className="text-lg font-bold">
+
+      {label}
+    </label>
+
     <input
       type="date"
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full border rounded px-3 py-2 font-semibold"
+      className="w-full border rounded px-3 py-2 text-base font-semibold"
     />
   </div>
 );
+

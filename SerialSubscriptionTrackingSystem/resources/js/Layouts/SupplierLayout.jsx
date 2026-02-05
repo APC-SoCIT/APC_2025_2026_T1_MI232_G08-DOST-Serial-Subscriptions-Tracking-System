@@ -225,7 +225,7 @@ export default function SupplierLayout({ children, title }) {
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160 }}>
         <TopBar title={title} />
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '16px' }}>
           {children}
         </div>
       </div>

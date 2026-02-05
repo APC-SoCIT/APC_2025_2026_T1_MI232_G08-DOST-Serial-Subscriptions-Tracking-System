@@ -10,7 +10,7 @@ import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 
 const Icon = ({ children }) => (
-  <span style={{ marginRight: 8 }}>{children}</span>
+  <span style={{ marginRight: 0 }}>{children}</span>
 );
 
 const sidebarItems = [
@@ -241,7 +241,7 @@ function TopBar() {
   );
 }
 
-export default function GSPSLayout({ children, title = 'GSPS Dashboard' }) {
+export default function GSPSLayout({ children, title = '' }) {
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning,';
@@ -252,13 +252,11 @@ export default function GSPSLayout({ children, title = 'GSPS Dashboard' }) {
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160 }}>
+      <div style={{ flex: 1, marginLeft: 150 }}>
         <TopBar />
-        <div style={{ padding: '32px 40px' }}>
-          <h2 style={{ marginBottom: 8 }}>{title}</h2>
-          <p style={{ color: '#666', marginBottom: 32 }}>
-            {getGreeting()} Welcome back!
-          </p>
+        <div style={{ padding: '16px 40px' }}>
+         
+        
           {children}
         </div>
       </div>
