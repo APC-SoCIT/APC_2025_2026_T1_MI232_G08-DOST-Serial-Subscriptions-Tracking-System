@@ -13,23 +13,44 @@ use App\Events\MessageSent;
 class ChatController extends Controller
 {
     /**
+     * Roles that have access to chat feature
+     */
+    private const CHAT_ENABLED_ROLES = ['tpu', 'gsps', 'inspection', 'supplier'];
+    
+    /**
+     * Roles that suppliers are allowed to chat with
+     */
+    private const SUPPLIER_ALLOWED_ROLES = ['tpu', 'gsps', 'inspection'];
+
+    /**
      * Get all available users that can be chatted with
      */
     public function getAvailableUsers()
     {
-        $currentUserId = Auth::id();
+        $currentUser = Auth::user();
+        $currentUserId = (string) $currentUser->_id;
+        $currentRole = strtolower($currentUser->role ?? 'user');
         
-        // Get all users except the current user
-        $users = User::where('_id', '!=', $currentUserId)
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => (string) $user->_id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role ?? 'user',
-                ];
-            });
+        // Build query excluding current user
+        $query = User::where('_id', '!=', $currentUserId);
+        
+        // Apply role-based filtering
+        if ($currentRole === 'supplier') {
+            // Suppliers can only chat with TPU, GSPS, and Inspection
+            $query->whereIn('role', self::SUPPLIER_ALLOWED_ROLES);
+        } else {
+            // TPU, GSPS, Inspection can chat with all chat-enabled roles (including suppliers)
+            $query->whereIn('role', self::CHAT_ENABLED_ROLES);
+        }
+        
+        $users = $query->get()->map(function ($user) {
+            return [
+                'id' => (string) $user->_id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role ?? 'user',
+            ];
+        });
 
         return response()->json($users);
     }
@@ -92,6 +113,7 @@ class ChatController extends Controller
                     'id' => (string) $message->_id,
                     'sender' => $message->sender->name ?? 'Unknown',
                     'senderId' => $senderId,
+                    'senderRole' => $message->sender->role ?? 'user',
                     'content' => $message->content,
                     'attachment' => $message->attachment ? Storage::url($message->attachment) : null,
                     'timestamp' => $message->created_at->toISOString(),
@@ -117,10 +139,17 @@ class ChatController extends Controller
         $userId = (string) Auth::id();
         $otherUserId = (string) $request->other_user_id;
         $currentUser = Auth::user();
+        $currentRole = strtolower($currentUser->role ?? 'user');
+        $otherUserRole = strtolower($request->other_user_role);
 
         // Prevent creating chat with yourself
         if ($userId === $otherUserId) {
             return response()->json(['error' => 'Cannot create chat with yourself'], 400);
+        }
+
+        // Validate role-based chat permissions (defense-in-depth)
+        if ($currentRole === 'supplier' && !in_array($otherUserRole, self::SUPPLIER_ALLOWED_ROLES)) {
+            return response()->json(['error' => 'Suppliers can only chat with TPU, GSPS, or Inspection staff'], 403);
         }
 
         // Look for existing chat
@@ -155,6 +184,7 @@ class ChatController extends Controller
                     'id' => (string) $message->_id,
                     'sender' => $message->sender->name ?? 'Unknown',
                     'senderId' => $senderId,
+                    'senderRole' => $message->sender->role ?? 'user',
                     'content' => $message->content,
                     'attachment' => $message->attachment ? Storage::url($message->attachment) : null,
                     'timestamp' => $message->created_at->toISOString(),
