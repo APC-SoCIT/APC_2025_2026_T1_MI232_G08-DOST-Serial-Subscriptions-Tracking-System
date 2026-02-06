@@ -7,14 +7,12 @@ import EmojiPicker from './EmojiPicker';
 import ChatSkeleton from './ChatSkeleton';
 import MessageStatus from './MessageStatus';
 
-// Helper function to format timestamp in user's local timezone
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
-// Helper function to format contact time (shows relative time or date)
 const formatContactTime = (timestamp) => {
   if (!timestamp) return 'Just now';
   const date = new Date(timestamp);
@@ -33,7 +31,6 @@ const formatContactTime = (timestamp) => {
   }
 };
 
-// Helper function for API calls using axios (ensures CSRF token is always fresh)
 const apiGet = async (url) => {
   const response = await window.axios.get(url);
   return response.data;
@@ -48,7 +45,7 @@ const apiPost = async (url, data, isFormData = false) => {
   return response.data;
 };
 
-const POLL_INTERVAL = 5000; // Poll every 5 seconds for new messages (reduced to prevent flickering)
+const POLL_INTERVAL = 5000;
 
 export default function ChatComponent({ 
   primaryColor = '#004A98',
@@ -57,7 +54,7 @@ export default function ChatComponent({
   const [message, setMessage] = useState('');
   const [activeChat, setActiveChat] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [availableUsers, setAvailableUsers] = useState([]); // Users available to start new chat with
+  const [availableUsers, setAvailableUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -76,40 +73,30 @@ export default function ChatComponent({
   const pollIntervalRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
-  const currentChatIdRef = useRef(null); // Track current chat ID for async operations
+  const currentChatIdRef = useRef(null);
 
-  // Fetch contacts and available users on component mount
   useEffect(() => {
     fetchContacts();
     fetchAvailableUsers();
   }, []);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Poll for new messages when a chat is active
   useEffect(() => {
-    // Update the ref whenever currentChatId changes
     currentChatIdRef.current = currentChatId;
     
-    // Clear any existing interval
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
     
     if (currentChatId) {
-      // Clear messages first to prevent overlap
       setMessages([]);
-      
-      // Fetch immediately when chat is selected
       fetchMessagesForChat(currentChatId);
       
-      // Set up polling with the current chat ID captured
       pollIntervalRef.current = setInterval(() => {
-        // Only fetch if we're still on the same chat
         if (currentChatIdRef.current === currentChatId) {
           fetchMessagesForChat(currentChatId);
         }
@@ -124,7 +111,6 @@ export default function ChatComponent({
     };
   }, [currentChatId]);
 
-  // Close emoji picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
@@ -164,7 +150,6 @@ export default function ChatComponent({
   const fetchMessagesForChat = async (chatId) => {
     try {
       const data = await apiGet(`/api/chats/${chatId}/messages`);
-      // Only update if this is still the active chat (use ref for accurate check)
       if (chatId === currentChatIdRef.current) {
         setMessages(data);
       }
@@ -174,18 +159,14 @@ export default function ChatComponent({
   };
 
   const handleChatSelect = (index) => {
-    // Prevent re-selecting the same chat
     if (activeChat === index) return;
     
     setActiveChat(index);
     const selectedContact = filteredContacts[index];
     if (selectedContact) {
       const newChatId = selectedContact.id;
-      // Clear messages immediately to prevent overlap
       setMessages([]);
-      // Update the ref first
       currentChatIdRef.current = newChatId;
-      // Then update state (this will trigger the useEffect)
       setCurrentChatId(newChatId);
     }
   };
@@ -248,7 +229,6 @@ export default function ChatComponent({
     if (file) {
       setSelectedFile(file);
       
-      // Create preview for images
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -315,79 +295,62 @@ export default function ChatComponent({
 
   const startNewChat = async (contact) => {
     try {
-      console.log('Starting new chat with:', contact);
-      
       const data = await apiPost('/api/chats/get-or-create', {
         other_user_id: contact.id,
         other_user_name: contact.name,
         other_user_role: contact.role,
       });
 
-      console.log('Chat created/found:', data);
       setCurrentChatId(data.chat_id);
       setMessages(data.messages || []);
       setShowNewChatModal(false);
       
-      // Refresh contacts and select the new chat
       await fetchContacts();
-      
-      // Find and select the chat in the list
-      setActiveChat(0); // Select first chat (most recent)
+      setActiveChat(0);
     } catch (error) {
       console.error('Error creating chat:', error);
       alert('Error creating chat: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Delete message handler
   const handleDeleteMessage = async (messageId) => {
     try {
       await window.axios.delete(`/api/messages/${messageId}`);
-      
-      // Remove message from state
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
       setShowDeleteConfirm(null);
-      fetchContacts(); // Refresh contacts to update last message
+      fetchContacts();
     } catch (error) {
       console.error('Error deleting message:', error);
       alert('Error deleting message: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Edit message handler
   const handleEditMessage = async (messageId) => {
     if (!editingContent.trim()) return;
     
     try {
-      console.log('Editing message:', messageId, 'with content:', editingContent);
-      
       const response = await window.axios.put(`/api/messages/${messageId}`, {
         content: editingContent
       });
       
-      console.log('Edit response:', response.data);
-      
-      // Update message in state
       setMessages(prev => prev.map(msg => 
         msg.id === messageId ? { ...msg, content: response.data.content, isEdited: true } : msg
       ));
       
       setEditingMessageId(null);
       setEditingContent('');
-      fetchContacts(); // Refresh contacts to update last message
+      fetchContacts();
     } catch (error) {
       console.error('Error editing message:', error);
       alert('Error editing message: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Start editing a message
   const startEditingMessage = (msg) => {
     setEditingMessageId(msg.id);
     setEditingContent(msg.content);
   };
 
-  // Cancel editing
   const cancelEditing = () => {
     setEditingMessageId(null);
     setEditingContent('');
@@ -398,7 +361,6 @@ export default function ChatComponent({
     contact.role?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Check if we need a date separator
   const shouldShowDateSeparator = (currentMsg, prevMsg) => {
     if (!prevMsg) return true;
     const currentDate = new Date(currentMsg.timestamp).toDateString();
@@ -406,7 +368,6 @@ export default function ChatComponent({
     return currentDate !== prevDate;
   };
 
-  // Format date for separator
   const formatDateSeparator = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -418,7 +379,6 @@ export default function ChatComponent({
     return date.toLocaleDateString([], { weekday: 'long' });
   };
 
-  // Check if should show sender info (first message in a group from same sender)
   const shouldShowSenderInfo = (index) => {
     if (index === 0) return true;
     const prevMsg = messages[index - 1];
@@ -434,11 +394,9 @@ export default function ChatComponent({
     const prevMsg = index > 0 ? messages[index - 1] : null;
     const showDateSeparator = shouldShowDateSeparator(msg, prevMsg);
     const showSenderInfo = shouldShowSenderInfo(index);
-    const isOneOnOne = true; // Set to true for one-on-one chat
 
     return (
       <div key={msg.id}>
-        {/* Date Separator */}
         {showDateSeparator && (
           <div style={{ 
             display: 'flex', 
@@ -453,7 +411,6 @@ export default function ChatComponent({
           </div>
         )}
 
-        {/* Message Row */}
         <div
           style={{
             display: 'flex',
@@ -465,7 +422,6 @@ export default function ChatComponent({
           onMouseEnter={() => setHoveredMessageId(msg.id)}
           onMouseLeave={() => setHoveredMessageId(null)}
         >
-          {/* Avatar - only for received messages in one-on-one chat, and only first message from sender */}
           {!msg.isOwn && showSenderInfo && (
             <div style={{
               width: 40,
@@ -485,19 +441,16 @@ export default function ChatComponent({
             </div>
           )}
 
-          {/* Spacer for consecutive messages from same sender */}
           {!msg.isOwn && !showSenderInfo && (
             <div style={{ width: 40, flexShrink: 0 }} />
           )}
 
-          {/* Message Content Container */}
           <div style={{ 
             display: 'flex',
             flexDirection: 'column',
             alignItems: msg.isOwn ? 'flex-end' : 'flex-start',
             maxWidth: '70%'
           }}>
-            {/* Message Bubble */}
             {isEditing ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
                 <textarea
@@ -570,7 +523,6 @@ export default function ChatComponent({
                     <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>(edited)</span>
                   )}
 
-                  {/* Hover Actions for own messages */}
                   {isHovered && msg.isOwn && (
                     <div style={{
                       position: 'absolute',
@@ -625,7 +577,6 @@ export default function ChatComponent({
                     </div>
                   )}
 
-                  {/* Delete Confirmation */}
                   {showDeleteConfirm === msg.id && (
                     <div style={{
                       position: 'absolute',
@@ -675,7 +626,6 @@ export default function ChatComponent({
               )
             )}
 
-            {/* Attachment */}
             {msg.attachment && (
               <div style={{ marginTop: 8, marginBottom: msg.content ? 0 : 8 }}>
                 {isImage ? (
@@ -717,7 +667,6 @@ export default function ChatComponent({
               </div>
             )}
 
-            {/* Time - below message for own messages */}
             {msg.isOwn && (
               <div style={{ 
                 fontSize: 12, 
@@ -746,9 +695,10 @@ export default function ChatComponent({
   return (
     <div style={{ 
       background: '#fff', 
-      borderRadius: '12px', 
-      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-      height: 'calc(100vh - 200px)',
+      borderRadius: '0px',
+      boxShadow: 'none',
+      height: '100%',
+      width: '100%',
       display: 'flex',
       overflow: 'hidden'
     }}>
@@ -757,10 +707,15 @@ export default function ChatComponent({
         width: '320px', 
         borderRight: '1px solid #e9ecef',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        minHeight: 0
       }}>
-        {/* Header with Search */}
-        <div style={{ padding: '20px', borderBottom: '1px solid #e9ecef' }}>
+        {/* Header with Search - THIS MUST STAY FIXED */}
+        <div style={{ 
+          padding: '20px', 
+          borderBottom: '1px solid #e9ecef',
+          flexShrink: 0
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 20, color: primaryColor, fontWeight: 600 }}>Chat</h3>
             {availableUsers.length > 0 && (
@@ -809,8 +764,8 @@ export default function ChatComponent({
           </div>
         </div>
 
-        {/* Contacts List */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Contacts List - ONLY THIS SCROLLS */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {filteredContacts.length === 0 ? (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999' }}>
               <p style={{ marginBottom: 8 }}>No conversations yet</p>
@@ -933,72 +888,68 @@ export default function ChatComponent({
       </div>
 
       {/* Right Side - Chat Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Chat Header */}
-        {activeChat !== null && filteredContacts[activeChat] ? (
-          <div style={{ 
-            padding: '20px 24px', 
-            borderBottom: '1px solid #e9ecef',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: primaryColor,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: '18px',
-                marginRight: '12px'
-              }}>
-                {filteredContacts[activeChat].name?.charAt(0) || '?'}
-              </div>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#212529', fontWeight: '600' }}>
-                  {filteredContacts[activeChat].name}
-                </h3>
-                <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
-                  {filteredContacts[activeChat].role}
-                </p>
-              </div>
-            </div>
-            <BsThreeDotsVertical style={{ color: '#6c757d', cursor: 'pointer', fontSize: '20px' }} />
-          </div>
-        ) : (
-          <div style={{ 
-            padding: '20px 24px', 
-            borderBottom: '1px solid #e9ecef',
-            background: '#fff'
-          }}>
-            <p style={{ margin: 0, color: '#999' }}>Select a conversation to start chatting</p>
-          </div>
-        )}
-
-        {/* Messages Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* Messages Area - Header SCROLLS WITH messages - ONLY THIS SCROLLS */}
         <div style={{ 
           flex: 1, 
           padding: '0',
           overflowY: 'auto',
+          overflowX: 'hidden',
           background: '#fff',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          minHeight: 0
         }}>
           {activeChat !== null ? (
             <>
+              {/* Chat Header - INSIDE scrollable area */}
+              {filteredContacts[activeChat] && (
+                <div style={{ 
+                  padding: '20px 24px', 
+                  borderBottom: '1px solid #e9ecef',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#fff',
+                  flexShrink: 0
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: primaryColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      fontSize: '18px',
+                      marginRight: '12px'
+                    }}>
+                      {filteredContacts[activeChat].name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#212529', fontWeight: '600' }}>
+                        {filteredContacts[activeChat].name}
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
+                        {filteredContacts[activeChat].role}
+                      </p>
+                    </div>
+                  </div>
+                  <BsThreeDotsVertical style={{ color: '#6c757d', cursor: 'pointer', fontSize: '20px' }} />
+                </div>
+              )}
+
+              {/* Messages */}
               {messages.length === 0 ? (
                 <div style={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
                   alignItems: 'center', 
                   justifyContent: 'center',
-                  height: '100%',
+                  flex: 1,
                   color: '#6c757d',
                   padding: '24px'
                 }}>
@@ -1007,11 +958,7 @@ export default function ChatComponent({
                 </div>
               ) : (
                 <div style={{ 
-                  flex: 1, 
-                  padding: '24px 40px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'flex-end'
+                  padding: '24px 40px'
                 }}>
                   {messages.map((msg, index) => renderMessage(msg, index))}
                   <div ref={messagesEndRef} />
@@ -1032,7 +979,7 @@ export default function ChatComponent({
           )}
         </div>
 
-        {/* Attachment Preview */}
+        {/* Attachment Preview - STAYS FIXED */}
         {attachmentPreview && (
           <div style={{
             padding: '12px 40px',
@@ -1040,7 +987,8 @@ export default function ChatComponent({
             borderTop: '1px solid #e9ecef',
             display: 'flex',
             alignItems: 'center',
-            gap: 12
+            gap: 12,
+            flexShrink: 0
           }}>
             {attachmentPreview.type === 'image' ? (
               <img 
@@ -1079,7 +1027,8 @@ export default function ChatComponent({
                 alignItems: 'center',
                 gap: '6px',
                 fontSize: '12px',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                flexShrink: 0
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#dee2e6';
@@ -1093,20 +1042,20 @@ export default function ChatComponent({
           </div>
         )}
 
-        {/* Message Input */}
+        {/* Message Input - STAYS FIXED AT BOTTOM */}
         <div style={{ 
           padding: '16px 40px', 
           borderTop: '1px solid #e9ecef',
           background: '#fff',
           opacity: activeChat !== null ? 1 : 0.5,
-          pointerEvents: activeChat !== null ? 'auto' : 'none'
+          pointerEvents: activeChat !== null ? 'auto' : 'none',
+          flexShrink: 0
         }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center',
             gap: '12px'
           }}>
-            {/* File Upload Button */}
             <input
               type="file"
               ref={fileInputRef}
@@ -1129,7 +1078,8 @@ export default function ChatComponent({
                 justifyContent: 'center',
                 transition: 'color 0.2s',
                 height: '40px',
-                width: '40px'
+                width: '40px',
+                flexShrink: 0
               }}
               onMouseEnter={(e) => e.currentTarget.style.color = primaryColor}
               onMouseLeave={(e) => e.currentTarget.style.color = '#6c757d'}
@@ -1138,7 +1088,6 @@ export default function ChatComponent({
               <IoAttach />
             </button>
             
-            {/* Message Input */}
             <div style={{ flex: 1, position: 'relative' }}>
               <textarea
                 value={message}
@@ -1163,7 +1112,6 @@ export default function ChatComponent({
                 rows={1}
               />
               
-              {/* Emoji Button */}
               <div ref={emojiPickerRef} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
                 <button
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -1183,7 +1131,6 @@ export default function ChatComponent({
                   <IoHappyOutline />
                 </button>
                 
-                {/* Emoji Picker */}
                 {showEmojiPicker && (
                   <div style={{
                     position: 'absolute',
@@ -1197,7 +1144,6 @@ export default function ChatComponent({
               </div>
             </div>
             
-            {/* Send Button */}
             <button
               onClick={handleSend}
               disabled={(!message.trim() && !selectedFile) || sending}

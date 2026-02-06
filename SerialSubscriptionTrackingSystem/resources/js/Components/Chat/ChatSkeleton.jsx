@@ -69,7 +69,7 @@ const ChatMessageSkeleton = () => (
 
 export default function ChatSkeleton() {
   return (
-    <div className="bg-white rounded-xl shadow-sm h-[calc(100vh-200px)] flex overflow-hidden">
+    <div className="bg-white h-full w-full flex overflow-hidden">
       <ChatListSkeleton />
       <ChatMessageSkeleton />
     </div>
