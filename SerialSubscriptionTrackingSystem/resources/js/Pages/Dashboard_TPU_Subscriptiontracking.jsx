@@ -72,12 +72,29 @@ function SubscriptionTracking() {
   const categories = ['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education'];
   
   // Load suppliers from localStorage (fallback) but prioritize approved suppliers from backend
+  // Also validate localStorage against approved suppliers to remove deleted ones
   useEffect(() => {
     const savedSuppliers = localStorage.getItem('tpu_suppliers');
     if (savedSuppliers) {
-      setAddedSuppliers(JSON.parse(savedSuppliers));
+      const parsed = JSON.parse(savedSuppliers);
+      // If we have approved suppliers from backend, filter localStorage to only valid ones
+      if (approvedSuppliers.length > 0) {
+        const approvedEmails = approvedSuppliers.map(s => s.email?.toLowerCase());
+        const validSuppliers = parsed.filter(s => approvedEmails.includes(s.email?.toLowerCase()));
+        setAddedSuppliers(validSuppliers);
+        // Update localStorage if any were removed
+        if (validSuppliers.length !== parsed.length) {
+          if (validSuppliers.length > 0) {
+            localStorage.setItem('tpu_suppliers', JSON.stringify(validSuppliers));
+          } else {
+            localStorage.removeItem('tpu_suppliers');
+          }
+        }
+      } else {
+        setAddedSuppliers(parsed);
+      }
     }
-  }, []);
+  }, [approvedSuppliers]);
   
   // Fetch subscriptions from API on mount
   useEffect(() => {

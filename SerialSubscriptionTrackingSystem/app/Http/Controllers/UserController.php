@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\SupplierAccount;
+use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
@@ -57,8 +58,17 @@ class UserController extends Controller
 
             if (($user->role ?? null) === 'supplier') {
                 $userId = $user->_id ?? $user->id;
+                $userEmail = $user->email;
+                $userName = $user->name;
+                
+                // Delete all subscriptions/serials assigned to this supplier
+                Subscription::where('supplier_id', $userId)
+                    ->orWhere('supplier_name', $userName)
+                    ->delete();
+                
+                // Delete supplier account
                 SupplierAccount::where('user_id', $userId)
-                    ->orWhere('email', $user->email)
+                    ->orWhere('email', $userEmail)
                     ->delete();
             }
 
