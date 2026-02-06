@@ -1,4 +1,3 @@
-// resources/js/Layouts/GSPSLayout.jsx
 import React, { useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
@@ -246,14 +245,23 @@ export default function GSPSLayout({ children, title = 'GSPS Dashboard', hideTit
   const isFullPage = hideTitle || isChatPage || title === 'Supplier Information' || title === 'Delivery Status' || title === 'Inspection Status';
 
   return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160 }}>
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <TopBar />
         <div style={{ 
+<<<<<<< HEAD
           padding: isFullPage ? '0' : '32px 40px',
           minHeight: isFullPage ? 'calc(100vh - 73px)' : 'auto',
           overflowY: isFullPage ? 'auto' : 'visible'
+=======
+          flex: 1,
+          padding: isFullPage ? '0' : '32px 40px',
+          overflow: isChatPage ? 'hidden' : (isFullPage ? 'auto' : 'visible'),
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+>>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
         }}>
           {!isFullPage && (
             <>

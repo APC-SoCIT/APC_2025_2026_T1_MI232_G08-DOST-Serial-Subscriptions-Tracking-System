@@ -1,6 +1,5 @@
-// resources/js/Layouts/SupplierLayout.jsx
 import React, { useState } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { FaTruckFast } from "react-icons/fa6";
@@ -119,6 +118,10 @@ function TopBar({ title }) {
     setActiveIcon(activeIcon === icon ? null : icon);
   };
 
+  const handleLogout = () => {
+    router.post(route('logout'));
+  };
+
   return (
     <div style={{
       fontSize: 22,
@@ -193,10 +196,8 @@ function TopBar({ title }) {
                   <p style={{ margin: 0, fontSize: 13, color: '#777' }}>Supplier Account</p>
                 </div>
               </div>
-              <Link
-                href={route('logout')}
-                method="post"
-                as="button"
+              <button
+                onClick={handleLogout}
                 style={{
                   width: '100%',
                   background: '#0B4DA1',
@@ -210,7 +211,7 @@ function TopBar({ title }) {
                 }}
               >
                 Logout
-              </Link>
+              </button>
             </div>
           )}
         </span>
@@ -220,12 +221,22 @@ function TopBar({ title }) {
 }
 
 export default function SupplierLayout({ children, title }) {
+  const isChatPage = title === 'Supplier Chat';
+  const isFullPage = isChatPage || title === 'List of Serials' || title === 'Late Deliveries' || title === 'Undelivered' || title === 'Delivered';
+
   return (
-    <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160 }}>
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <TopBar title={title} />
-        <div style={{ padding: '24px' }}>
+        <div style={{ 
+          flex: 1,
+          padding: isChatPage ? '0' : '24px',
+          overflow: isChatPage ? 'hidden' : 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
           {children}
         </div>
       </div>

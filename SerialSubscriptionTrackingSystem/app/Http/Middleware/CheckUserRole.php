@@ -40,13 +40,12 @@ class CheckUserRole
      */
     private function getRoleDashboard($user)
     {
-        $userRole = $user->roles->first();
+        $roleName = $user->getRole();
         
-        if (!$userRole) {
+        if (!$roleName) {
             return route('dashboard');
         }
 
-        $roleName = $userRole->name;
         $roleRoutes = [
             'admin' => '/dashboard-admin',
             'supplier' => '/dashboard-supplier',

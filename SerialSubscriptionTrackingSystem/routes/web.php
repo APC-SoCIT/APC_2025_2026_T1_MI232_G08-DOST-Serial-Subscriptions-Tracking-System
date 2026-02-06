@@ -4,10 +4,19 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SupplierAccountController;
 use App\Http\Controllers\SubscriptionController;
+<<<<<<< HEAD
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
  
+=======
+use App\Http\Controllers\UserController;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+
+>>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
 // Public welcome page
 Route::get('/', function () {
     return redirect()->route('login');
@@ -20,7 +29,15 @@ Route::get('/account-approval', function () {
 Route::get('/list-of-supplier', function () {
     return Inertia::render('ListofSupplier');
 });
+<<<<<<< HEAD
  
+=======
+
+Route::get('/list-of-user', function () {
+    return Inertia::render('ListofUser');
+})->middleware(['auth', 'verified', 'role:admin'])->name('admin.users');
+
+>>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
 //Default dashboard (fallback)
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
@@ -140,6 +157,16 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+<<<<<<< HEAD
+=======
+    // User Management API Routes
+    Route::prefix('api/users')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->name('users.index');
+        Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+        Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
+    });
+
+>>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
     // Supplier Account Management API Routes
     Route::prefix('api/supplier-accounts')->group(function () {
         Route::get('/', [SupplierAccountController::class, 'index'])->name('supplier-accounts.index');
