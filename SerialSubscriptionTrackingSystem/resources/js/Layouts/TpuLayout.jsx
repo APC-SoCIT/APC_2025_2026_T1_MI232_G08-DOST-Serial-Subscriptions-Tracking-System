@@ -1,6 +1,5 @@
-// resources/js/Layouts/TPULayout.jsx
 import React, { useState } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
@@ -107,7 +106,7 @@ function TopBar() {
   };
 
   const handleLogout = () => {
-    window.location.href = route('logout');
+    router.post(route('logout'));
   };
 
   return (
@@ -232,14 +231,17 @@ export default function TPULayout({ children, title = 'Dashboard', hideTitle = f
   const isFullPage = hideTitle || isChatPage || title === 'Add Account' || title === 'Supplier Information' || title === 'Subscription Tracking' || title === 'Monitor Delivery';
   
   return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160 }}>
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <TopBar />
         <div style={{ 
+          flex: 1,
           padding: isFullPage ? '0' : '32px 40px',
-          minHeight: isFullPage ? 'calc(100vh - 73px)' : 'auto',
-          overflowY: isFullPage ? 'auto' : 'visible'
+          overflow: isChatPage ? 'hidden' : (isFullPage ? 'auto' : 'visible'),
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
         }}>
           {!isFullPage && (
             <>

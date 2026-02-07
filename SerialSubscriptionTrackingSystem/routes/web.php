@@ -4,15 +4,10 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SupplierAccountController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'auth' => null,
-    ]);
-});
 
 
 // Public welcome page
@@ -27,6 +22,10 @@ Route::get('/account-approval', function () {
 Route::get('/list-of-supplier', function () {
     return Inertia::render('ListofSupplier');
 });
+
+Route::get('/list-of-user', function () {
+    return Inertia::render('ListofUser');
+})->middleware(['auth', 'verified', 'role:admin'])->name('admin.users');
 
 //Default dashboard (fallback)
 Route::get('/dashboard', function () {
@@ -146,6 +145,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // User Management API Routes
+    Route::prefix('api/users')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->name('users.index');
+        Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+        Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
+    });
 
     // Supplier Account Management API Routes
     Route::prefix('api/supplier-accounts')->group(function () {
