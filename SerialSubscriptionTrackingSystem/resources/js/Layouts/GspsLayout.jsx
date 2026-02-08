@@ -3,7 +3,6 @@ import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { FaTruck } from "react-icons/fa";
-import { MdMarkEmailRead } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
@@ -17,7 +16,6 @@ const sidebarItems = [
   { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'dashboard-gsps-chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-gsps-supplierinfo' },
   { icon: <FaTruck />, label: 'Delivery Status', route: 'dashboard-gsps-deliverystatus' },
-  { icon: <MdMarkEmailRead />, label: 'Inspection Status', route: 'dashboard-gsps-inspectionstatus' },
 ];
 
 function Sidebar() {

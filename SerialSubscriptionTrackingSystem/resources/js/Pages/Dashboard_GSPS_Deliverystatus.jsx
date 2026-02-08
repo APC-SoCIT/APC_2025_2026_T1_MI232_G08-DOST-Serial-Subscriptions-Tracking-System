@@ -109,6 +109,24 @@ function DeliveryStatus() {
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Delivery Tracking</h2>
             <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Current status of all serial deliveries</p>
           </div>
+          <button
+            onClick={fetchDeliverySerials}
+            disabled={loading}
+            style={{
+              background: '#004A98',
+              border: 'none',
+              color: '#fff',
+              padding: '12px 20px',
+              borderRadius: 6,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: 14,
+              fontWeight: 500,
+              opacity: loading ? 0.7 : 1,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
         </div>
 
         {/* Search and Filter */}

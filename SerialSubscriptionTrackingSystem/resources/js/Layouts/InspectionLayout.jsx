@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { router, usePage, Link } from "@inertiajs/react";
 import { GoHome } from "react-icons/go";
-import { FaClipboardList, FaUserCircle } from "react-icons/fa";
+import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 
 const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
+  { icon: <FaClipboardCheck size={18} />, label: "Serials for Inspection", href: "/inspection-serialsforinspection" },
   { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", href: "/inspection-chat" },
 ];
 

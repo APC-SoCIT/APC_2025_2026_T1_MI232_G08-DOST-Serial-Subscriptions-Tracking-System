@@ -89,10 +89,6 @@ Route::get('/dashboard-gsps-deliverystatus', function () {
         return Inertia::render('Dashboard_GSPS_Deliverystatus');
     })->name('dashboard-gsps-deliverystatus');
 
-Route::get('/dashboard-gsps-inspectionstatus', function () {
-        return Inertia::render('Dashboard_GSPS_Inspectionstatus');
-    })->name('dashboard-gsps-inspectionstatus');
-
 Route::get('/dashboard-gsps-chat', function () {
         return Inertia::render('Dashboard_GSPS_Chat');
     })->middleware(['auth'])->name('dashboard-gsps-chat');
@@ -135,6 +131,8 @@ Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('
 
 Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
 
+Route::get('/inspection-serialsforinspection', fn () => Inertia::render('Dashboard_Inspection_Serialsforinspection'))->middleware(['auth', 'verified'])->name('inspection.serialsforinspection');
+
 Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))->middleware(['auth'])->name('inspection.chat');
 
     
@@ -171,6 +169,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/stats', [SubscriptionController::class, 'stats'])->name('subscriptions.stats');
         Route::get('/supplier-serials', [SubscriptionController::class, 'getSupplierSerials'])->name('subscriptions.supplierSerials');
         Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
+        Route::get('/inspection-serials', [SubscriptionController::class, 'getSerialsForInspection'])->name('subscriptions.inspectionSerials');
+        Route::get('/monitored-deliveries', [SubscriptionController::class, 'getMonitoredDeliveries'])->name('subscriptions.monitoredDeliveries');
         Route::post('/', [SubscriptionController::class, 'store'])->name('subscriptions.store');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
         Route::put('/{id}', [SubscriptionController::class, 'update'])->name('subscriptions.update');
@@ -179,6 +179,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{id}/transactions', [SubscriptionController::class, 'addTransaction'])->name('subscriptions.addTransaction');
         Route::put('/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
         Route::put('/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
+        Route::post('/{id}/submit-inspection', [SubscriptionController::class, 'submitInspection'])->name('subscriptions.submitInspection');
     });
 
     // Chat routes

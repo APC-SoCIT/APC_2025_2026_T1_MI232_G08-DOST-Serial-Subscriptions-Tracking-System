@@ -36,11 +36,51 @@ class SubscriptionController extends Controller
         }
 
         $subscriptions = $query->orderBy('created_at', 'desc')->get();
+        
+        // Recalculate delivered_cost for each subscription based on inspected serials
+        foreach ($subscriptions as $subscription) {
+            $this->recalculateDeliveredCost($subscription);
+        }
 
         return response()->json([
             'subscriptions' => $subscriptions,
             'success' => true,
         ]);
+    }
+    
+    /**
+     * Recalculate delivered_cost based on inspected serials
+     */
+    private function recalculateDeliveredCost(Subscription $subscription)
+    {
+        $serials = $subscription->serials ?? [];
+        $deliveredCost = 0;
+        
+        foreach ($serials as $serial) {
+            $inspectionStatus = $serial['inspection_status'] ?? null;
+            
+            // Only count serials that have been inspected and marked as "Good" (inspected status)
+            if ($inspectionStatus === 'inspected') {
+                $quantity = floatval($serial['quantity'] ?? 1);
+                $unitPrice = floatval($serial['unitPrice'] ?? 0);
+                $deliveredCost += $quantity * $unitPrice;
+            }
+        }
+        
+        // Update the subscription if the calculated value differs
+        if ($subscription->delivered_cost != $deliveredCost) {
+            $subscription->delivered_cost = $deliveredCost;
+            $subscription->remaining_cost = max(0, ($subscription->award_cost ?? 0) - $deliveredCost);
+            $subscription->payment_status = $this->calculatePaymentStatus(
+                $subscription->award_cost ?? 0,
+                $deliveredCost,
+                $subscription->remaining_cost
+            );
+            $subscription->progress = ($subscription->award_cost ?? 0) > 0 
+                ? min(100, round(($deliveredCost / $subscription->award_cost) * 100)) 
+                : 0;
+            $subscription->save();
+        }
     }
 
     /**
@@ -48,6 +88,14 @@ class SubscriptionController extends Controller
      */
     public function stats(Request $request)
     {
+        $subscriptions = Subscription::all();
+        
+        // Recalculate delivered_cost for all subscriptions based on inspected serials
+        foreach ($subscriptions as $subscription) {
+            $this->recalculateDeliveredCost($subscription);
+        }
+        
+        // Refresh the collection after updates
         $subscriptions = Subscription::all();
 
         $totalAwardCost = $subscriptions->sum('award_cost');
@@ -157,6 +205,10 @@ class SubscriptionController extends Controller
             'serials' => 'nullable|array',
             'transactions' => 'nullable|array',
             'note' => 'nullable|string',
+            'issn' => 'nullable|string|max:50',
+            'frequency' => 'nullable|string|max:50',
+            'author_publisher' => 'nullable|string|max:255',
+            'category' => 'nullable|string|max:100',
         ]);
 
         $subscription->fill($validated);
@@ -351,6 +403,14 @@ class SubscriptionController extends Controller
                     'frequency' => $serial['frequency'] ?? '',
                     'status' => $serial['status'] ?? 'pending', // pending, prepare, for_delivery
                     'supplier_name' => $subscription->supplier_name,
+                    // Inspection-related fields for Delivered/For Return status
+                    'inspection_status' => $serial['inspection_status'] ?? null,
+                    'inspection_checklist' => $serial['inspection_checklist'] ?? [],
+                    'other_description' => $serial['other_description'] ?? null,
+                    'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                    'inspector_name' => $serial['inspector_name'] ?? null,
+                    'inspection_date' => $serial['inspection_date'] ?? null,
+                    'condition' => $serial['condition'] ?? null,
                 ];
             }
         }
@@ -479,6 +539,8 @@ class SubscriptionController extends Controller
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
                 $serial['status'] = 'received';
                 $serial['receivedDate'] = $receivedDate;
+                // Set inspection status to pending when received
+                $serial['inspection_status'] = 'pending';
                 $updated = true;
                 break;
             }
@@ -499,6 +561,217 @@ class SubscriptionController extends Controller
             'message' => 'Serial marked as received',
             'receivedDate' => $receivedDate,
             'subscription' => $subscription,
+        ]);
+    }
+
+    /**
+     * Get serials for inspection (received serials with pending inspection)
+     */
+    public function getSerialsForInspection(Request $request)
+    {
+        $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
+        
+        // Extract all serials that are received and need inspection
+        $inspectionSerials = [];
+        $serialId = 1;
+        
+        foreach ($subscriptions as $subscription) {
+            $subscriptionSerials = $subscription->serials ?? [];
+            
+            foreach ($subscriptionSerials as $serial) {
+                $status = $serial['status'] ?? 'pending';
+                $inspectionStatus = $serial['inspection_status'] ?? null;
+                
+                // Include serials that are received and have pending/inspected/rejected inspection status
+                if ($status === 'received' && $inspectionStatus !== null) {
+                    $inspectionSerials[] = [
+                        'id' => $serialId++,
+                        'subscription_id' => $subscription->_id ?? $subscription->id,
+                        'issn' => $serial['issn'] ?? '',
+                        'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                        'supplierName' => $subscription->supplier_name,
+                        'deliveryDate' => $serial['deliveryDate'] ?? null,
+                        'receivedDate' => $serial['receivedDate'] ?? null,
+                        'status' => $status,
+                        'inspection_status' => $inspectionStatus,
+                        'frequency' => $serial['frequency'] ?? '',
+                        'quantity' => $serial['quantity'] ?? 1,
+                        // Inspection details if already inspected
+                        'inspector_name' => $serial['inspector_name'] ?? null,
+                        'condition' => $serial['condition'] ?? null,
+                        'inspection_date' => $serial['inspection_date'] ?? null,
+                        'inspection_checklist' => $serial['inspection_checklist'] ?? null,
+                        'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                    ];
+                }
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'serials' => $inspectionSerials,
+        ]);
+    }
+
+    /**
+     * Submit inspection result for a serial
+     */
+    public function submitInspection(Request $request, $subscriptionId)
+    {
+        $subscription = Subscription::find($subscriptionId);
+        
+        if (!$subscription) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subscription not found',
+            ], 404);
+        }
+        
+        $validated = $request->validate([
+            'serial_issn' => 'required|string',
+            'inspector_name' => 'required|string|max:255',
+            'condition' => 'required|string|in:Good,For Return',
+            'checklist' => 'nullable|array',
+            'other_description' => 'nullable|string',
+            'remarks' => 'nullable|string',
+        ]);
+        
+        $serials = $subscription->serials ?? [];
+        $updated = false;
+        $inspectionDate = now()->toISOString();
+        
+        // Determine inspection status based on condition
+        $inspectionStatus = $validated['condition'] === 'For Return' ? 'for_return' : 'inspected';
+        
+        // Track the serial cost for delivered items
+        $serialCost = 0;
+        $wasAlreadyInspected = false;
+        
+        foreach ($serials as &$serial) {
+            if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                // Check if this serial was already marked as inspected (to prevent double-counting)
+                $wasAlreadyInspected = ($serial['inspection_status'] ?? null) === 'inspected';
+                
+                $serial['inspection_status'] = $inspectionStatus;
+                $serial['inspector_name'] = $validated['inspector_name'];
+                $serial['condition'] = $validated['condition'];
+                $serial['inspection_date'] = $inspectionDate;
+                $serial['inspection_checklist'] = $validated['checklist'] ?? null;
+                $serial['other_description'] = $validated['other_description'] ?? null;
+                $serial['inspection_remarks'] = $validated['remarks'] ?? null;
+                
+                // Calculate serial cost (quantity * unitPrice)
+                $quantity = floatval($serial['quantity'] ?? 1);
+                $unitPrice = floatval($serial['unitPrice'] ?? 0);
+                $serialCost = $quantity * $unitPrice;
+                
+                $updated = true;
+                break;
+            }
+        }
+        
+        if (!$updated) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial not found in subscription',
+            ], 404);
+        }
+        
+        $subscription->serials = $serials;
+        
+        // Update delivered_cost when serial is marked as delivered (Good condition)
+        // Only add cost if it wasn't already inspected before (to prevent double-counting)
+        if ($inspectionStatus === 'inspected' && !$wasAlreadyInspected && $serialCost > 0) {
+            $subscription->delivered_cost = ($subscription->delivered_cost ?? 0) + $serialCost;
+            $subscription->remaining_cost = max(0, ($subscription->award_cost ?? 0) - $subscription->delivered_cost);
+            $subscription->payment_status = $this->calculatePaymentStatus(
+                $subscription->award_cost ?? 0,
+                $subscription->delivered_cost,
+                $subscription->remaining_cost
+            );
+            $subscription->progress = ($subscription->award_cost ?? 0) > 0 
+                ? min(100, round(($subscription->delivered_cost / $subscription->award_cost) * 100)) 
+                : 0;
+        }
+        
+        $subscription->save();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Inspection submitted successfully',
+            'inspection_status' => $inspectionStatus,
+            'inspection_date' => $inspectionDate,
+            'subscription' => $subscription,
+        ]);
+    }
+
+    /**
+     * Get serials for TPU Monitor Delivery (serials that have been inspected)
+     */
+    public function getMonitoredDeliveries(Request $request)
+    {
+        $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
+        
+        // Extract all serials that have been inspected (inspected or for_return)
+        $monitoredSerials = [];
+        $serialId = 1;
+        
+        // Statistics
+        $totalDelivered = 0;
+        $totalForReturn = 0;
+        $totalPending = 0;
+        
+        foreach ($subscriptions as $subscription) {
+            $subscriptionSerials = $subscription->serials ?? [];
+            
+            foreach ($subscriptionSerials as $serial) {
+                $status = $serial['status'] ?? 'pending';
+                $inspectionStatus = $serial['inspection_status'] ?? null;
+                
+                // Include all serials that have gone through the delivery flow
+                if ($status === 'received' && $inspectionStatus !== null) {
+                    // Determine delivery status based on inspection
+                    $deliveryStatus = 'Pending';
+                    if ($inspectionStatus === 'inspected') {
+                        $deliveryStatus = 'Delivered';
+                        $totalDelivered++;
+                    } elseif ($inspectionStatus === 'for_return') {
+                        $deliveryStatus = 'For Return';
+                        $totalForReturn++;
+                    } else {
+                        $totalPending++;
+                    }
+                    
+                    $monitoredSerials[] = [
+                        'id' => $serialId++,
+                        'subscription_id' => $subscription->_id ?? $subscription->id,
+                        'issn' => $serial['issn'] ?? '',
+                        'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                        'supplierName' => $subscription->supplier_name,
+                        'deliveryDate' => $serial['deliveryDate'] ?? null,
+                        'receivedDate' => $serial['receivedDate'] ?? null,
+                        'inspectionDate' => $serial['inspection_date'] ?? null,
+                        'deliveryStatus' => $deliveryStatus,
+                        'inspection_status' => $inspectionStatus,
+                        'frequency' => $serial['frequency'] ?? '',
+                        'quantity' => $serial['quantity'] ?? 1,
+                        'inspector_name' => $serial['inspector_name'] ?? null,
+                        'condition' => $serial['condition'] ?? null,
+                        'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                    ];
+                }
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'serials' => $monitoredSerials,
+            'stats' => [
+                'total' => count($monitoredSerials),
+                'delivered' => $totalDelivered,
+                'for_return' => $totalForReturn,
+                'pending' => $totalPending,
+            ],
         ]);
     }
 }

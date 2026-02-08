@@ -36,13 +36,25 @@ function SupplierInfo() {
     status: 'Active'
   });
 
-  // Load suppliers from localStorage on mount
+  // Load suppliers from localStorage on mount, filtering out any that no longer exist in approved suppliers
   useEffect(() => {
     const savedSuppliers = localStorage.getItem('tpu_suppliers');
     if (savedSuppliers) {
-      setSuppliers(JSON.parse(savedSuppliers));
+      const parsed = JSON.parse(savedSuppliers);
+      // Filter to only keep suppliers that still exist in approvedSuppliers (by email)
+      const approvedEmails = approvedSuppliers.map(s => s.email?.toLowerCase());
+      const validSuppliers = parsed.filter(s => approvedEmails.includes(s.email?.toLowerCase()));
+      setSuppliers(validSuppliers);
+      // Update localStorage if any were removed
+      if (validSuppliers.length !== parsed.length) {
+        if (validSuppliers.length > 0) {
+          localStorage.setItem('tpu_suppliers', JSON.stringify(validSuppliers));
+        } else {
+          localStorage.removeItem('tpu_suppliers');
+        }
+      }
     }
-  }, []);
+  }, [approvedSuppliers]);
 
   // Fetch supplier accounts from API
   useEffect(() => {

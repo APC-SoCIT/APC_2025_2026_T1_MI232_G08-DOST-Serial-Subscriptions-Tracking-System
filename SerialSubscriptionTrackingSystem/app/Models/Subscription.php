@@ -26,6 +26,10 @@ class Subscription extends Model
         'payment_status', // 'Fully Paid', 'Partially Paid', 'Overpaid', 'Unpaid'
         'progress',
         'note',
+        'issn',
+        'frequency',
+        'author_publisher',
+        'category',
         'created_by', // TPU user ID who created
         'serials', // Array of serial items
         'transactions', // Array of payment transactions
