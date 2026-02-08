@@ -84,31 +84,13 @@ return [
             ]) : [],
         ],
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
+
        'mongodb' => [ 
             'driver' => 'mongodb', 
             'dsn' => env('DB_DSN'), 
             'database' => env('DB_DATABASE','dost_serial_subscriptions'), 
             'options' => [ 
                 'connectionTimeoutMS' => 10000,
-=======
-      'mongodb' => [
-=======
-=======
->>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
-       'mongodb' => [
->>>>>>> 8cccb39a44fb2cb2c72fdc475c901683ce9beed5
-            'driver' => 'mongodb',
-            'dsn' => env('DB_DSN'),
-            'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),
-            'options' => [
-                'connectTimeoutMS' => 10000,
-<<<<<<< HEAD
->>>>>>> c54527f06ccf9890ab2dcd9987a0cb19543c7890
-=======
->>>>>>> 25936b88d5acb16a830c4feffb2468228fa25ed1
                 'serverSelectionTimeoutMS' => 10000,
                 'socketTimeoutMS' => 60000,
             ],
