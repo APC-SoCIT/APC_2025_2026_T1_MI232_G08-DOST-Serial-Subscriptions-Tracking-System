@@ -62,6 +62,37 @@ function SupplierInfoGSPS() {
     }
   };
 
+  // Helper function to determine display status based on serial status and inspection status
+  const getDisplayStatus = (serial) => {
+    const status = serial.status || 'pending';
+    const inspectionStatus = serial.inspection_status;
+    
+    // If serial has been inspected, show the final delivery status
+    if (inspectionStatus === 'inspected') {
+      return 'Delivered';
+    }
+    if (inspectionStatus === 'for_return') {
+      return 'For Return';
+    }
+    if (inspectionStatus === 'pending' && status === 'received') {
+      return 'Pending Inspection';
+    }
+    
+    // Map other statuses to display format
+    switch (status) {
+      case 'received':
+        return 'Received';
+      case 'for_delivery':
+        return 'For Delivery';
+      case 'prepare':
+        return 'Preparing';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+  };
+
   // Get serials for a specific supplier from subscriptions
   const getSerialsForSupplier = (supplierName) => {
     const supplierSubscriptions = subscriptions.filter(
@@ -78,7 +109,7 @@ function SupplierInfoGSPS() {
             title: serial.title || sub.serial_title,
             issn: serial.issn || 'N/A',
             frequency: serial.frequency || 'N/A',
-            status: serial.status || 'Pending',
+            status: getDisplayStatus(serial),
             nextIssue: serial.deliveryDate || null,
             subscriptionPeriod: sub.period,
             awardCost: sub.award_cost,
@@ -291,8 +322,20 @@ function SupplierInfoGSPS() {
                       <span style={{
                         padding: '4px 12px',
                         borderRadius: 16,
-                        background: serial.status === 'Active' || serial.status === 'Delivered' ? '#d1fae5' : '#fef3c7',
-                        color: serial.status === 'Active' || serial.status === 'Delivered' ? '#065f46' : '#92400e',
+                        background: 
+                          serial.status === 'Delivered' ? '#d1fae5' : 
+                          serial.status === 'For Return' ? '#fee2e2' :
+                          serial.status === 'Pending Inspection' ? '#fef3c7' :
+                          serial.status === 'For Delivery' ? '#dbeafe' :
+                          serial.status === 'Received' ? '#e0e7ff' :
+                          '#f3f4f6',
+                        color: 
+                          serial.status === 'Delivered' ? '#065f46' : 
+                          serial.status === 'For Return' ? '#dc2626' :
+                          serial.status === 'Pending Inspection' ? '#92400e' :
+                          serial.status === 'For Delivery' ? '#1e40af' :
+                          serial.status === 'Received' ? '#3730a3' :
+                          '#374151',
                         fontSize: 12,
                         fontWeight: 500,
                       }}>

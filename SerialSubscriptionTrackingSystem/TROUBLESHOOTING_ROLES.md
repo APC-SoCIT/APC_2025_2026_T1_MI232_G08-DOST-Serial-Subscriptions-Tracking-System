@@ -62,7 +62,7 @@ All supplier sub-routes are accessible:
 3. **Test Sub-Route Access**:
    - For **Supplier**: Click on "List of Serials", "Late", "Undelivered", "Delivered" links
    - For **TPU**: Click on "Chat", "Supplier Info", "Subscription Tracking" links
-   - For **GSPS**: Click on "Supplier Info", "Delivery Status", "Inspection Status" links
+   - For **GSPS**: Click on "Supplier Info", "Delivery Status" links
    - For **Inspection**: Click on "By Date" and "Serials" links
 
 ---

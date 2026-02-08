@@ -25,7 +25,10 @@ class User extends Authenticatable
         'password',
         'role',
         'email_verified_at',
+<<<<<<< HEAD
         'is_disabled',
+=======
+>>>>>>> 3fb55b1f07f53dbfcdd5bc04734f2daa96cfb771
     ];
 
     /**

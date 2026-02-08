@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\SupplierAccount;
+use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
@@ -49,6 +51,26 @@ class UserController extends Controller
             // Exclude admin users from the list
             $users = User::where('role', '!=', 'admin')->get();
             
+            // Fix existing supplier users that don't have email_verified_at set
+            // This is a data migration fix for suppliers approved before the bug fix
+            foreach ($users as $user) {
+                if ($user->role === 'supplier' && !$user->email_verified_at) {
+                    // Check if this supplier account is approved
+                    $supplierAccount = SupplierAccount::where('email', $user->email)
+                        ->where('status', 'approved')
+                        ->first();
+                    
+                    if ($supplierAccount) {
+                        // Mark user as verified since they were approved by admin
+                        $user->email_verified_at = $supplierAccount->approved_at ?? now();
+                        $user->save();
+                    }
+                }
+            }
+            
+            // Refresh the users collection after updates
+            $users = User::where('role', '!=', 'admin')->get();
+            
             return response()->json([
                 'success' => true,
                 'users' => $users->map(function ($user) {
@@ -84,6 +106,22 @@ class UserController extends Controller
                     'success' => false,
                     'message' => 'User not found',
                 ], 404);
+            }
+
+            if (($user->role ?? null) === 'supplier') {
+                $userId = $user->_id ?? $user->id;
+                $userEmail = $user->email;
+                $userName = $user->name;
+                
+                // Delete all subscriptions/serials assigned to this supplier
+                Subscription::where('supplier_id', $userId)
+                    ->orWhere('supplier_name', $userName)
+                    ->delete();
+                
+                // Delete supplier account
+                SupplierAccount::where('user_id', $userId)
+                    ->orWhere('email', $userEmail)
+                    ->delete();
             }
 
             $user->delete();
