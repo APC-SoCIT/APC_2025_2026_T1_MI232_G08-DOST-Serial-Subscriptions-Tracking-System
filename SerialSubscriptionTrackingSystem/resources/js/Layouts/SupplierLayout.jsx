@@ -136,7 +136,7 @@ function TopBar({ title }) {
       zIndex: 9
     }}>
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
-        {title || 'Serial Subscription Tracking System'}
+        {title || 'Supplier Dashboard'}
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
