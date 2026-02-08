@@ -14,16 +14,10 @@ const Icon = ({ children }) => (
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
-<<<<<<< HEAD
   { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'gsps.chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo' },
   { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus' },
   { icon: <MdMarkEmailRead />, label: 'Inspection Status', route: 'gsps.inspectionstatus' },
-=======
-  { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'dashboard-gsps-chat' },
-  { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-gsps-supplierinfo' },
-  { icon: <FaTruck />, label: 'Delivery Status', route: 'dashboard-gsps-deliverystatus' },
->>>>>>> 3fb55b1f07f53dbfcdd5bc04734f2daa96cfb771
 ];
 
 function Sidebar() {

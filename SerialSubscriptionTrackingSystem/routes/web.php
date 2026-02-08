@@ -79,85 +79,7 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Subscriptiontracking', [
             'approvedSuppliers' => $approvedSuppliers,
         ]);
-<<<<<<< HEAD
     })->name('tpu.subscriptiontracking');
-=======
-    })->name('dashboard-tpu-subscriptiontracking');
-
-Route::get('/dashboard-tpu-monitordelivery', function () {
-        return Inertia::render('Dashboard_TPU_Monitordelivery');
-    })->name('dashboard-tpu-monitordelivery');
-
-Route::get('/dashboard-tpu-addserial', function () {
-        return Inertia::render('Dashboard_TPU_AddSerial');
-    })->name('dashboard-tpu-addserial');
-
-Route::get('/dashboard-tpu-addaccount', function () {
-        return Inertia::render('Dashboard_TPU_Addaccount');
-    })->middleware(['auth'])->name('dashboard-tpu-addaccount');
-
-
-// GSPS Routes - Main dashboard without role middleware, sub-routes with middleware
-Route::get('/dashboard-gsps', function () {
-    return Inertia::render('Dashboard_GSPS');
-})->middleware(['auth', 'verified'])->name('gsps.dashboard');
-
-
-Route::get('/dashboard-gsps-supplierinfo', function () {
-        return Inertia::render('Dashboard_GSPS_Supplierinfo');
-    })->name('dashboard-gsps-supplierinfo');
-
-Route::get('/dashboard-gsps-deliverystatus', function () {
-        return Inertia::render('Dashboard_GSPS_Deliverystatus');
-    })->name('dashboard-gsps-deliverystatus');
-
-Route::get('/dashboard-gsps-chat', function () {
-        return Inertia::render('Dashboard_GSPS_Chat');
-    })->middleware(['auth'])->name('dashboard-gsps-chat');
-
-
-
-Route::get('/dashboard-supplier', function () {
-    return Inertia::render('Dashboard_Supplier');
-})->middleware(['auth', 'verified'])->name('supplier.dashboard');
-
-
-Route::get('/dashboard-supplier-listofserial', function () {
-        return Inertia::render('Dashboard_Supplier_ListofSerial');
-    })->name('dashboard-supplier-listofserial');
-
-Route::get('/dashboard-supplier-late', function () {
-        return Inertia::render('Dashboard_Supplier_Late');
-    })->name('dashboard-supplier-late');
-
-Route::get('/dashboard-supplier-undelivered', function () {
-        return Inertia::render('Dashboard_Supplier_Undelivered');
-    })->name('dashboard-supplier-undelivered');
-
-Route::get('/dashboard-supplier-delivered', function () {
-        return Inertia::render('Dashboard_Supplier_Delivered');
-    })->name('dashboard-supplier-delivered');
-
-Route::get('/dashboard-supplier-chat', function () {
-        return Inertia::render('Dashboard_Supplier_Chat');
-    })->middleware(['auth'])->name('dashboard-supplier-chat');
-
-
-
-
-// Inspection Routes - Main dashboard without role middleware, sub-routes with middleware
-Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->middleware(['auth', 'verified'])->name('inspection.dashboard');
-
-
-Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('inspection.date');
-
-Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
-
-Route::get('/inspection-serialsforinspection', fn () => Inertia::render('Dashboard_Inspection_Serialsforinspection'))->middleware(['auth', 'verified'])->name('inspection.serialsforinspection');
-
-Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))->middleware(['auth'])->name('inspection.chat');
-
->>>>>>> 3fb55b1f07f53dbfcdd5bc04734f2daa96cfb771
     
     Route::get('/dashboard-tpu-monitordelivery', function () {
         return Inertia::render('Dashboard_TPU_Monitordelivery');
@@ -237,49 +159,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-<<<<<<< HEAD
     // Chat routes - available to all authenticated users
-=======
-    // User Management API Routes
-    Route::prefix('api/users')->group(function () {
-        Route::get('/', [UserController::class, 'index'])->name('users.index');
-        Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
-        Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
-    });
-
-    // Supplier Account Management API Routes
-    Route::prefix('api/supplier-accounts')->group(function () {
-        Route::get('/', [SupplierAccountController::class, 'index'])->name('supplier-accounts.index');
-        Route::get('/pending', [SupplierAccountController::class, 'pending'])->name('supplier-accounts.pending');
-        Route::get('/approved', [SupplierAccountController::class, 'approved'])->name('supplier-accounts.approved');
-        Route::get('/stats', [SupplierAccountController::class, 'stats'])->name('supplier-accounts.stats');
-        Route::post('/', [SupplierAccountController::class, 'store'])->name('supplier-accounts.store');
-        Route::get('/{id}', [SupplierAccountController::class, 'show'])->name('supplier-accounts.show');
-        Route::post('/{id}/approve', [SupplierAccountController::class, 'approve'])->name('supplier-accounts.approve');
-        Route::post('/{id}/reject', [SupplierAccountController::class, 'reject'])->name('supplier-accounts.reject');
-    });
-
-    // Subscription Management API Routes
-    Route::prefix('api/subscriptions')->group(function () {
-        Route::get('/', [SubscriptionController::class, 'index'])->name('subscriptions.index');
-        Route::get('/stats', [SubscriptionController::class, 'stats'])->name('subscriptions.stats');
-        Route::get('/supplier-serials', [SubscriptionController::class, 'getSupplierSerials'])->name('subscriptions.supplierSerials');
-        Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
-        Route::get('/inspection-serials', [SubscriptionController::class, 'getSerialsForInspection'])->name('subscriptions.inspectionSerials');
-        Route::get('/monitored-deliveries', [SubscriptionController::class, 'getMonitoredDeliveries'])->name('subscriptions.monitoredDeliveries');
-        Route::post('/', [SubscriptionController::class, 'store'])->name('subscriptions.store');
-        Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
-        Route::put('/{id}', [SubscriptionController::class, 'update'])->name('subscriptions.update');
-        Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
-        Route::post('/{id}/serials', [SubscriptionController::class, 'addSerial'])->name('subscriptions.addSerial');
-        Route::post('/{id}/transactions', [SubscriptionController::class, 'addTransaction'])->name('subscriptions.addTransaction');
-        Route::put('/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
-        Route::put('/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
-        Route::post('/{id}/submit-inspection', [SubscriptionController::class, 'submitInspection'])->name('subscriptions.submitInspection');
-    });
-
-    // Chat routes
->>>>>>> 3fb55b1f07f53dbfcdd5bc04734f2daa96cfb771
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::get('/api/users/available', [ChatController::class, 'getAvailableUsers'])->name('users.available');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'getMessages'])->name('chats.messages');
