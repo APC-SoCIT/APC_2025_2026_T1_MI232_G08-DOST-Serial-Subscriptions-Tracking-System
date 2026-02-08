@@ -57,3 +57,4 @@ class CheckUserRole
         return $roleRoutes[$roleName] ?? route('dashboard');
     }
 }
+
