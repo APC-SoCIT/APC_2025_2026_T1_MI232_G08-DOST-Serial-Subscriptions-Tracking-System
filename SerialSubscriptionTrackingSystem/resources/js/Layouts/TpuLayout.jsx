@@ -127,6 +127,7 @@ function TopBar() {
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
         TPU Dashboard
       </h2>
+      
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
@@ -260,5 +261,6 @@ export default function TPULayout({ children, title = 'Dashboard', hideTitle = f
         </div>
       </div>
     </div>
+    
   );
 }
