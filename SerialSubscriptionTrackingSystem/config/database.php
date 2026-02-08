@@ -84,7 +84,7 @@ return [
             ]) : [],
         ],
 
-              'mongodb' => [
+              
        'mongodb' => [
             'driver' => 'mongodb',
             'dsn' => env('DB_DSN'),
