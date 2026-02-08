@@ -25,7 +25,7 @@ export default function SupplierList() {
           contactPerson: acc.contact_person,
           email: acc.email,
           phone: acc.phone,
-          status: 'Active',
+          is_disabled: acc.is_disabled || false,
           date: new Date(acc.approved_at || acc.created_at).toLocaleDateString('en-US', { 
             month: 'short', 
             day: '2-digit', 
@@ -98,19 +98,22 @@ export default function SupplierList() {
             {!loading && paginated.map((item, i) => (
             <div key={item.id}
                 className={`grid grid-cols-[2fr,1.5fr,2fr,1fr,1fr] gap-x-6 px-8 py-4 text-sm items-center 
-                            ${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"}`}>
+                            ${item.is_disabled ? 'bg-gray-100 opacity-60' : (i % 2 === 0 ? "bg-gray-50/60" : "bg-white")}`}>
                 
-                <span className="font-medium text-gray-800">{item.name}</span>
-                <span className="text-gray-700">{item.contactPerson}</span>
-                <span className="text-gray-700 truncate" title={item.email}>{item.email}</span>
+                <span className={`font-medium ${item.is_disabled ? 'text-gray-400' : 'text-gray-800'}`}>
+                  {item.name}
+                  {item.is_disabled && <span className="ml-2 text-xs text-red-500">(Disabled)</span>}
+                </span>
+                <span className={`${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`}>{item.contactPerson}</span>
+                <span className={`truncate ${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`} title={item.email}>{item.email}</span>
 
                 <span>
-                <span className="bg-green-100 text-green-600 px-3 py-1 rounded-full text-xs font-medium">
-                    {item.status}
+                <span className={`${item.is_disabled ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} px-3 py-1 rounded-full text-xs font-medium`}>
+                    {item.is_disabled ? 'Disabled' : 'Active'}
                 </span>
                 </span>
 
-                <span className="text-gray-700">{item.date}</span>
+                <span className={`${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`}>{item.date}</span>
             </div>
             ))}
         </div>

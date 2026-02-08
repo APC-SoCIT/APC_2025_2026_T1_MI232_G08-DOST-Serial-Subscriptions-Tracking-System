@@ -87,8 +87,19 @@ class SupplierAccountController extends Controller
 
         $accounts = $query->orderBy('approved_at', 'desc')->get();
 
+        // Add user disabled status to each account
+        $accountsWithStatus = $accounts->map(function ($account) {
+            $user = null;
+            if ($account->user_id) {
+                $user = User::find($account->user_id);
+            }
+            $accountData = $account->toArray();
+            $accountData['is_disabled'] = $user ? ($user->is_disabled ?? false) : false;
+            return $accountData;
+        });
+
         return response()->json([
-            'accounts' => $accounts,
+            'accounts' => $accountsWithStatus,
             'success' => true,
         ]);
     }
