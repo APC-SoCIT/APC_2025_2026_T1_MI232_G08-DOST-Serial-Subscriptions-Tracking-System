@@ -32,6 +32,7 @@ const BASE_YEAR_DATA = {
 /* ================= HELPERS ================= */
 
 const monthIndex = (month) => MONTHS.indexOf(month);
+
 const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
   const RADIAN = Math.PI / 180;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
@@ -201,12 +202,13 @@ const selectedMonthIndex =
   /* ================= KPI DATA ================= */
 
 const stats = useMemo(() => {
-  const base = BASE_YEAR_DATA[year];
+  const base = BASE_YEAR_DATA[year] || {
+    approved: 0,
+    pending: 0,
+    disabled: 0,
+    rejected: 0,
+  };
 
-  // Year mode = full year
-  if (filterMode === "year") {
-    return base;
-  }
 
   // Month mode = cumulative to month
   if (filterMode === "month") {
@@ -510,7 +512,8 @@ onClick={() => {
         {/* KPIs */}
         {/* ================= KPIs ================= */}
 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-  <KPI title="Total Users" value={stats.total} />
+  <KPI title="Total Users" value={stats.total || 0} />
+
   <KPI title="Approved Users" value={stats.approved} />
   <KPI title="Pending Users" value={stats.pending} />
 
