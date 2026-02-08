@@ -53,6 +53,23 @@ const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   );
 };
 
+const getDaysInMonth = (year, month) => {
+  const days = [];
+  const firstDay = new Date(year, month, 1).getDay();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+
+  // Empty cells before month starts
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null);
+  }
+
+  for (let d = 1; d <= totalDays; d++) {
+    days.push(d);
+  }
+
+  return days;
+};
+
 
 const firstDayOfMonth = (year, month) =>
   `${year}-${String(monthIndex(month) + 1).padStart(2, "0")}-01`;
@@ -83,25 +100,86 @@ const dateRangeFactor = (startDate, endDate) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
 
-  if (end <= start) return 0.1;
+  if (end <= start) return 1;
 
   const diffDays = (end - start) / (1000 * 60 * 60 * 24);
 
-  // normalize vs full year
-  return Math.min(diffDays / 365, 1);
+// Minimum factor so charts don't collapse
+return Math.max(diffDays / 365, 0.25);
+
 };
+
 
 
 /* ================= COMPONENT ================= */
 
 export default function Dashboard() {
-  const [year, setYear] = useState(2024);
-  const [startMonth, setStartMonth] = useState("January");
-  const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2024, "January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2024, "December"));
+  // FILTER MODE: year | month | week | custom
+const [filterMode, setFilterMode] = useState("year");
+
+const [year, setYear] = useState(2024);
+const [startMonth, setStartMonth] = useState("January");
+const [endMonth, setEndMonth] = useState("December");
+const [startDate, setStartDate] = useState(firstDayOfMonth(2024, "January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(2024, "December"));
+
+const [showFilterModal, setShowFilterModal] = useState(false);
+const [tempYear, setTempYear] = useState(year);
+const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+const [tempEndMonth, setTempEndMonth] = useState(endMonth);
+const [tempStartDate, setTempStartDate] = useState(startDate);
+const [tempEndDate, setTempEndDate] = useState(endDate);
+
+// calendar month for Week mode
+const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
+const [calendarYear, setCalendarYear] = useState(year);
+
+
+const selectWeek = (day) => {
+  const start = new Date(calendarYear, calendarMonth, day);
+
+  // Start of week (Monday)
+  const dayOfWeek = start.getDay();
+  const diff = start.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+
+  const weekStart = new Date(calendarYear, calendarMonth, diff);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  setTempStartDate(weekStart.toISOString().split("T")[0]);
+  setTempEndDate(weekEnd.toISOString().split("T")[0]);
+};
+
+const applyFilter = () => {
+  setYear(tempYear);
+
+  // Always update dates
+  setStartDate(tempStartDate);
+  setEndDate(tempEndDate);
+
+  // 🔥 IMPORTANT: derive months from dates (for Custom & Week)
+  const start = new Date(tempStartDate);
+  const end = new Date(tempEndDate);
+
+  const startMonthName = MONTHS[start.getMonth()];
+  const endMonthName = MONTHS[end.getMonth()];
+
+  setStartMonth(startMonthName);
+  setEndMonth(endMonthName);
+
+  setShowFilterModal(false);
+};
+
 
   /* AUTO-SYNC DATES WHEN MONTH/YEAR CHANGES */
+
+  useEffect(() => {
+  if (filterMode === "week") {
+    setCalendarYear(year);
+    setCalendarMonth(monthIndex(startMonth));
+  }
+}, [filterMode]);
+
   useEffect(() => {
     setStartDate(firstDayOfMonth(year, startMonth));
   }, [year, startMonth]);
@@ -110,29 +188,52 @@ export default function Dashboard() {
     setEndDate(lastDayOfMonth(year, endMonth));
   }, [year, endMonth]);
 
+  
   const months = monthRange(startMonth, endMonth);
 const yFactor = yearWeight(year);
 
 // ✅ THIS is what makes KPIs react to Start Date / End Date
 const dFactor = dateRangeFactor(startDate, endDate);
+const selectedMonthIndex =
+  MONTHS.includes(startMonth) ? monthIndex(startMonth) : 0;
 
 
   /* ================= KPI DATA ================= */
 
 const stats = useMemo(() => {
   const base = BASE_YEAR_DATA[year];
-  const monthScale = months.length / 12;
 
+  // Year mode = full year
+  if (filterMode === "year") {
+    return base;
+  }
+
+  // Month mode = cumulative to month
+  if (filterMode === "month") {
+    const monthProgress = (selectedMonthIndex + 1) / 12;
+
+    return {
+      approved: Math.round(base.approved * monthProgress),
+      pending: Math.round(base.pending * monthProgress),
+      disabled: Math.round(base.disabled * monthProgress),
+      rejected: Math.round(base.rejected * monthProgress),
+      total: Math.round(
+        (base.approved + base.pending) * monthProgress
+      ),
+    };
+  }
+
+  // Week / Custom = scale by days
   return {
-    approved: Math.round(base.approved * monthScale * dFactor),
-    pending: Math.round(base.pending * monthScale * dFactor),
-    disabled: Math.round(base.disabled * monthScale * dFactor),
-    rejected: Math.round(base.rejected * monthScale * dFactor),
+    approved: Math.round(base.approved * dFactor),
+    pending: Math.round(base.pending * dFactor),
+    disabled: Math.round(base.disabled * dFactor),
+    rejected: Math.round(base.rejected * dFactor),
     total: Math.round(
-      (base.approved + base.pending) * monthScale * dFactor
+      (base.approved + base.pending) * dFactor
     ),
   };
-}, [year, months, dFactor]);
+}, [year, startMonth, dFactor, filterMode]);
 
 
 // Approval backlog (>7 days)
@@ -157,23 +258,40 @@ const inactiveSuppliers = Math.max(
 
   /* ================= CHART DATA ================= */
 
- const approvalTrend = months.map((m, i) => ({
-  month: m,
-  approved: Math.round((10 + i) * yFactor * dFactor),
-}));
+const approvalTrend = months.map((m, i) => {
+  const idx = monthIndex(m);
+  return {
+    month: m,
+    approved: Math.round(
+  (10 + idx) *
+  yFactor *
+  (filterMode === "week" || filterMode === "custom" ? dFactor : 1)
+)
+
+  };
+});
 
 
- const approvalVsPending = months.map((m, i) => ({
-  month: m,
-  approved: Math.round((15 + i) * yFactor * dFactor),
-  pending: Math.max(1, Math.round((12 - i) * dFactor)),
-}));
+
+const approvalVsPending = months.map((m) => {
+  const idx = monthIndex(m);
+  return {
+    month: m,
+    approved: Math.round((15 + idx) * yFactor * dFactor),
+    pending: Math.max(1, Math.round((12 - idx) * dFactor)),
+  };
+});
 
 
-  const supplierCreation = months.map((m, i) => ({
-  month: m,
-  created: Math.round((15 + i * 2) * yFactor * dFactor),
-}));
+
+ const supplierCreation = months.map((m) => {
+  const idx = monthIndex(m);
+  return {
+    month: m,
+    created: Math.round((15 + idx * 2) * yFactor * dFactor),
+  };
+});
+
 
 
   const pieData = [
@@ -190,16 +308,204 @@ const inactiveSuppliers = Math.max(
       <div className="space-y-6">
 
         {/* FILTERS */}
-        <div className="bg-white p-5 rounded-xl shadow">
-          <h2 className="text-xl font-bold mb-4">Dashboard Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <SmallSelect label="Year" value={year} onChange={setYear} options={YEARS} />
-            <SmallSelect label="Start Month" value={startMonth} onChange={setStartMonth} options={MONTHS} />
-            <SmallSelect label="End Month" value={endMonth} onChange={setEndMonth} options={MONTHS} />
-            <SmallInput label="Start Date" value={startDate} onChange={setStartDate} />
-            <SmallInput label="End Date" value={endDate} onChange={setEndDate} />
-          </div>
+        {/* ================= NEW FILTER ================= */}
+{/* FILTER HEADER */}
+<div className="relative bg-white p-5 rounded-xl shadow flex items-center justify-between">
+
+  <h2 className="text-xl font-bold">Filter by</h2>
+
+  <div className="flex gap-2">
+    {["year", "month", "week", "custom"].map(mode => (
+      <button
+        key={mode}
+       onClick={() => {
+  setFilterMode(mode);
+  setShowFilterModal(true);
+
+  // load current values
+  setTempYear(year);
+  setTempStartMonth(startMonth);
+  setTempEndMonth(endMonth);
+  setTempStartDate(startDate);
+  setTempEndDate(endDate);
+
+  // IMPORTANT: sync calendar for Week mode
+  if (mode === "week") {
+    setCalendarYear(year);
+    setCalendarMonth(monthIndex(startMonth));
+  }
+}}
+        className="px-4 py-2 rounded-full bg-gray-100 font-semibold hover:bg-gray-200"
+      >
+        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+      </button>
+    ))}
+  </div>
+</div>
+
+
+  
+  {/* ================= FILTER MODAL ================= */}
+{showFilterModal && (
+  <div className="absolute right-6 top-20 z-50">
+    <div className="bg-white w-[420px] rounded-xl shadow-2xl border p-6 space-y-4">
+
+
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-bold">Filter by</h3>
+        <button
+          onClick={() => setShowFilterModal(false)}
+          className="text-gray-500 text-xl"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Mode Tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {["year", "month", "week", "custom"].map(mode => (
+          <button
+            key={mode}
+            onClick={() => setFilterMode(mode)}
+            className={`px-3 py-1 rounded-full text-sm font-semibold border
+              ${filterMode === mode
+                ? "bg-green-700 text-white"
+                : "bg-gray-100"}`}
+          >
+            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* YEAR MODE */}
+      {filterMode === "year" && (
+        <div className="grid grid-cols-3 gap-3">
+          {YEARS.map(y => (
+            <button
+              key={y}
+              onClick={() => setTempYear(y)}
+              className={`p-3 rounded-lg border font-semibold
+                ${tempYear === y
+                  ? "bg-green-700 text-white"
+                  : "bg-gray-100"}`}
+            >
+              {y}
+            </button>
+          ))}
         </div>
+      )}
+
+      {/* MONTH MODE */}
+      {filterMode === "month" && (
+        <div className="grid grid-cols-3 gap-2 max-h-64 overflow-auto">
+          {MONTHS.map(m => (
+            <button
+              key={m}
+onClick={() => {
+  setTempStartMonth(m);
+  setTempEndMonth(m);
+
+  // 🔥 IMPORTANT: also update dates
+  setTempStartDate(firstDayOfMonth(tempYear, m));
+  setTempEndDate(lastDayOfMonth(tempYear, m));
+
+  setCalendarMonth(monthIndex(m));
+  setCalendarYear(tempYear);
+}}
+
+
+              className={`p-2 text-sm rounded border
+                ${tempStartMonth === m
+                  ? "bg-green-700 text-white"
+                  : "bg-gray-100"}`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
+     {filterMode === "week" && (
+  <div className="space-y-3">
+
+    {/* Month Navigation */}
+    <div className="flex justify-between items-center font-semibold">
+      <button
+        onClick={() => {
+          if (calendarMonth === 0) {
+            setCalendarMonth(11);
+            setCalendarYear(calendarYear - 1);
+          } else {
+            setCalendarMonth(calendarMonth - 1);
+          }
+        }}
+      >
+        ←
+      </button>
+
+      <span>
+        {MONTHS[calendarMonth]} {calendarYear}
+      </span>
+
+      <button
+        onClick={() => {
+          if (calendarMonth === 11) {
+            setCalendarMonth(0);
+            setCalendarYear(calendarYear + 1);
+          } else {
+            setCalendarMonth(calendarMonth + 1);
+          }
+        }}
+      >
+        →
+      </button>
+    </div>
+
+    {/* Calendar Grid */}
+    <div className="grid grid-cols-7 gap-2 text-center">
+      {getDaysInMonth(calendarYear, calendarMonth).map((day, i) => (
+        <button
+          key={i}
+          disabled={!day}
+          onClick={() => day && selectWeek(day)}
+          className={`p-2 rounded-lg text-sm
+            ${day ? "hover:bg-green-100" : ""}
+          `}
+        >
+          {day || ""}
+        </button>
+      ))}
+    </div>
+
+    {/* Selected Range Preview */}
+    <div className="text-sm text-gray-600">
+      {tempStartDate} → {tempEndDate}
+    </div>
+  </div>
+)}
+
+
+      {/* CUSTOM MODE */}
+      {filterMode === "custom" && (
+        <div className="grid grid-cols-2 gap-3">
+          <SmallInput label="Start Date" value={tempStartDate} onChange={setTempStartDate} />
+          <SmallInput label="End Date" value={tempEndDate} onChange={setTempEndDate} />
+        </div>
+      )}
+
+      {/* APPLY BUTTON */}
+      <button
+        onClick={applyFilter}
+        className="w-full bg-green-800 text-white py-3 rounded-lg font-bold"
+      >
+        Apply
+      </button>
+
+    </div>
+  </div>
+)}
+
 
         {/* KPIs */}
         {/* ================= KPIs ================= */}
