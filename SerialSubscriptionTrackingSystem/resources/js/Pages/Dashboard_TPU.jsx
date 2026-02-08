@@ -401,13 +401,10 @@ const delivered = Math.round(
       <Tooltip/>
 
       {/* Legend uses same colors */}
-      <Legend
-        formatter={(value) => (
-          <span style={{ color: PIPELINE_COLORS[value] }}>
-            {value}
-          </span>
-        )}
-      />
+      <Legend 
+  verticalAlign="bottom"
+  height={36}
+/>
 
       <Area
         type="monotone"

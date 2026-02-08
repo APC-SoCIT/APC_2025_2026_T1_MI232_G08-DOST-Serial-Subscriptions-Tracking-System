@@ -26,6 +26,7 @@ const COLORS = {
   returned: "#ef4444"
 };
 
+
 /* ================= HELPERS ================= */
 
 const monthIndex = (m) => MONTHS.indexOf(m);
@@ -388,20 +389,58 @@ const kpis = useMemo(() => {
             </ResponsiveContainer>
           </Chart>
 
-          <Chart title="Inspection Pipeline Status">
-            <ResponsiveContainer height={300}>
-              <AreaChart data={pipelineData}>
-                <XAxis dataKey="month"/>
-                <YAxis/>
-                <Tooltip/>
-                <Legend/>
-                <Area dataKey="received" stackId="1" fill={COLORS.received}/>
-                <Area dataKey="pending" stackId="1" fill={COLORS.pending}/>
-                <Area dataKey="inspected" stackId="1" fill={COLORS.inspected}/>
-                <Area dataKey="returned" stackId="1" fill={COLORS.returned}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </Chart>
+      <Chart title="Inspection Pipeline Status">
+  <ResponsiveContainer height={300}>
+    <AreaChart data={pipelineData}>
+      <XAxis dataKey="month"/>
+      <YAxis/>
+      <Tooltip/>
+      
+      <Legend 
+  verticalAlign="bottom"
+  height={36}
+/>
+
+      <Area
+        type="monotone"
+        dataKey="received"
+        stackId="1"
+        stroke={COLORS.received}
+        fill={COLORS.received}
+        name="Received"
+      />
+
+      <Area
+        type="monotone"
+        dataKey="pending"
+        stackId="1"
+        stroke={COLORS.pending}
+        fill={COLORS.pending}
+        name="Pending"
+      />
+
+      <Area
+        type="monotone"
+        dataKey="inspected"
+        stackId="1"
+        stroke={COLORS.inspected}
+        fill={COLORS.inspected}
+        name="Inspected"
+      />
+
+      <Area
+        type="monotone"
+        dataKey="returned"
+        stackId="1"
+        stroke={COLORS.returned}
+        fill={COLORS.returned}
+        name="Returned"
+      />
+
+    </AreaChart>
+  </ResponsiveContainer>
+</Chart>
+
 
           <Chart title="Monthly Inspected Volume">
             <ResponsiveContainer height={300}>

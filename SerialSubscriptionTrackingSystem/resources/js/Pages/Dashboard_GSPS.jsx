@@ -387,7 +387,10 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Legend/>
+                <Legend 
+  verticalAlign="bottom"
+  height={36}
+/>
                 <Area dataKey="received" stackId="1" fill={COLORS.received} stroke={COLORS.received}/>
                 <Area dataKey="pending" stackId="1" fill={COLORS.pending} stroke={COLORS.pending}/>
                 <Area dataKey="forwarded" stackId="1" fill={COLORS.forwarded} stroke={COLORS.forwarded}/>

@@ -381,10 +381,9 @@ const kpis = {
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Legend
+                <Legend 
   verticalAlign="bottom"
-  align="center"
-  wrapperStyle={{ paddingTop: 10 }}
+  height={36}
 />
 
                 <Area
