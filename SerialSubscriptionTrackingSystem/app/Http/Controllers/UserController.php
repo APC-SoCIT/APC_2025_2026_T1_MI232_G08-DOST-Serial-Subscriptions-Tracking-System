@@ -20,6 +20,26 @@ class UserController extends Controller
             // Exclude admin users from the list
             $users = User::where('role', '!=', 'admin')->get();
             
+            // Fix existing supplier users that don't have email_verified_at set
+            // This is a data migration fix for suppliers approved before the bug fix
+            foreach ($users as $user) {
+                if ($user->role === 'supplier' && !$user->email_verified_at) {
+                    // Check if this supplier account is approved
+                    $supplierAccount = SupplierAccount::where('email', $user->email)
+                        ->where('status', 'approved')
+                        ->first();
+                    
+                    if ($supplierAccount) {
+                        // Mark user as verified since they were approved by admin
+                        $user->email_verified_at = $supplierAccount->approved_at ?? now();
+                        $user->save();
+                    }
+                }
+            }
+            
+            // Refresh the users collection after updates
+            $users = User::where('role', '!=', 'admin')->get();
+            
             return response()->json([
                 'success' => true,
                 'users' => $users->map(function ($user) {

@@ -1,119 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import TPULayout from '@/Layouts/TPULayout';
 import { MdSearch, MdFilterList, MdRefresh } from "react-icons/md";
-import { FiTrendingUp, FiTrendingDown, FiPackage, FiCheckCircle, FiAlertCircle } from "react-icons/fi";
+import { FiTrendingUp, FiTrendingDown, FiPackage, FiCheckCircle, FiAlertCircle, FiClock } from "react-icons/fi";
 
 // Monitor Delivery Component
 function MonitorDelivery() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
+  
+  // API data state
+  const [deliveryData, setDeliveryData] = useState([]);
+  const [stats, setStats] = useState({ total: 0, delivered: 0, for_return: 0, pending: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Delivery data from your image
-  const deliveryData = [
-    {
-      id: 1,
-      supplierName: 'ABC Books Supplier',
-      phone: '+63 912 345 6789',
-      address: 'Makati City',
-      status: 'Active',
-      deliveryStatus: 'Delivered',
-      expectedDate: '2024-01-15',
-      deliveredDate: '2024-01-14',
-      deliveryRate: '100%'
-    },
-    {
-      id: 2,
-      supplierName: 'MedJournal Suppliers Inc.',
-      phone: '+63 912 345 7777',
-      address: 'Pasig City',
-      status: 'Active',
-      deliveryStatus: 'Pending',
-      expectedDate: '2024-01-20',
-      deliveredDate: '—',
-      deliveryRate: '85%'
-    },
-    {
-      id: 3,
-      supplierName: 'Global Periodicals Co.',
-      phone: '+63 912 345 7777',
-      address: 'Pasig City',
-      status: 'Active',
-      deliveryStatus: 'Delivered',
-      expectedDate: '2024-01-10',
-      deliveredDate: '2024-01-10',
-      deliveryRate: '95%'
-    },
-    {
-      id: 4,
-      supplierName: 'EastAsia Books & Journals',
-      phone: '+63 945 567 8901',
-      address: 'Manila City',
-      status: 'Active',
-      deliveryStatus: 'Delayed',
-      expectedDate: '2024-01-05',
-      deliveredDate: '2024-01-07',
-      deliveryRate: '90%'
-    },
-    {
-      id: 5,
-      supplierName: 'MedJournal Suppliers Inc.',
-      phone: '+63 956 678 9012',
-      address: 'Makati City',
-      status: 'Active',
-      deliveryStatus: 'Delivered',
-      expectedDate: '2024-01-18',
-      deliveredDate: '2024-01-17',
-      deliveryRate: '98%'
-    },
-  ];
+  // Fetch monitored deliveries from API
+  useEffect(() => {
+    fetchMonitoredDeliveries();
+  }, []);
+
+  const fetchMonitoredDeliveries = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await axios.get('/api/subscriptions/monitored-deliveries');
+      
+      if (response.data.success) {
+        setDeliveryData(response.data.serials || []);
+        setStats(response.data.stats || { total: 0, delivered: 0, for_return: 0, pending: 0 });
+      }
+    } catch (err) {
+      console.error('Error fetching monitored deliveries:', err);
+      setError('Failed to load delivery data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter deliveries
   const filteredDeliveries = deliveryData.filter(delivery => {
     const matchesSearch = 
-      delivery.supplierName.toLowerCase().includes(searchTerm.toLowerCase());
+      (delivery.serialTitle && delivery.serialTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (delivery.supplierName && delivery.supplierName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (delivery.issn && delivery.issn.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === 'All' || delivery.deliveryStatus === statusFilter;
     
-    const matchesDate = !dateFilter || delivery.expectedDate === dateFilter;
+    const matchesDate = !dateFilter || 
+      (delivery.inspectionDate && delivery.inspectionDate.startsWith(dateFilter));
     
     return matchesSearch && matchesStatus && matchesDate;
   });
 
-  // Stats calculation
-  const totalExpected = 76;
-  const totalDelivered = 71;
-  const undelivered = 5;
-  const deliveryRate = Math.round((totalDelivered / totalExpected) * 100);
+  // Calculate delivery rate
+  const deliveryRate = stats.total > 0 ? Math.round((stats.delivered / stats.total) * 100) : 0;
 
-  const stats = [
+  const statsCards = [
     { 
-      title: 'Total Expected', 
-      value: totalExpected, 
+      title: 'Total Serials', 
+      value: stats.total, 
       icon: <FiPackage />,
       color: '#004A98',
       bgColor: '#E8F1FA'
     },
     { 
-      title: 'Total Delivered', 
-      value: totalDelivered, 
+      title: 'Delivered', 
+      value: stats.delivered, 
       icon: <FiCheckCircle />,
       color: '#0D9488',
       bgColor: '#E6F7F5'
     },
     { 
-      title: 'Undelivered', 
-      value: undelivered, 
+      title: 'For Return', 
+      value: stats.for_return, 
       icon: <FiAlertCircle />,
       color: '#DC2626',
       bgColor: '#FEE2E2'
     },
     { 
-      title: 'Delivery Rate', 
-      value: `${deliveryRate}%`, 
-      icon: deliveryRate >= 90 ? <FiTrendingUp /> : <FiTrendingDown />,
-      color: deliveryRate >= 90 ? '#059669' : deliveryRate >= 70 ? '#D97706' : '#DC2626',
-      bgColor: deliveryRate >= 90 ? '#D1FAE5' : deliveryRate >= 70 ? '#FEF3C7' : '#FEE2E2'
+      title: 'Pending Inspection', 
+      value: stats.pending, 
+      icon: <FiClock />,
+      color: '#D97706',
+      bgColor: '#FEF3C7'
     },
   ];
 
@@ -121,7 +93,7 @@ function MonitorDelivery() {
     switch(status) {
       case 'Delivered': return '#d4edda';
       case 'Pending': return '#fff3cd';
-      case 'Delayed': return '#f8d7da';
+      case 'For Return': return '#f8d7da';
       default: return '#e2e3e5';
     }
   };
@@ -130,20 +102,16 @@ function MonitorDelivery() {
     switch(status) {
       case 'Delivered': return '#155724';
       case 'Pending': return '#856404';
-      case 'Delayed': return '#721c24';
+      case 'For Return': return '#721c24';
       default: return '#383d41';
     }
-  };
-
-  const handleRefresh = () => {
-    alert('Refreshing delivery data...');
   };
 
   return (
     <div style={{ background: '#fff', minHeight: 'calc(100vh - 73px)', padding: '24px 32px' }}>
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 24 }}>
-        {stats.map((stat, index) => (
+        {statsCards.map((stat, index) => (
           <div
             key={index}
             style={{
@@ -184,13 +152,41 @@ function MonitorDelivery() {
       {/* Main Content Card */}
       <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
 
+        {/* Header with refresh button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Delivery Monitoring</h2>
+            <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Track serials that have been inspected</p>
+          </div>
+          <button
+            onClick={fetchMonitoredDeliveries}
+            disabled={loading}
+            style={{
+              background: '#004A98',
+              border: 'none',
+              color: '#fff',
+              padding: '12px 20px',
+              borderRadius: 6,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: 14,
+              fontWeight: 500,
+              opacity: loading ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+
         {/* Search and Filter Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <MdSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
             <input
               type="text"
-              placeholder="Search deliveries..."
+              placeholder="Search serial title, supplier, or ISSN..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -219,7 +215,7 @@ function MonitorDelivery() {
               <option value="All">All Status</option>
               <option value="Delivered">Delivered</option>
               <option value="Pending">Pending</option>
-              <option value="Delayed">Delayed</option>
+              <option value="For Return">For Return</option>
             </select>
 
             <input
@@ -263,47 +259,82 @@ function MonitorDelivery() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f5f5f5' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Phone</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Address</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Delivery Status</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Status</th>
+              <tr style={{ 
+                background: 'linear-gradient(90deg, #004A98, #0062f4)',
+                color: '#fff'
+              }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>ISSN</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Inspection Date</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Inspector</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {filteredDeliveries.map((delivery) => (
-                <tr key={delivery.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '16px' }}>{delivery.supplierName}</td>
-                  <td style={{ padding: '16px' }}>{delivery.phone}</td>
-                  <td style={{ padding: '16px' }}>{delivery.address}</td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{
-                      padding: '6px 16px',
-                      borderRadius: 20,
-                      background: getDeliveryStatusColor(delivery.deliveryStatus),
-                      color: getDeliveryStatusTextColor(delivery.deliveryStatus),
-                      fontSize: 12,
-                      fontWeight: 500,
-                      display: 'inline-block',
-                    }}>
-                      {delivery.deliveryStatus}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      borderRadius: 20,
-                      background: delivery.status === 'Active' ? '#d4edda' : '#f8d7da',
-                      color: delivery.status === 'Active' ? '#155724' : '#721c24',
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}>
-                      {delivery.status}
-                    </span>
+              {loading ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                    Loading delivery data...
                   </td>
                 </tr>
-              ))}
+              ) : error ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
+                    {error}
+                    <button 
+                      onClick={fetchMonitoredDeliveries}
+                      style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : filteredDeliveries.length > 0 ? (
+                filteredDeliveries.map((delivery, index) => (
+                  <tr 
+                    key={delivery.id} 
+                    style={{ 
+                      borderBottom: '1px solid #eee',
+                      background: index % 2 === 0 ? '#fff' : '#f9f9f9'
+                    }}
+                  >
+                    <td style={{ padding: '16px', fontWeight: 500 }}>{delivery.issn}</td>
+                    <td style={{ padding: '16px' }}>{delivery.serialTitle}</td>
+                    <td style={{ padding: '16px' }}>{delivery.supplierName}</td>
+                    <td style={{ padding: '16px', textAlign: 'center', color: '#555' }}>
+                      {delivery.inspectionDate 
+                        ? new Date(delivery.inspectionDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                        : '-'
+                      }
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center', color: '#555' }}>
+                      {delivery.inspector_name || '-'}
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '6px 16px',
+                        borderRadius: 20,
+                        background: getDeliveryStatusColor(delivery.deliveryStatus),
+                        color: getDeliveryStatusTextColor(delivery.deliveryStatus),
+                        fontSize: 12,
+                        fontWeight: 500,
+                        display: 'inline-block',
+                      }}>
+                        {delivery.deliveryStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                    {searchTerm || statusFilter !== 'All' || dateFilter
+                      ? 'No serials match your search/filter criteria.' 
+                      : 'No inspected serials yet. Serials will appear here once the inspection team submits their inspection.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -312,51 +343,6 @@ function MonitorDelivery() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, color: '#666', fontSize: 14 }}>
           <div>
             Showing {filteredDeliveries.length} of {deliveryData.length} results
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Previous
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #004A98', 
-              background: '#004A98', 
-              color: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              1
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              2
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Next
-            </button>
           </div>
         </div>
       </div>

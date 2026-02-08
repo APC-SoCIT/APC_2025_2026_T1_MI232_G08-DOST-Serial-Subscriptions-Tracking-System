@@ -304,6 +304,8 @@ function Dashboard_Supplier_ListofSerial() {
   const [serialStatuses, setSerialStatuses] = useState({});
   // Confirmation modal state - type can be 'accept' or 'delivery'
   const [confirmModal, setConfirmModal] = useState({ show: false, serialId: null, serialData: null, type: null });
+  // Reason modal state for "For Return" items
+  const [reasonModal, setReasonModal] = useState({ show: false, serialData: null });
 
   // Fetch serials from API
   useEffect(() => {
@@ -348,9 +350,30 @@ function Dashboard_Supplier_ListofSerial() {
 
   // Status options in sequential order
   const statusFlow = [
-    { value: 'prepare', label: 'Prepare', color: '#ffc107' },
-    { value: 'for_delivery', label: 'For Delivery', color: '#17a2b8' },
+    { value: 'prepare', label: 'Prepare', color: '#ffc107', textColor: '#333' },
+    { value: 'for_delivery', label: 'For Delivery', color: '#17a2b8', textColor: '#fff' },
+    { value: 'received', label: 'Received', color: '#28a745', textColor: '#fff' },
+    { value: 'delivered', label: 'Delivered', color: '#d4edda', textColor: '#155724' },
+    { value: 'for_return', label: 'For Return', color: '#f8d7da', textColor: '#721c24' },
   ];
+
+  // Helper to get the final display status considering inspection_status
+  const getFinalStatus = (serial) => {
+    const baseStatus = serialStatuses[serial.id] || serial.status;
+    const inspectionStatus = serial.inspection_status;
+    
+    // If it's received and has been inspected, show the inspection result
+    if (baseStatus === 'received' || inspectionStatus) {
+      if (inspectionStatus === 'inspected') {
+        return 'delivered';
+      }
+      if (inspectionStatus === 'for_return') {
+        return 'for_return';
+      }
+    }
+    
+    return baseStatus;
+  };
 
   // Handle Accept button click - show confirmation
   const handleAcceptClick = (serial) => {
@@ -410,15 +433,43 @@ function Dashboard_Supplier_ListofSerial() {
 
   // Get status display info
   const getStatusInfo = (serial) => {
-    const status = serialStatuses[serial.id] || serial.status;
+    const status = getFinalStatus(serial);
     if (!status || status === 'pending') return null;
     return statusFlow.find(opt => opt.value === status);
   };
 
-  // Check if status is final (For Delivery)
+  // Check if status is final (For Delivery, Received, Delivered, or For Return)
   const isFinalStatus = (serial) => {
-    const status = serialStatuses[serial.id] || serial.status;
-    return status === 'for_delivery';
+    const status = getFinalStatus(serial);
+    return status === 'for_delivery' || status === 'received' || status === 'delivered' || status === 'for_return';
+  };
+
+  // Check if status is a delivery result status (Delivered or For Return)
+  const isDeliveryResultStatus = (serial) => {
+    const status = getFinalStatus(serial);
+    return status === 'delivered' || status === 'for_return';
+  };
+
+  // Handle showing reason modal
+  const handleShowReason = (serial) => {
+    setReasonModal({ show: true, serialData: serial });
+  };
+
+  // Format checklist items for display
+  const formatChecklistItems = (checklist) => {
+    if (!checklist || typeof checklist !== 'object') return [];
+    
+    const labels = {
+      missingPages: 'Missing Pages',
+      tornPages: 'Torn Pages',
+      waterDamage: 'Water Damage',
+      misprint: 'Misprint',
+      other: 'Other Issues',
+    };
+    
+    return Object.entries(checklist)
+      .filter(([key, value]) => value === true)
+      .map(([key]) => labels[key] || key);
   };
 
   // Filter and Sort Logic
@@ -585,27 +636,50 @@ function Dashboard_Supplier_ListofSerial() {
                         </td>
                         <td style={{ padding: "16px 8px", textAlign: "center", width: 180, position: 'relative' }}>
                           {getStatusInfo(row) ? (
-                            <button
-                              onClick={() => handleStatusClick(row)}
-                              disabled={isFinalStatus(row)}
-                              style={{
-                                padding: '8px 16px',
-                                borderRadius: 20,
-                                border: 'none',
-                                background: getStatusInfo(row).color,
-                                color: getStatusInfo(row).value === 'preparing' ? '#333' : '#fff',
-                                cursor: isFinalStatus(row) ? 'default' : 'pointer',
-                                fontSize: 13,
-                                fontWeight: 600,
-                                transition: 'all 0.2s',
-                                opacity: isFinalStatus(row) ? 1 : 0.9,
-                              }}
-                              onMouseOver={(e) => !isFinalStatus(row) && (e.target.style.opacity = '1')}
-                              onMouseOut={(e) => !isFinalStatus(row) && (e.target.style.opacity = '0.9')}
-                              title={isFinalStatus(row) ? 'Final status reached' : 'Click to advance status'}
-                            >
-                              {getStatusInfo(row).label}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                              <button
+                                onClick={() => handleStatusClick(row)}
+                                disabled={isFinalStatus(row)}
+                                style={{
+                                  padding: '8px 16px',
+                                  borderRadius: 20,
+                                  border: 'none',
+                                  background: getStatusInfo(row).color,
+                                  color: getStatusInfo(row).textColor || '#fff',
+                                  cursor: isFinalStatus(row) ? 'default' : 'pointer',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  transition: 'all 0.2s',
+                                  opacity: isFinalStatus(row) ? 1 : 0.9,
+                                }}
+                                onMouseOver={(e) => !isFinalStatus(row) && (e.target.style.opacity = '1')}
+                                onMouseOut={(e) => !isFinalStatus(row) && (e.target.style.opacity = '0.9')}
+                                title={isFinalStatus(row) ? 'Final status reached' : 'Click to advance status'}
+                              >
+                                {getStatusInfo(row).label}
+                              </button>
+                              {getFinalStatus(row) === 'for_return' && (
+                                <button
+                                  onClick={() => handleShowReason(row)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    borderRadius: 6,
+                                    border: '1px solid #721c24',
+                                    background: '#fff',
+                                    color: '#721c24',
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s',
+                                  }}
+                                  onMouseOver={(e) => { e.target.style.background = '#721c24'; e.target.style.color = '#fff'; }}
+                                  onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#721c24'; }}
+                                  title="View reason for return"
+                                >
+                                  Reason
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <button
                               onClick={() => handleAcceptClick(row)}
@@ -724,6 +798,164 @@ function Dashboard_Supplier_ListofSerial() {
                 No
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reason Modal for For Return items */}
+      {reasonModal.show && reasonModal.serialData && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setReasonModal({ show: false, serialData: null })}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 16,
+              padding: '32px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              maxWidth: 500,
+              width: '90%',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px', fontSize: 22, color: '#721c24' }}>Return Reason</h3>
+                <p style={{ margin: 0, fontSize: 14, color: '#666' }}>
+                  {reasonModal.serialData.title || 'Serial'} - {reasonModal.serialData.issn || 'N/A'}
+                </p>
+              </div>
+              <button
+                onClick={() => setReasonModal({ show: false, serialData: null })}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 24,
+                  color: '#999',
+                  cursor: 'pointer',
+                  padding: 0,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Inspector Info */}
+            <div style={{ marginBottom: 20, padding: '16px', background: '#f8f9fa', borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#666', fontSize: 14 }}>Inspector:</span>
+                <span style={{ fontWeight: 500, color: '#333' }}>{reasonModal.serialData.inspector_name || 'N/A'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#666', fontSize: 14 }}>Inspection Date:</span>
+                <span style={{ fontWeight: 500, color: '#333' }}>
+                  {reasonModal.serialData.inspection_date 
+                    ? new Date(reasonModal.serialData.inspection_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                    : 'N/A'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#666', fontSize: 14 }}>Condition:</span>
+                <span style={{ fontWeight: 600, color: '#721c24' }}>{reasonModal.serialData.condition || 'For Return'}</span>
+              </div>
+            </div>
+
+            {/* Issues Found (Checklist) */}
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Issues Found</h4>
+              {formatChecklistItems(reasonModal.serialData.inspection_checklist).length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {formatChecklistItems(reasonModal.serialData.inspection_checklist).map((item, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        padding: '6px 14px',
+                        background: '#f8d7da',
+                        color: '#721c24',
+                        borderRadius: 20,
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, color: '#888', fontSize: 14 }}>No specific issues recorded in checklist.</p>
+              )}
+            </div>
+
+            {/* Other Description */}
+            {reasonModal.serialData.other_description && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: 16, color: '#333' }}>Other Issues Description</h4>
+                <p style={{ 
+                  margin: 0, 
+                  padding: '12px 16px', 
+                  background: '#fff3cd', 
+                  borderRadius: 8, 
+                  fontSize: 14, 
+                  color: '#856404',
+                  lineHeight: 1.5,
+                }}>
+                  {reasonModal.serialData.other_description}
+                </p>
+              </div>
+            )}
+
+            {/* Remarks */}
+            {reasonModal.serialData.inspection_remarks && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: 16, color: '#333' }}>Inspector Remarks</h4>
+                <p style={{ 
+                  margin: 0, 
+                  padding: '12px 16px', 
+                  background: '#e2e3e5', 
+                  borderRadius: 8, 
+                  fontSize: 14, 
+                  color: '#383d41',
+                  lineHeight: 1.5,
+                  fontStyle: 'italic',
+                }}>
+                  {reasonModal.serialData.inspection_remarks}
+                </p>
+              </div>
+            )}
+
+            {/* Close Button */}
+            <button
+              onClick={() => setReasonModal({ show: false, serialData: null })}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#004A98',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 15,
+                fontWeight: 600,
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => e.target.style.background = '#003570'}
+              onMouseOut={(e) => e.target.style.background = '#004A98'}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
