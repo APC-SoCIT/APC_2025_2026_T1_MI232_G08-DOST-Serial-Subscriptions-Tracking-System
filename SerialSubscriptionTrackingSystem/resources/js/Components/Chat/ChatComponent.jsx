@@ -4,15 +4,15 @@ import { BsThreeDotsVertical, BsEmojiSmile } from "react-icons/bs";
 import { BiSearch } from "react-icons/bi";
 import { FaFileAlt, FaFilePdf, FaFileWord, FaFileExcel, FaFileImage } from "react-icons/fa";
 import EmojiPicker from './EmojiPicker';
+import ChatSkeleton from './ChatSkeleton';
+import MessageStatus from './MessageStatus';
 
-// Helper function to format timestamp in user's local timezone
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
-// Helper function to format contact time (shows relative time or date)
 const formatContactTime = (timestamp) => {
   if (!timestamp) return 'Just now';
   const date = new Date(timestamp);
@@ -31,52 +31,21 @@ const formatContactTime = (timestamp) => {
   }
 };
 
-// Helper function to get CSRF token
-const getCsrfToken = () => {
-  const token = document.querySelector('meta[name="csrf-token"]');
-  return token ? token.getAttribute('content') : '';
-};
-
-// Helper function for API calls with CSRF token
 const apiGet = async (url) => {
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
-    credentials: 'same-origin',
-  });
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  return response.json();
+  const response = await window.axios.get(url);
+  return response.data;
 };
 
 const apiPost = async (url, data, isFormData = false) => {
-  const headers = {
-    'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
-    'X-CSRF-TOKEN': getCsrfToken(),
-  };
+  const config = isFormData ? {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  } : {};
   
-  if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
-  }
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    credentials: 'same-origin',
-    body: isFormData ? data : JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `HTTP error! status: ${response.status}`);
-  }
-  return response.json();
+  const response = await window.axios.post(url, data, config);
+  return response.data;
 };
 
-const POLL_INTERVAL = 5000; // Poll every 5 seconds for new messages (reduced to prevent flickering)
+const POLL_INTERVAL = 5000;
 
 export default function ChatComponent({ 
   primaryColor = '#004A98',
@@ -85,7 +54,7 @@ export default function ChatComponent({
   const [message, setMessage] = useState('');
   const [activeChat, setActiveChat] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [availableUsers, setAvailableUsers] = useState([]); // Users available to start new chat with
+  const [availableUsers, setAvailableUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -104,40 +73,30 @@ export default function ChatComponent({
   const pollIntervalRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
-  const currentChatIdRef = useRef(null); // Track current chat ID for async operations
+  const currentChatIdRef = useRef(null);
 
-  // Fetch contacts and available users on component mount
   useEffect(() => {
     fetchContacts();
     fetchAvailableUsers();
   }, []);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Poll for new messages when a chat is active
   useEffect(() => {
-    // Update the ref whenever currentChatId changes
     currentChatIdRef.current = currentChatId;
     
-    // Clear any existing interval
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
     
     if (currentChatId) {
-      // Clear messages first to prevent overlap
       setMessages([]);
-      
-      // Fetch immediately when chat is selected
       fetchMessagesForChat(currentChatId);
       
-      // Set up polling with the current chat ID captured
       pollIntervalRef.current = setInterval(() => {
-        // Only fetch if we're still on the same chat
         if (currentChatIdRef.current === currentChatId) {
           fetchMessagesForChat(currentChatId);
         }
@@ -152,7 +111,6 @@ export default function ChatComponent({
     };
   }, [currentChatId]);
 
-  // Close emoji picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
@@ -192,7 +150,6 @@ export default function ChatComponent({
   const fetchMessagesForChat = async (chatId) => {
     try {
       const data = await apiGet(`/api/chats/${chatId}/messages`);
-      // Only update if this is still the active chat (use ref for accurate check)
       if (chatId === currentChatIdRef.current) {
         setMessages(data);
       }
@@ -202,29 +159,42 @@ export default function ChatComponent({
   };
 
   const handleChatSelect = (index) => {
-    // Prevent re-selecting the same chat
     if (activeChat === index) return;
     
     setActiveChat(index);
     const selectedContact = filteredContacts[index];
     if (selectedContact) {
       const newChatId = selectedContact.id;
-      // Clear messages immediately to prevent overlap
       setMessages([]);
-      // Update the ref first
       currentChatIdRef.current = newChatId;
-      // Then update state (this will trigger the useEffect)
       setCurrentChatId(newChatId);
     }
   };
 
   const handleSend = async () => {
     if ((!message.trim() && !selectedFile) || !currentChatId || sending) {
-      console.log('Send blocked:', { message: message.trim(), selectedFile, currentChatId, sending });
       return;
     }
 
     setSending(true);
+
+    const tempId = `temp_${Date.now()}`;
+    const tempMessage = {
+      id: tempId,
+      content: message,
+      attachment: selectedFile ? URL.createObjectURL(selectedFile) : null,
+      attachment_name: selectedFile ? selectedFile.name : null,
+      sender: 'You',
+      isOwn: true,
+      timestamp: new Date().toISOString(),
+      status: 'sending',
+    };
+
+    setMessages(prev => [...prev, tempMessage]);
+    setMessage('');
+    setSelectedFile(null);
+    setAttachmentPreview(null);
+
     try {
       const formData = new FormData();
       if (message.trim()) {
@@ -234,19 +204,14 @@ export default function ChatComponent({
         formData.append('attachment', selectedFile);
       }
 
-      console.log('Sending message to chat:', currentChatId);
-
       const newMessage = await apiPost(`/api/chats/${currentChatId}/messages`, formData, true);
 
-      console.log('Message sent successfully:', newMessage);
-      setMessages(prev => [...prev, newMessage]);
-      setMessage('');
-      setSelectedFile(null);
-      setAttachmentPreview(null);
-      fetchContacts(); // Refresh contacts to update last message
+      setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...newMessage, status: 'sent' } : msg)));
+      fetchContacts();
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Error sending message: ' + error.message);
+      setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...msg, status: 'failed' } : msg)));
+      alert('Error sending message: ' + (error.response?.data?.error || error.message));
     } finally {
       setSending(false);
     }
@@ -264,7 +229,6 @@ export default function ChatComponent({
     if (file) {
       setSelectedFile(file);
       
-      // Create preview for images
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -331,79 +295,62 @@ export default function ChatComponent({
 
   const startNewChat = async (contact) => {
     try {
-      console.log('Starting new chat with:', contact);
-      
       const data = await apiPost('/api/chats/get-or-create', {
         other_user_id: contact.id,
         other_user_name: contact.name,
         other_user_role: contact.role,
       });
 
-      console.log('Chat created/found:', data);
       setCurrentChatId(data.chat_id);
       setMessages(data.messages || []);
       setShowNewChatModal(false);
       
-      // Refresh contacts and select the new chat
       await fetchContacts();
-      
-      // Find and select the chat in the list
-      setActiveChat(0); // Select first chat (most recent)
+      setActiveChat(0);
     } catch (error) {
       console.error('Error creating chat:', error);
-      alert('Error creating chat: ' + error.message);
+      alert('Error creating chat: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Delete message handler
   const handleDeleteMessage = async (messageId) => {
     try {
       await window.axios.delete(`/api/messages/${messageId}`);
-      
-      // Remove message from state
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
       setShowDeleteConfirm(null);
-      fetchContacts(); // Refresh contacts to update last message
+      fetchContacts();
     } catch (error) {
       console.error('Error deleting message:', error);
       alert('Error deleting message: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Edit message handler
   const handleEditMessage = async (messageId) => {
     if (!editingContent.trim()) return;
     
     try {
-      console.log('Editing message:', messageId, 'with content:', editingContent);
-      
       const response = await window.axios.put(`/api/messages/${messageId}`, {
         content: editingContent
       });
       
-      console.log('Edit response:', response.data);
-      
-      // Update message in state
       setMessages(prev => prev.map(msg => 
         msg.id === messageId ? { ...msg, content: response.data.content, isEdited: true } : msg
       ));
       
       setEditingMessageId(null);
       setEditingContent('');
-      fetchContacts(); // Refresh contacts to update last message
+      fetchContacts();
     } catch (error) {
       console.error('Error editing message:', error);
       alert('Error editing message: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Start editing a message
   const startEditingMessage = (msg) => {
     setEditingMessageId(msg.id);
     setEditingContent(msg.content);
   };
 
-  // Cancel editing
   const cancelEditing = () => {
     setEditingMessageId(null);
     setEditingContent('');
@@ -414,281 +361,344 @@ export default function ChatComponent({
     contact.role?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const renderMessage = (msg) => {
+  const shouldShowDateSeparator = (currentMsg, prevMsg) => {
+    if (!prevMsg) return true;
+    const currentDate = new Date(currentMsg.timestamp).toDateString();
+    const prevDate = new Date(prevMsg.timestamp).toDateString();
+    return currentDate !== prevDate;
+  };
+
+  const formatDateSeparator = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return date.toLocaleDateString([], { weekday: 'long' });
+  };
+
+  const shouldShowSenderInfo = (index) => {
+    if (index === 0) return true;
+    const prevMsg = messages[index - 1];
+    const currentMsg = messages[index];
+    return prevMsg.sender !== currentMsg.sender || shouldShowDateSeparator(currentMsg, prevMsg);
+  };
+
+  const renderMessage = (msg, index) => {
     const isImage = msg.attachment && /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment);
     const fileExtension = msg.attachment ? msg.attachment.split('.').pop().toLowerCase() : null;
     const isHovered = hoveredMessageId === msg.id;
     const isEditing = editingMessageId === msg.id;
+    const prevMsg = index > 0 ? messages[index - 1] : null;
+    const showDateSeparator = shouldShowDateSeparator(msg, prevMsg);
+    const showSenderInfo = shouldShowSenderInfo(index);
 
     return (
-      <div
-        key={msg.id}
-        style={{
-          display: 'flex',
-          justifyContent: msg.isOwn ? 'flex-end' : 'flex-start',
-          marginBottom: 16,
-          position: 'relative'
-        }}
-        onMouseEnter={() => setHoveredMessageId(msg.id)}
-        onMouseLeave={() => setHoveredMessageId(null)}
-      >
-        {/* Edit/Delete options for own messages - shown on hover */}
-        {msg.isOwn && isHovered && !isEditing && (
-          <div style={{
+      <div key={msg.id}>
+        {showDateSeparator && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 16,
+            margin: '24px 0 20px 0',
+            color: '#999'
+          }}>
+            <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#999' }}>{formatDateSeparator(msg.timestamp)}</span>
+            <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+          </div>
+        )}
+
+        <div
+          style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            marginRight: 8,
-            opacity: 0.8
-          }}>
-            <button
-              onClick={() => startEditingMessage(msg)}
-              style={{
-                background: '#f0f0f0',
-                border: 'none',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#666',
-                transition: 'all 0.2s'
-              }}
-              title="Edit message"
-              onMouseEnter={(e) => e.currentTarget.style.background = '#e0e0e0'}
-              onMouseLeave={(e) => e.currentTarget.style.background = '#f0f0f0'}
-            >
-              <IoPencil size={16} />
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(msg.id)}
-              style={{
-                background: '#fee2e2',
-                border: 'none',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#dc3545',
-                transition: 'all 0.2s'
-              }}
-              title="Delete message"
-              onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
-              onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
-            >
-              <IoTrash size={16} />
-            </button>
-          </div>
-        )}
-
-        {/* Delete confirmation popup */}
-        {showDeleteConfirm === msg.id && (
-          <div style={{
-            position: 'absolute',
-            right: msg.isOwn ? '0' : 'auto',
-            left: msg.isOwn ? 'auto' : '0',
-            top: '100%',
-            background: '#fff',
-            border: '1px solid #e0e0e0',
-            borderRadius: 8,
-            padding: '12px 16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            zIndex: 100,
-            minWidth: 200
-          }}>
-            <p style={{ margin: '0 0 12px 0', fontSize: 14, color: '#333' }}>
-              Delete this message?
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  borderRadius: 6,
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 13
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteMessage(msg.id)}
-                style={{
-                  padding: '6px 12px',
-                  border: 'none',
-                  borderRadius: 6,
-                  background: '#dc3545',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 13
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={{
-          maxWidth: '70%',
-          background: msg.isOwn ? primaryColor : '#fff',
-          color: msg.isOwn ? '#fff' : '#222',
-          padding: '12px 16px',
-          borderRadius: 12,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-        }}>
-          {!msg.isOwn && (
-            <p style={{ margin: '0 0 4px 0', fontSize: 12, fontWeight: 600, color: primaryColor }}>
-              {msg.sender}
-            </p>
-          )}
-          
-          {/* Attachment display */}
-          {msg.attachment && (
-            <div style={{ marginBottom: msg.content ? 8 : 0 }}>
-              {isImage ? (
-                <a href={msg.attachment} target="_blank" rel="noopener noreferrer">
-                  <img 
-                    src={msg.attachment} 
-                    alt="attachment" 
-                    style={{ 
-                      maxWidth: '100%', 
-                      maxHeight: '200px', 
-                      borderRadius: 8,
-                      cursor: 'pointer'
-                    }} 
-                  />
-                </a>
-              ) : (
-                <a 
-                  href={msg.attachment} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    background: msg.isOwn ? 'rgba(255,255,255,0.2)' : '#f8f9fa',
-                    borderRadius: 8,
-                    textDecoration: 'none',
-                    color: msg.isOwn ? '#fff' : '#333'
-                  }}
-                >
-                  {getFileIcon(fileExtension)}
-                  <span style={{ fontSize: 13 }}>
-                    {msg.attachment.split('/').pop()}
-                  </span>
-                </a>
-              )}
+            gap: 12,
+            marginBottom: 12,
+            alignItems: 'flex-start',
+            justifyContent: msg.isOwn ? 'flex-end' : 'flex-start'
+          }}
+          onMouseEnter={() => setHoveredMessageId(msg.id)}
+          onMouseLeave={() => setHoveredMessageId(null)}
+        >
+          {!msg.isOwn && showSenderInfo && (
+            <div style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: primaryColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 'bold',
+              fontSize: 16,
+              flexShrink: 0,
+              marginTop: 4
+            }}>
+              {msg.sender?.charAt(0) || '?'}
             </div>
           )}
-          
-          {/* Message content - editable or display */}
-          {isEditing ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea
-                value={editingContent}
-                onChange={(e) => setEditingContent(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #ddd',
-                  fontSize: 14,
-                  resize: 'none',
-                  minHeight: 60,
-                  color: '#222',
-                  fontFamily: 'inherit'
-                }}
-                autoFocus
-              />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  onClick={cancelEditing}
+
+          {!msg.isOwn && !showSenderInfo && (
+            <div style={{ width: 40, flexShrink: 0 }} />
+          )}
+
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: msg.isOwn ? 'flex-end' : 'flex-start',
+            maxWidth: '70%'
+          }}>
+            {isEditing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+                <textarea
+                  value={editingContent}
+                  onChange={(e) => setEditingContent(e.target.value)}
                   style={{
-                    padding: '6px 12px',
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 6,
                     border: '1px solid #ddd',
-                    borderRadius: 6,
-                    background: '#fff',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    color: '#666'
+                    fontSize: 14,
+                    resize: 'none',
+                    minHeight: 70,
+                    color: '#222',
+                    fontFamily: 'inherit'
                   }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleEditMessage(msg.id)}
-                  style={{
-                    padding: '6px 12px',
-                    border: 'none',
-                    borderRadius: 6,
-                    background: '#28a745',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4
-                  }}
-                >
-                  <IoCheckmark size={14} /> Save
-                </button>
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={cancelEditing}
+                    style={{
+                      padding: '8px 16px',
+                      border: '1px solid #ddd',
+                      borderRadius: 6,
+                      background: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      color: '#666'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleEditMessage(msg.id)}
+                    style={{
+                      padding: '8px 16px',
+                      border: 'none',
+                      borderRadius: 6,
+                      background: '#28a745',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <IoCheckmark size={16} /> Save
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            msg.content && (
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                {msg.content}
-                {msg.isEdited && (
-                  <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 6 }}>(edited)</span>
+            ) : (
+              msg.content && (
+                <div style={{
+                  background: msg.isOwn ? primaryColor : '#f0f0f0',
+                  color: msg.isOwn ? '#fff' : '#222',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  position: 'relative',
+                  display: 'inline-block'
+                }}
+                  onMouseEnter={() => setHoveredMessageId(msg.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                >
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {msg.content}
+                  </p>
+                  {msg.isEdited && (
+                    <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>(edited)</span>
+                  )}
+
+                  {isHovered && msg.isOwn && (
+                    <div style={{
+                      position: 'absolute',
+                      right: '100%',
+                      top: 0,
+                      display: 'flex',
+                      gap: 8,
+                      marginRight: 8
+                    }}>
+                      <button
+                        onClick={() => startEditingMessage(msg)}
+                        style={{
+                          background: '#f0f0f0',
+                          border: 'none',
+                          borderRadius: '6px',
+                          width: 36,
+                          height: 36,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#666',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#e0e0e0'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#f0f0f0'}
+                        title="Edit"
+                      >
+                        <IoPencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(msg.id)}
+                        style={{
+                          background: '#fee2e2',
+                          border: 'none',
+                          borderRadius: '6px',
+                          width: 36,
+                          height: 36,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#dc3545',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
+                        title="Delete"
+                      >
+                        <IoTrash size={16} />
+                      </button>
+                    </div>
+                  )}
+
+                  {showDeleteConfirm === msg.id && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-120px',
+                      right: 0,
+                      background: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: 8,
+                      padding: '12px 16px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      zIndex: 100,
+                      minWidth: 200
+                    }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: 13, color: '#333' }}>Delete message?</p>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => setShowDeleteConfirm(null)}
+                          style={{
+                            padding: '6px 12px',
+                            border: '1px solid #ddd',
+                            borderRadius: 5,
+                            background: '#fff',
+                            cursor: 'pointer',
+                            fontSize: 12
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderRadius: 5,
+                            background: '#dc3545',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: 12
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+
+            {msg.attachment && (
+              <div style={{ marginTop: 8, marginBottom: msg.content ? 0 : 8 }}>
+                {isImage ? (
+                  <a href={msg.attachment} target="_blank" rel="noopener noreferrer">
+                    <img 
+                      src={msg.attachment} 
+                      alt="attachment" 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: '240px', 
+                        borderRadius: 8,
+                        cursor: 'pointer'
+                      }} 
+                    />
+                  </a>
+                ) : (
+                  <a 
+                    href={msg.attachment} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 12px',
+                      background: '#f0f0f0',
+                      borderRadius: 6,
+                      textDecoration: 'none',
+                      color: '#333',
+                      width: 'fit-content'
+                    }}
+                  >
+                    {getFileIcon(fileExtension)}
+                    <span style={{ fontSize: 14 }}>
+                      {msg.attachment.split('/').pop()}
+                    </span>
+                  </a>
                 )}
-              </p>
-            )
-          )}
-          
-          <p style={{
-            margin: '6px 0 0 0',
-            fontSize: 11,
-            opacity: 0.7,
-            textAlign: 'right'
-          }}>
-            {formatTime(msg.timestamp)}
-          </p>
+              </div>
+            )}
+
+            {msg.isOwn && (
+              <div style={{ 
+                fontSize: 12, 
+                color: '#999',
+                marginTop: 4,
+                textAlign: 'right'
+              }}>
+                {new Date(msg.timestamp).toLocaleString([], { 
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                })}
+                {msg.isOwn && <span style={{marginLeft: '8px'}}><MessageStatus status={msg.status} /></span>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   };
 
   if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: 'calc(100vh - 200px)',
-        background: '#fff',
-        borderRadius: 12
-      }}>
-        <p>Loading chats...</p>
-      </div>
-    );
+    return <ChatSkeleton />;
   }
 
   return (
     <div style={{ 
       background: '#fff', 
-      borderRadius: '12px', 
-      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-      height: 'calc(100vh - 200px)',
+      borderRadius: '0px',
+      boxShadow: 'none',
+      height: '100%',
+      width: '100%',
       display: 'flex',
       overflow: 'hidden'
     }}>
@@ -697,10 +707,15 @@ export default function ChatComponent({
         width: '320px', 
         borderRight: '1px solid #e9ecef',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        minHeight: 0
       }}>
-        {/* Header with Search */}
-        <div style={{ padding: '20px', borderBottom: '1px solid #e9ecef' }}>
+        {/* Header with Search - THIS MUST STAY FIXED */}
+        <div style={{ 
+          padding: '20px', 
+          borderBottom: '1px solid #e9ecef',
+          flexShrink: 0
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 20, color: primaryColor, fontWeight: 600 }}>Chat</h3>
             {availableUsers.length > 0 && (
@@ -749,8 +764,8 @@ export default function ChatComponent({
           </div>
         </div>
 
-        {/* Contacts List */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Contacts List - ONLY THIS SCROLLS */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {filteredContacts.length === 0 ? (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999' }}>
               <p style={{ marginBottom: 8 }}>No conversations yet</p>
@@ -873,79 +888,82 @@ export default function ChatComponent({
       </div>
 
       {/* Right Side - Chat Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Chat Header */}
-        {activeChat !== null && filteredContacts[activeChat] ? (
-          <div style={{ 
-            padding: '20px 24px', 
-            borderBottom: '1px solid #e9ecef',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: primaryColor,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: '18px',
-                marginRight: '12px'
-              }}>
-                {filteredContacts[activeChat].name?.charAt(0) || '?'}
-              </div>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#212529', fontWeight: '600' }}>
-                  {filteredContacts[activeChat].name}
-                </h3>
-                <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
-                  {filteredContacts[activeChat].role}
-                </p>
-              </div>
-            </div>
-            <BsThreeDotsVertical style={{ color: '#6c757d', cursor: 'pointer', fontSize: '20px' }} />
-          </div>
-        ) : (
-          <div style={{ 
-            padding: '20px 24px', 
-            borderBottom: '1px solid #e9ecef',
-            background: '#fff'
-          }}>
-            <p style={{ margin: 0, color: '#999' }}>Select a conversation to start chatting</p>
-          </div>
-        )}
-
-        {/* Messages Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* Messages Area - Header SCROLLS WITH messages - ONLY THIS SCROLLS */}
         <div style={{ 
           flex: 1, 
-          padding: '24px',
+          padding: '0',
           overflowY: 'auto',
-          background: '#f8f9fa'
+          overflowX: 'hidden',
+          background: '#fff',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
         }}>
           {activeChat !== null ? (
             <>
+              {/* Chat Header - INSIDE scrollable area */}
+              {filteredContacts[activeChat] && (
+                <div style={{ 
+                  padding: '20px 24px', 
+                  borderBottom: '1px solid #e9ecef',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#fff',
+                  flexShrink: 0
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: primaryColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      fontSize: '18px',
+                      marginRight: '12px'
+                    }}>
+                      {filteredContacts[activeChat].name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#212529', fontWeight: '600' }}>
+                        {filteredContacts[activeChat].name}
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
+                        {filteredContacts[activeChat].role}
+                      </p>
+                    </div>
+                  </div>
+                  <BsThreeDotsVertical style={{ color: '#6c757d', cursor: 'pointer', fontSize: '20px' }} />
+                </div>
+              )}
+
+              {/* Messages */}
               {messages.length === 0 ? (
                 <div style={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
                   alignItems: 'center', 
                   justifyContent: 'center',
-                  height: '100%',
-                  color: '#6c757d'
+                  flex: 1,
+                  color: '#6c757d',
+                  padding: '24px'
                 }}>
                   <p style={{ fontSize: '16px', marginBottom: '8px' }}>No messages yet</p>
                   <p style={{ fontSize: '14px' }}>Start a conversation!</p>
                 </div>
               ) : (
-                messages.map(renderMessage)
+                <div style={{ 
+                  padding: '24px 40px'
+                }}>
+                  {messages.map((msg, index) => renderMessage(msg, index))}
+                  <div ref={messagesEndRef} />
+                </div>
               )}
-              <div ref={messagesEndRef} />
             </>
           ) : (
             <div style={{ 
@@ -961,73 +979,83 @@ export default function ChatComponent({
           )}
         </div>
 
-        {/* Attachment Preview */}
+        {/* Attachment Preview - STAYS FIXED */}
         {attachmentPreview && (
           <div style={{
-            padding: '12px 24px',
-            background: '#fff',
+            padding: '12px 40px',
+            background: '#f8f9fa',
             borderTop: '1px solid #e9ecef',
             display: 'flex',
             alignItems: 'center',
-            gap: 12
+            gap: 12,
+            flexShrink: 0
           }}>
             {attachmentPreview.type === 'image' ? (
               <img 
                 src={attachmentPreview.url} 
                 alt="preview" 
-                style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} 
+                style={{ width: 50, height: 50, borderRadius: 6, objectFit: 'cover' }} 
               />
             ) : (
               <div style={{
-                width: 60,
-                height: 60,
-                borderRadius: 8,
-                background: '#f8f9fa',
+                width: 50,
+                height: 50,
+                borderRadius: 6,
+                background: '#fff',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                border: '1px solid #dee2e6'
               }}>
                 {getFileIcon(attachmentPreview.extension)}
               </div>
             )}
             <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{attachmentPreview.name}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6c757d' }}>{attachmentPreview.size}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{attachmentPreview.name}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: '#6c757d' }}>{attachmentPreview.size}</p>
             </div>
             <button
               onClick={removeAttachment}
               style={{
-                background: '#dc3545',
-                color: '#fff',
+                background: '#e9ecef',
+                color: '#6c757d',
                 border: 'none',
-                borderRadius: '50%',
-                width: 28,
-                height: 28,
+                borderRadius: '6px',
+                padding: '6px 12px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                gap: '6px',
+                fontSize: '12px',
+                transition: 'all 0.2s',
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#dee2e6';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#e9ecef';
               }}
             >
-              <IoClose size={16} />
+              <IoClose size={14} /> Remove
             </button>
           </div>
         )}
 
-        {/* Message Input */}
+        {/* Message Input - STAYS FIXED AT BOTTOM */}
         <div style={{ 
-          padding: '20px 24px', 
+          padding: '16px 40px', 
           borderTop: '1px solid #e9ecef',
           background: '#fff',
           opacity: activeChat !== null ? 1 : 0.5,
-          pointerEvents: activeChat !== null ? 'auto' : 'none'
+          pointerEvents: activeChat !== null ? 'auto' : 'none',
+          flexShrink: 0
         }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center',
             gap: '12px'
           }}>
-            {/* File Upload Button */}
             <input
               type="file"
               ref={fileInputRef}
@@ -1042,19 +1070,24 @@ export default function ChatComponent({
                 border: 'none',
                 color: '#6c757d',
                 cursor: 'pointer',
-                fontSize: '20px',
-                padding: '8px',
+                fontSize: '22px',
+                padding: '10px',
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                transition: 'color 0.2s',
+                height: '40px',
+                width: '40px',
+                flexShrink: 0
               }}
+              onMouseEnter={(e) => e.currentTarget.style.color = primaryColor}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#6c757d'}
               title="Attach file or image"
             >
               <IoAttach />
             </button>
             
-            {/* Message Input */}
             <div style={{ flex: 1, position: 'relative' }}>
               <textarea
                 value={message}
@@ -1063,21 +1096,23 @@ export default function ChatComponent({
                 placeholder="Type your message here..."
                 style={{
                   width: '100%',
-                  padding: '12px 50px 12px 16px',
-                  borderRadius: '8px',
+                  padding: '10px 50px 10px 16px',
+                  borderRadius: '6px',
                   border: '1px solid #dee2e6',
                   fontSize: '14px',
                   resize: 'none',
-                  minHeight: '50px',
-                  maxHeight: '120px',
+                  minHeight: '40px',
+                  maxHeight: '100px',
                   outline: 'none',
-                  fontFamily: 'inherit'
+                  fontFamily: 'inherit',
+                  transition: 'border 0.2s'
                 }}
+                onFocus={(e) => e.currentTarget.style.borderColor = primaryColor}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#dee2e6'}
                 rows={1}
               />
               
-              {/* Emoji Button */}
-              <div ref={emojiPickerRef} style={{ position: 'absolute', right: '12px', bottom: '12px' }}>
+              <div ref={emojiPickerRef} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
                 <button
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   style={{
@@ -1085,15 +1120,17 @@ export default function ChatComponent({
                     border: 'none',
                     color: '#6c757d',
                     cursor: 'pointer',
-                    fontSize: '20px',
-                    padding: 0
+                    fontSize: '18px',
+                    padding: '6px',
+                    transition: 'color 0.2s'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#ffc107'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#6c757d'}
                   title="Add emoji"
                 >
                   <IoHappyOutline />
                 </button>
                 
-                {/* Emoji Picker */}
                 {showEmojiPicker && (
                   <div style={{
                     position: 'absolute',
@@ -1107,24 +1144,36 @@ export default function ChatComponent({
               </div>
             </div>
             
-            {/* Send Button */}
             <button
               onClick={handleSend}
               disabled={(!message.trim() && !selectedFile) || sending}
               style={{
-                background: (message.trim() || selectedFile) && !sending ? primaryColor : '#6c757d',
+                background: (message.trim() || selectedFile) && !sending ? primaryColor : '#e9ecef',
                 border: 'none',
-                color: '#fff',
+                color: (message.trim() || selectedFile) && !sending ? '#fff' : '#adb5bd',
                 cursor: (message.trim() || selectedFile) && !sending ? 'pointer' : 'not-allowed',
                 fontSize: '20px',
-                padding: '12px',
-                borderRadius: '8px',
+                padding: '10px',
+                height: '40px',
+                width: '40px',
+                borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'background 0.2s'
+                transition: 'all 0.2s',
+                flexShrink: 0
               }}
-              title="Send message"
+              onMouseEnter={(e) => {
+                if ((message.trim() || selectedFile) && !sending) {
+                  e.currentTarget.style.background = '#003c7a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if ((message.trim() || selectedFile) && !sending) {
+                  e.currentTarget.style.background = primaryColor;
+                }
+              }}
+              title="Send message (Enter)"
             >
               {sending ? (
                 <span style={{ fontSize: 14 }}>...</span>
@@ -1135,12 +1184,12 @@ export default function ChatComponent({
           </div>
           
           <div style={{ 
-            marginTop: '12px', 
-            fontSize: '12px', 
-            color: '#6c757d',
-            textAlign: 'center'
+            marginTop: '8px', 
+            fontSize: '11px', 
+            color: '#adb5bd',
+            textAlign: 'left'
           }}>
-            Press Enter to send • Attach images & files • Use emojis 😊
+            Press Enter to send • Attach images & files • Use emojis
           </div>
         </div>
       </div>

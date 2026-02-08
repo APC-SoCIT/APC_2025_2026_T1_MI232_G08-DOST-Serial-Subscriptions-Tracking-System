@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
-import { Link, router } from "@inertiajs/react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Link, router, usePage } from "@inertiajs/react";
+import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { FaTruckFast } from "react-icons/fa6";
@@ -217,50 +218,6 @@ function TopBar() {
   );
 }
 
-// Updated data with different dates to demonstrate sorting
-const serials = [
-  {
-    no: 1,
-    issn: "0027-8424",
-    title: "Proceedings of the National Academy of Sciences",
-    frequency: "Weekly",
-    start: "Jan 2025",
-    end: "Dec 2025",
-  },
-  {
-    no: 2,
-    issn: "0042-9686",
-    title: "Bulletin of the World Health Organization",
-    frequency: "Monthly",
-    start: "Mar 2025",
-    end: "Mar 2026",
-  },
-  {
-    no: 3,
-    issn: "0273-0979",
-    title: "Bulletin of the American Mathematical Society",
-    frequency: "Monthly",
-    start: "Feb 2024",
-    end: "Feb 2025",
-  },
-  {
-    no: 4,
-    issn: "0024-6107",
-    title: "Journal of the London Mathematical Society",
-    frequency: "Monthly",
-    start: "Jan 2025",
-    end: "Dec 2025",
-  },
-  {
-    no: 5,
-    issn: "0006-8071",
-    title: "Harvard Business Review",
-    frequency: "Daily",
-    start: "Dec 2024",
-    end: "Nov 2025",
-  },
-];
-
 function Pagination({ current, total, onPage }) {
   const pages = [];
   for (let i = 1; i <= total; i++) {
@@ -328,13 +285,141 @@ function Pagination({ current, total, onPage }) {
 }
 
 function Dashboard_Supplier_ListofSerial() {
+  const { auth } = usePage().props;
   const [activeSidebar, setActiveSidebar] = useState(2);
   const [page, setPage] = useState(1);
-  const totalPages = 10;
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
   // New State for Search and Sort
   const [searchQuery, setSearchQuery] = useState("");
   const [isSortNewest, setIsSortNewest] = useState(true);
+
+  // Serials data from API
+  const [serials, setSerials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Status state for each serial (keyed by serial id)
+  const [serialStatuses, setSerialStatuses] = useState({});
+  // Confirmation modal state - type can be 'accept' or 'delivery'
+  const [confirmModal, setConfirmModal] = useState({ show: false, serialId: null, serialData: null, type: null });
+
+  // Fetch serials from API
+  useEffect(() => {
+    fetchSerials();
+  }, []);
+
+  const fetchSerials = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get supplier name from authenticated user
+      const supplierName = auth?.user?.name || '';
+      
+      const response = await axios.get('/api/subscriptions/supplier-serials', {
+        params: { supplier_name: supplierName }
+      });
+      
+      if (response.data.success) {
+        const fetchedSerials = response.data.serials || [];
+        setSerials(fetchedSerials);
+        
+        // Initialize status state from fetched data
+        const statusMap = {};
+        fetchedSerials.forEach(serial => {
+          if (serial.status && serial.status !== 'pending') {
+            statusMap[serial.id] = serial.status;
+          }
+        });
+        setSerialStatuses(statusMap);
+        
+        // Calculate total pages
+        setTotalPages(Math.max(1, Math.ceil(fetchedSerials.length / itemsPerPage)));
+      }
+    } catch (err) {
+      console.error('Error fetching serials:', err);
+      setError('Failed to load serials. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Status options in sequential order
+  const statusFlow = [
+    { value: 'prepare', label: 'Prepare', color: '#ffc107' },
+    { value: 'for_delivery', label: 'For Delivery', color: '#17a2b8' },
+  ];
+
+  // Handle Accept button click - show confirmation
+  const handleAcceptClick = (serial) => {
+    setConfirmModal({ show: true, serialId: serial.id, serialData: serial, type: 'accept' });
+  };
+
+  // Handle Prepare button click - show confirmation for delivery
+  const handlePrepareClick = (serial) => {
+    setConfirmModal({ show: true, serialId: serial.id, serialData: serial, type: 'delivery' });
+  };
+
+  // Handle confirmation Yes
+  const handleConfirmYes = async () => {
+    const { serialId, serialData, type } = confirmModal;
+    const newStatus = type === 'accept' ? 'prepare' : 'for_delivery';
+    
+    try {
+      // Update status via API
+      const response = await axios.put(`/api/subscriptions/${serialData.subscription_id}/serial-status`, {
+        serial_issn: serialData.issn,
+        status: newStatus
+      });
+      
+      if (response.data.success) {
+        // Update local state
+        setSerialStatuses(prev => ({ ...prev, [serialId]: newStatus }));
+        
+        // Also update the serials array
+        setSerials(prev => prev.map(s => 
+          s.id === serialId ? { ...s, status: newStatus } : s
+        ));
+      } else {
+        console.error('Failed to update status:', response.data.message);
+        alert('Failed to update status. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error updating serial status:', err);
+      alert('Failed to update status. Please try again.');
+    }
+    
+    setConfirmModal({ show: false, serialId: null, serialData: null, type: null });
+  };
+
+  // Handle confirmation No
+  const handleConfirmNo = () => {
+    setConfirmModal({ show: false, serialId: null, serialData: null, type: null });
+  };
+
+  // Handle status button click
+  const handleStatusClick = (serial) => {
+    const currentStatus = serialStatuses[serial.id] || serial.status;
+    
+    if (currentStatus === 'prepare') {
+      handlePrepareClick(serial);
+    }
+  };
+
+  // Get status display info
+  const getStatusInfo = (serial) => {
+    const status = serialStatuses[serial.id] || serial.status;
+    if (!status || status === 'pending') return null;
+    return statusFlow.find(opt => opt.value === status);
+  };
+
+  // Check if status is final (For Delivery)
+  const isFinalStatus = (serial) => {
+    const status = serialStatuses[serial.id] || serial.status;
+    return status === 'for_delivery';
+  };
 
   // Filter and Sort Logic
   const filteredAndSortedSerials = useMemo(() => {
@@ -345,21 +430,34 @@ function Dashboard_Supplier_ListofSerial() {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter(
         (item) =>
-          item.title.toLowerCase().includes(lowerQuery) ||
-          item.issn.toLowerCase().includes(lowerQuery)
+          (item.title && item.title.toLowerCase().includes(lowerQuery)) ||
+          (item.issn && item.issn.toLowerCase().includes(lowerQuery))
       );
     }
 
-    // 2. Sort Logic (Parsing "Month Year" strings)
+    // 2. Sort Logic (by delivery date)
     result.sort((a, b) => {
-      const dateA = new Date(a.start);
-      const dateB = new Date(b.start);
+      const dateA = a.dateDelivered ? new Date(a.dateDelivered) : new Date(0);
+      const dateB = b.dateDelivered ? new Date(b.dateDelivered) : new Date(0);
       
       return isSortNewest ? dateB - dateA : dateA - dateB;
     });
 
     return result;
-  }, [searchQuery, isSortNewest]);
+  }, [serials, searchQuery, isSortNewest]);
+
+  // Paginated serials
+  const paginatedSerials = useMemo(() => {
+    const startIdx = (page - 1) * itemsPerPage;
+    const endIdx = startIdx + itemsPerPage;
+    return filteredAndSortedSerials.slice(startIdx, endIdx);
+  }, [filteredAndSortedSerials, page, itemsPerPage]);
+
+  // Update total pages when filtered data changes
+  useEffect(() => {
+    setTotalPages(Math.max(1, Math.ceil(filteredAndSortedSerials.length / itemsPerPage)));
+    setPage(1); // Reset to first page on filter change
+  }, [filteredAndSortedSerials.length]);
 
 
   return (
@@ -391,8 +489,8 @@ function Dashboard_Supplier_ListofSerial() {
                 }}
               ></div>
 
-              {/* === SEARCH AND SORT BAR === */}
-              <div style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {/* === SEARCH BAR === */}
+              <div style={{ padding: "20px 24px", display: "flex", alignItems: "center" }}>
                  {/* Search Input */}
                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <IoSearchOutline style={{ position: 'absolute', left: 12, color: '#666', fontSize: 18 }} />
@@ -413,28 +511,6 @@ function Dashboard_Supplier_ListofSerial() {
                       }}
                     />
                   </div>
-
-                  {/* Sort Button */}
-                  <button 
-                    onClick={() => setIsSortNewest(!isSortNewest)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '10px 16px',
-                      borderRadius: 8,
-                      border: '1px solid #004A98',
-                      background: isSortNewest ? '#004A98' : '#fff',
-                      color: isSortNewest ? '#fff' : '#004A98',
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <BiSortAlt2 size={18} />
-                    {isSortNewest ? 'New' : 'Old'}
-                  </button>
               </div>
 
               <table
@@ -447,44 +523,97 @@ function Dashboard_Supplier_ListofSerial() {
               >
                 <thead>
                   <tr style={{ color: "#222", fontWeight: 700, borderBottom: "1px solid #eee" }}>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 60 }}>NO.</th>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>ISSN</th>
-                    <th style={{ padding: "12px 8px", textAlign: "left", width: 340 }}>Title</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>Frequency</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>Start Date</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>End Date</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left", width: 380 }}>Title</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center", width: 150 }}>Delivery Date</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center", width: 180 }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAndSortedSerials.length > 0 ? (
-                    filteredAndSortedSerials.map((row, idx) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                        Loading serials...
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#dc3545" }}>
+                        {error}
+                        <button 
+                          onClick={fetchSerials}
+                          style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                        >
+                          Retry
+                        </button>
+                      </td>
+                    </tr>
+                  ) : paginatedSerials.length > 0 ? (
+                    paginatedSerials.map((row, idx) => (
                       <tr
-                        key={row.no}
+                        key={row.id}
                         style={{
                           background: idx % 2 === 0 ? "#f9f9f9" : "#fff",
                           borderBottom: '1px solid #f0f0f0'
                         }}
                       >
-                        <td style={{ padding: "16px 8px", textAlign: "center", width: 60, fontWeight: 500 }}>
-                          {row.no}
-                        </td>
                         <td style={{ padding: "16px 8px", textAlign: "center", width: 120, fontWeight: 700, color: "#004A98" }}>
                           {row.issn}
                         </td>
-                        <td style={{ padding: "16px 8px", textAlign: "left", width: 340 }}>{row.title}</td>
-                        <td style={{ padding: "16px 8px", textAlign: "center", width: 120 }}>{row.frequency}</td>
-                        <td style={{ padding: "16px 8px", textAlign: "center", width: 120, fontWeight: 600, color: '#333' }}>
-                          {row.start}
+                        <td style={{ padding: "16px 8px", textAlign: "left", width: 380 }}>{row.title}</td>
+                        <td style={{ padding: "16px 8px", textAlign: "center", width: 150, color: "#555" }}>
+                          {row.dateDelivered ? new Date(row.dateDelivered).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
                         </td>
-                        <td style={{ padding: "16px 8px", textAlign: "center", width: 120, color: '#666' }}>
-                          {row.end}
+                        <td style={{ padding: "16px 8px", textAlign: "center", width: 180, position: 'relative' }}>
+                          {getStatusInfo(row) ? (
+                            <button
+                              onClick={() => handleStatusClick(row)}
+                              disabled={isFinalStatus(row)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 20,
+                                border: 'none',
+                                background: getStatusInfo(row).color,
+                                color: getStatusInfo(row).value === 'preparing' ? '#333' : '#fff',
+                                cursor: isFinalStatus(row) ? 'default' : 'pointer',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                transition: 'all 0.2s',
+                                opacity: isFinalStatus(row) ? 1 : 0.9,
+                              }}
+                              onMouseOver={(e) => !isFinalStatus(row) && (e.target.style.opacity = '1')}
+                              onMouseOut={(e) => !isFinalStatus(row) && (e.target.style.opacity = '0.9')}
+                              title={isFinalStatus(row) ? 'Final status reached' : 'Click to advance status'}
+                            >
+                              {getStatusInfo(row).label}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleAcceptClick(row)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: 'none',
+                                background: '#28a745',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseOver={(e) => e.target.style.background = '#218838'}
+                              onMouseOut={(e) => e.target.style.background = '#28a745'}
+                            >
+                              Accept
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
-                        No serials found matching "{searchQuery}"
+                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                        {searchQuery ? `No serials found matching "${searchQuery}"` : 'No serials assigned to you yet.'}
                       </td>
                     </tr>
                   )}
@@ -494,13 +623,91 @@ function Dashboard_Supplier_ListofSerial() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, padding: "0 24px" }}>
                 <Pagination current={page} total={totalPages} onPage={setPage} />
                 <span style={{ color: "#444", fontSize: 15 }}>
-                  Showing {filteredAndSortedSerials.length} results
+                  Showing {paginatedSerials.length} of {filteredAndSortedSerials.length} results
                 </span>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={handleConfirmNo}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: '32px 40px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              textAlign: 'center',
+              maxWidth: 400,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px', fontSize: 20, color: '#222' }}>
+              {confirmModal.type === 'accept' ? 'Confirm Acceptance' : 'Confirm For Delivery'}
+            </h3>
+            <p style={{ margin: '0 0 24px', fontSize: 15, color: '#666' }}>
+              {confirmModal.type === 'accept' 
+                ? 'Are you sure you want to accept this serial subscription?' 
+                : 'Are you sure this serial is ready for delivery?'}
+            </p>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button
+                onClick={handleConfirmYes}
+                style={{
+                  padding: '10px 32px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#28a745',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => e.target.style.background = '#218838'}
+                onMouseOut={(e) => e.target.style.background = '#28a745'}
+              >
+                Yes
+              </button>
+              <button
+                onClick={handleConfirmNo}
+                style={{
+                  padding: '10px 32px',
+                  borderRadius: 6,
+                  border: '1px solid #dc3545',
+                  background: '#fff',
+                  color: '#dc3545',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => { e.target.style.background = '#dc3545'; e.target.style.color = '#fff'; }}
+                onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#dc3545'; }}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

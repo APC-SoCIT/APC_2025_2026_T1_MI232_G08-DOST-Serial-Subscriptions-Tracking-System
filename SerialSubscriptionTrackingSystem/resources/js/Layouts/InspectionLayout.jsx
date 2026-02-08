@@ -16,9 +16,10 @@ export default function InspectionLayout({ children, title }) {
   const [activeView, setActiveView] = useState("content");
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openAccount, setOpenAccount] = useState(false);
+  const isChatPage = title === 'Inspection Chat' || url.includes('/inspection-chat');
 
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-800">
+    <div className="h-screen bg-gray-100 text-gray-800 overflow-hidden">
       {/* ================= SIDEBAR ================= */}
       <aside className="fixed left-0 top-0 h-screen w-52 bg-[#0f57a3] text-white">
         <div className="px-5 py-5 flex items-center gap-3 border-b border-blue-800">
@@ -49,7 +50,7 @@ export default function InspectionLayout({ children, title }) {
       </aside>
 
       {/* ================= MAIN ================= */}
-      <div className="ml-52 flex flex-col min-h-screen">
+      <div className="ml-52 flex flex-col h-screen overflow-hidden">
         {/* ================= TOPBAR ================= */}
         <header className="sticky top-0 z-20 bg-white border-b">
           <div className="px-6 py-5 flex items-center justify-between">
@@ -182,7 +183,7 @@ export default function InspectionLayout({ children, title }) {
         </header>
 
         {/* ================= PAGE CONTENT ================= */}
-        <main className="flex-1 bg-[#eef2f5] px-6 py-6">
+        <main className={`flex-1 bg-[#eef2f5] ${isChatPage ? 'p-0 overflow-hidden' : 'px-6 py-6 overflow-auto'} flex flex-col min-h-0`}>
           {children}
         </main>
       </div>

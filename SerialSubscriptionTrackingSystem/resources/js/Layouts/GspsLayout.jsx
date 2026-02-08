@@ -1,4 +1,3 @@
-// resources/js/Layouts/GSPSLayout.jsx
 import React, { useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
@@ -248,15 +247,36 @@ export default function GSPSLayout({ children, title = '' }) {
     if (hour < 18) return 'Good afternoon,';
     return 'Good evening,';
   };
+export default function GSPSLayout({ children, title = 'GSPS Dashboard', hideTitle = false }) {
+  const isChatPage = title === 'GSPS Chat';
+  const isFullPage = hideTitle || isChatPage || title === 'Supplier Information' || title === 'Delivery Status' || title === 'Inspection Status';
 
   return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: 150 }}>
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <TopBar />
-        <div style={{ padding: '16px 40px' }}>
-         
-        
+        <div style={{ 
+          flex: 1,
+          padding: isFullPage ? '0' : '32px 40px',
+          overflow: isChatPage ? 'hidden' : (isFullPage ? 'auto' : 'visible'),
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
+          {!isFullPage && (
+            <>
+              <h2 style={{ marginBottom: 8 }}>{title}</h2>
+              <p style={{ color: '#666', marginBottom: 32 }}>
+                {(() => {
+                  const hour = new Date().getHours();
+                  if (hour < 12) return 'Good morning,';
+                  if (hour < 18) return 'Good afternoon,';
+                  return 'Good evening,';
+                })()} Welcome back!
+              </p>
+            </>
+          )}
           {children}
         </div>
       </div>

@@ -18,6 +18,7 @@ return [
 
     'default' => env('DB_CONNECTION', 'mongodb'),
 
+
     /*
     |--------------------------------------------------------------------------
     | Database Connections
@@ -83,7 +84,11 @@ return [
             ]) : [],
         ],
 
+<<<<<<< HEAD
               'mongodb' => [
+=======
+       'mongodb' => [
+>>>>>>> main
             'driver' => 'mongodb',
             'dsn' => env('DB_DSN'),
             'database' => env('DB_DATABASE', 'dost_serial_subscriptions'),

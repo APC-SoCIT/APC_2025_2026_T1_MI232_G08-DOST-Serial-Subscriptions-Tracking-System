@@ -2,25 +2,17 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\SupplierAccountController;
+use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'auth' => null,
-    ]);
-});
-
 
 // Public welcome page
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
+    return redirect()->route('login');
 });
 
 Route::get('/account-approval', function () {
@@ -30,6 +22,10 @@ Route::get('/account-approval', function () {
 Route::get('/list-of-supplier', function () {
     return Inertia::render('ListofSupplier');
 });
+
+Route::get('/list-of-user', function () {
+    return Inertia::render('ListofUser');
+})->middleware(['auth', 'verified', 'role:admin'])->name('admin.users');
 
 //Default dashboard (fallback)
 Route::get('/dashboard', function () {
@@ -53,11 +49,17 @@ Route::get('/dashboard-tpu-chat', function () {
     })->middleware(['auth'])->name('dashboard-tpu-chat');
 
 Route::get('/dashboard-tpu-supplierinfo', function () {
-        return Inertia::render('Dashboard_TPU_Supplierinfo');
+        $approvedSuppliers = \App\Models\SupplierAccount::approved()->get();
+        return Inertia::render('Dashboard_TPU_Supplierinfo', [
+            'approvedSuppliers' => $approvedSuppliers,
+        ]);
     })->name('dashboard-tpu-supplierinfo');
 
 Route::get('/dashboard-tpu-subscriptiontracking', function () {
-        return Inertia::render('Dashboard_TPU_Subscriptiontracking');
+        $approvedSuppliers = \App\Models\SupplierAccount::approved()->get();
+        return Inertia::render('Dashboard_TPU_Subscriptiontracking', [
+            'approvedSuppliers' => $approvedSuppliers,
+        ]);
     })->name('dashboard-tpu-subscriptiontracking');
 
 Route::get('/dashboard-tpu-monitordelivery', function () {
@@ -67,6 +69,10 @@ Route::get('/dashboard-tpu-monitordelivery', function () {
 Route::get('/dashboard-tpu-addserial', function () {
         return Inertia::render('Dashboard_TPU_AddSerial');
     })->name('dashboard-tpu-addserial');
+
+Route::get('/dashboard-tpu-addaccount', function () {
+        return Inertia::render('Dashboard_TPU_Addaccount');
+    })->middleware(['auth'])->name('dashboard-tpu-addaccount');
 
 
 // GSPS Routes - Main dashboard without role middleware, sub-routes with middleware
@@ -139,6 +145,41 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // User Management API Routes
+    Route::prefix('api/users')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->name('users.index');
+        Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+        Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
+    });
+
+    // Supplier Account Management API Routes
+    Route::prefix('api/supplier-accounts')->group(function () {
+        Route::get('/', [SupplierAccountController::class, 'index'])->name('supplier-accounts.index');
+        Route::get('/pending', [SupplierAccountController::class, 'pending'])->name('supplier-accounts.pending');
+        Route::get('/approved', [SupplierAccountController::class, 'approved'])->name('supplier-accounts.approved');
+        Route::get('/stats', [SupplierAccountController::class, 'stats'])->name('supplier-accounts.stats');
+        Route::post('/', [SupplierAccountController::class, 'store'])->name('supplier-accounts.store');
+        Route::get('/{id}', [SupplierAccountController::class, 'show'])->name('supplier-accounts.show');
+        Route::post('/{id}/approve', [SupplierAccountController::class, 'approve'])->name('supplier-accounts.approve');
+        Route::post('/{id}/reject', [SupplierAccountController::class, 'reject'])->name('supplier-accounts.reject');
+    });
+
+    // Subscription Management API Routes
+    Route::prefix('api/subscriptions')->group(function () {
+        Route::get('/', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+        Route::get('/stats', [SubscriptionController::class, 'stats'])->name('subscriptions.stats');
+        Route::get('/supplier-serials', [SubscriptionController::class, 'getSupplierSerials'])->name('subscriptions.supplierSerials');
+        Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
+        Route::post('/', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+        Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
+        Route::put('/{id}', [SubscriptionController::class, 'update'])->name('subscriptions.update');
+        Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
+        Route::post('/{id}/serials', [SubscriptionController::class, 'addSerial'])->name('subscriptions.addSerial');
+        Route::post('/{id}/transactions', [SubscriptionController::class, 'addTransaction'])->name('subscriptions.addTransaction');
+        Route::put('/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
+        Route::put('/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
+    });
 
     // Chat routes
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
