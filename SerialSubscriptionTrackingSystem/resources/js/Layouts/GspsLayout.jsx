@@ -238,13 +238,6 @@ function TopBar() {
   );
 }
 
-export default function GSPSLayout({ children, title = '' }) {
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning,';
-    if (hour < 18) return 'Good afternoon,';
-    return 'Good evening,';
-  };
 export default function GSPSLayout({ children, title = 'GSPS Dashboard', hideTitle = false }) {
   const isChatPage = title === 'GSPS Chat';
   const isFullPage = hideTitle || isChatPage || title === 'Supplier Information' || title === 'Delivery Status' || title === 'Inspection Status';
