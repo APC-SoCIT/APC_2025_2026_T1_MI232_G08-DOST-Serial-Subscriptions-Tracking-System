@@ -51,29 +51,64 @@ export default function AdminLayout({ children, header, title }) {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#f5f7fb] text-gray-800">
+    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
 
       {/* ===================== SIDEBAR ===================== */}
-      <aside className="w-48 bg-[#0f57a3] text-white flex-shrink-0 flex flex-col justify-between sticky top-0 h-screen shadow-xl">
+      <aside style={{
+        background: '#004A98',
+        color: '#fff',
+        width: 160,
+        minHeight: '100vh',
+        padding: '20px 0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        zIndex: 100
+      }}>
 
         {/* LOGO */}
-        <div>
-          <div className="px-5 py-6 flex items-center gap-3 border-b border-blue-800">
+        <a href="/dashboard" style={{ textDecoration: 'none' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 24
+          }}>
             <img
               src="/images/dost-logo1.png"
               alt="logo"
-              className="w-10 h-10 rounded-lg"
+              style={{
+                width: 55,
+                height: 55,
+                borderRadius: 12,
+                cursor: 'pointer'
+              }}
             />
-            <div>
-              <p className="font-semibold text-base">DOST STII</p>
-              <p className="text-xs text-blue-200">Admin Panel</p>
+            <div style={{
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: 16,
+              letterSpacing: 1,
+              fontFamily: 'Montserrat Bold',
+              textAlign: 'left',
+            }}>
+              DOST <br />
+              STII
             </div>
           </div>
+        </a>
 
-          {/* NAV */}
-          <nav className="mt-6 px-3">
-            <ul className="space-y-2">
-              {navItems.map((item) => (
+        {/* NAV */}
+        <nav style={{ width: '100%' }}>
+          <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
+            {navItems.map((item) => {
+              const isActive = url.startsWith(item.href);
+              
+              return (
                 <li key={item.label}>
                   <a
                     href={item.href}
@@ -81,26 +116,36 @@ export default function AdminLayout({ children, header, title }) {
                       e.preventDefault();
                       router.get(item.href);
                     }}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all
-                      ${
-                        url.startsWith(item.href)
-                          ? "bg-[#0b63d6] shadow-md"
-                          : "hover:bg-[#0b63d6]/70"
-                      }
-                    `}
+                    style={{
+                      margin: '10px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: '#fff',
+                      background: isActive ? '#0062f4ff' : 'transparent',
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      width: '140px',
+                      marginLeft: '10px',
+                      transition: 'background 0.2s, transform 0.1s',
+                      boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
+                      textDecoration: 'none',
+                    }}
                   >
-                    <span className="text-lg">{item.icon}</span>
-                    <span className="text-sm font-medium">{item.label}</span>
+                    <span style={{ marginRight: 8 }}>{item.icon}</span>
+                    <span style={{ fontSize: 15 }}>{item.label}</span>
                   </a>
                 </li>
-              ))}
-            </ul>
-          </nav>
-        </div>
+              );
+            })}
+          </ul>
+        </nav>
       </aside>
 
       {/* ===================== MAIN WRAPPER ===================== */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
         {/* TOPBAR */}
         <header className="bg-white shadow-sm sticky top-0 z-20">

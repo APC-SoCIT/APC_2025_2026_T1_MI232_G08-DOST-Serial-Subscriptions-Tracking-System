@@ -9,7 +9,7 @@ import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
-  <span style={{ marginRight: 0 }}>{children}</span>
+  <span style={{ marginRight: 8 }}>{children}</span>
 );
 
 const sidebarItems = [
@@ -39,17 +39,35 @@ function Sidebar() {
       zIndex: 100
     }}>
       <Link href={route('gsps.dashboard')} style={{ textDecoration: 'none' }}>
-        <img
-          src="/images/dost-logo1.png"
-          alt="LOGO"
-          style={{
-            marginBottom: 24,
-            width: 55,
-            height: 55,
-            borderRadius: 12,
-            cursor: 'pointer'
-          }}
-        />
+        <div style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 24
+        }}>
+          <img
+            src="/images/dost-logo1.png"
+            alt="LOGO"
+            style={{
+              width: 55,
+              height: 55,
+              borderRadius: 12,
+              cursor: 'pointer'
+            }}
+          />
+          <div style={{
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: 16,
+            letterSpacing: 1,
+            fontFamily: 'Montserrat Bold',
+            textAlign: 'left',
+          }}>
+            DOST <br />
+            STII
+          </div>
+        </div>
       </Link>
       
       <nav style={{ width: '100%' }}>
