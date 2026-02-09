@@ -6,11 +6,8 @@ export default function UserList() {
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [deleteModal, setDeleteModal] = useState({ open: false, user: null });
-  const [editModal, setEditModal] = useState({ open: false, user: null, newRole: '' });
+  const [disableModal, setDisableModal] = useState({ open: false, user: null });
   const perPage = 10;
-
-  const roleOptions = ['tpu', 'gsps', 'supplier', 'inspection'];
 
   // Fetch users on mount
   useEffect(() => {
@@ -27,12 +24,12 @@ export default function UserList() {
           name: user.name,
           email: user.email,
           role: user.role || 'N/A',
-          status: user.email_verified_at ? 'Verified' : 'Unverified',
+          is_disabled: user.is_disabled || false,
           date: new Date(user.created_at).toLocaleDateString('en-US', { 
-            month: '2-digit', 
+            month: 'short', 
             day: '2-digit', 
-            year: '2-digit' 
-          }).replace(/\//g, '.'),
+            year: 'numeric' 
+          }),
         }));
         setAllUsers(users);
       }
@@ -43,37 +40,20 @@ export default function UserList() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteModal.user) return;
+  const handleToggleDisable = async () => {
+    if (!disableModal.user) return;
     
     try {
-      const response = await axios.delete(`/api/users/${deleteModal.user.id}`);
-      if (response.data.success) {
-        setAllUsers(prev => prev.filter(u => u.id !== deleteModal.user.id));
-        setDeleteModal({ open: false, user: null });
-      }
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Failed to delete user');
-    }
-  };
-
-  const handleUpdateRole = async () => {
-    if (!editModal.user || !editModal.newRole) return;
-    
-    try {
-      const response = await axios.put(`/api/users/${editModal.user.id}/role`, {
-        role: editModal.newRole
-      });
+      const response = await axios.put(`/api/users/${disableModal.user.id}/toggle-disable`);
       if (response.data.success) {
         setAllUsers(prev => prev.map(u => 
-          u.id === editModal.user.id ? { ...u, role: editModal.newRole } : u
+          u.id === disableModal.user.id ? { ...u, is_disabled: response.data.is_disabled } : u
         ));
-        setEditModal({ open: false, user: null, newRole: '' });
+        setDisableModal({ open: false, user: null });
       }
     } catch (error) {
-      console.error('Error updating user role:', error);
-      alert('Failed to update user role');
+      console.error('Error toggling user status:', error);
+      alert('Failed to update user status');
     }
   };
 
@@ -118,12 +98,11 @@ export default function UserList() {
           {/* Scrollable Table */}
           <div className="overflow-y-auto max-h-[480px]">
             {/* Header */}
-            <div className="grid grid-cols-[2fr,2fr,1fr,1fr,1fr,1fr] gap-x-6 bg-gray-50 px-8 py-4 
+            <div className="grid grid-cols-[2fr,2fr,1fr,1fr,1fr] gap-x-6 bg-gray-50 px-8 py-4 
                             text-xs font-semibold text-gray-600 tracking-wide">
               <span>NAME</span>
               <span>EMAIL</span>
               <span>ROLE</span>
-              <span>STATUS</span>
               <span>DATE CREATED</span>
               <span>ACTIONS</span>
             </div>
@@ -145,11 +124,14 @@ export default function UserList() {
             {/* Rows */}
             {!loading && paginated.map((item, i) => (
               <div key={item.id}
-                  className={`grid grid-cols-[2fr,2fr,1fr,1fr,1fr,1fr] gap-x-6 px-8 py-4 text-sm items-center 
-                              ${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"}`}>
+                  className={`grid grid-cols-[2fr,2fr,1fr,1fr,1fr] gap-x-6 px-8 py-4 text-sm items-center 
+                              ${item.is_disabled ? 'bg-gray-100 opacity-60' : (i % 2 === 0 ? "bg-gray-50/60" : "bg-white")}`}>
                   
-                <span className="font-medium text-gray-800">{item.name}</span>
-                <span className="text-gray-700 truncate" title={item.email}>{item.email}</span>
+                <span className={`font-medium ${item.is_disabled ? 'text-gray-400' : 'text-gray-800'}`}>
+                  {item.name}
+                  {item.is_disabled && <span className="ml-2 text-xs text-red-500">(Disabled)</span>}
+                </span>
+                <span className={`truncate ${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`} title={item.email}>{item.email}</span>
 
                 <span>
                   <span className={`${getRoleBadgeColor(item.role)} px-3 py-1 rounded-full text-xs font-medium capitalize`}>
@@ -157,26 +139,16 @@ export default function UserList() {
                   </span>
                 </span>
 
-                <span>
-                  <span className={`${item.status === 'Verified' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'} px-3 py-1 rounded-full text-xs font-medium`}>
-                    {item.status}
-                  </span>
-                </span>
-
-                <span className="text-gray-700">{item.date}</span>
+                <span className={`${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`}>{item.date}</span>
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setEditModal({ open: true, user: item, newRole: item.role })}
-                    className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                    onClick={() => setDisableModal({ open: true, user: item })}
+                    className={`px-3 py-1 text-xs rounded-lg ${item.is_disabled 
+                      ? 'bg-green-50 text-green-600 hover:bg-green-100' 
+                      : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
                   >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setDeleteModal({ open: true, user: item })}
-                    className="px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-                  >
-                    Delete
+                    {item.is_disabled ? 'Enable' : 'Disable'}
                   </button>
                 </div>
               </div>
@@ -207,61 +179,31 @@ export default function UserList() {
           </button>
         </div>
 
-        {/* Delete Confirmation Modal */}
-        {deleteModal.open && (
+        {/* Disable/Enable Confirmation Modal */}
+        {disableModal.open && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Confirm Delete</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                {disableModal.user?.is_disabled ? 'Enable Account' : 'Disable Account'}
+              </h3>
               <p className="text-gray-600 mb-6">
-                Are you sure you want to delete user <strong>{deleteModal.user?.name}</strong>? This action cannot be undone.
+                Are you sure you want to {disableModal.user?.is_disabled ? 'enable' : 'disable'} the account for <strong>{disableModal.user?.name}</strong>?
+                {!disableModal.user?.is_disabled && ' This user will not be able to log in until re-enabled.'}
               </p>
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => setDeleteModal({ open: false, user: null })}
+                  onClick={() => setDisableModal({ open: false, user: null })}
                   className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  onClick={handleToggleDisable}
+                  className={`px-4 py-2 text-white rounded-lg ${disableModal.user?.is_disabled 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-yellow-600 hover:bg-yellow-700'}`}
                 >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Role Modal */}
-        {editModal.open && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit User Role</h3>
-              <p className="text-gray-600 mb-4">
-                Update role for <strong>{editModal.user?.name}</strong>
-              </p>
-              <select
-                value={editModal.newRole}
-                onChange={(e) => setEditModal(prev => ({ ...prev, newRole: e.target.value }))}
-                className="w-full border rounded-lg px-4 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {roleOptions.map(role => (
-                  <option key={role} value={role}>{role.toUpperCase()}</option>
-                ))}
-              </select>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setEditModal({ open: false, user: null, newRole: '' })}
-                  className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateRole}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Update
+                  {disableModal.user?.is_disabled ? 'Enable' : 'Disable'}
                 </button>
               </div>
             </div>

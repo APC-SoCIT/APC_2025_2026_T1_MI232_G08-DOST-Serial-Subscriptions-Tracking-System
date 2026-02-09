@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Head } from "@inertiajs/react";
 import { Listbox } from "@headlessui/react";
+import axios from 'axios';
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -114,6 +115,24 @@ return Math.max(diffDays / 365, 0.25);
 /* ================= COMPONENT ================= */
 
 export default function Dashboard() {
+  // Real user stats from database
+  const [userStats, setUserStats] = useState({ total: 0, approved: 0, pending: 0 });
+
+  // Fetch user stats from database on mount
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const response = await axios.get('/api/users/stats');
+        if (response.data.success) {
+          setUserStats(response.data.stats);
+        }
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+      }
+    };
+    fetchUserStats();
+  }, []);
+
   // FILTER MODE: year | month | week | custom
 const [filterMode, setFilterMode] = useState("year");
 
@@ -510,9 +529,9 @@ onClick={() => {
         {/* KPIs */}
         {/* ================= KPIs ================= */}
 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-  <KPI title="Total Users" value={stats.total} />
-  <KPI title="Approved Users" value={stats.approved} />
-  <KPI title="Pending Users" value={stats.pending} />
+  <KPI title="Total Users" value={userStats.total} />
+  <KPI title="Approved Users" value={userStats.approved} />
+  <KPI title="Pending Users" value={userStats.pending} />
 
   <KPI
     title="Approval Backlog (>7 days)"

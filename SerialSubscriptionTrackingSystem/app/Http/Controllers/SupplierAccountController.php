@@ -195,7 +195,7 @@ class SupplierAccountController extends Controller
             'email' => $supplierAccount->email,
             'password' => $supplierAccount->getRawPassword(), // Raw password, will be hashed by User model
             'role' => 'supplier',
-            'email_verified_at' => now(), // Mark as verified since admin approved
+            'email_verified_at' => now(), // Auto-verify since admin approved
         ]);
 
         // Link supplier account to user
