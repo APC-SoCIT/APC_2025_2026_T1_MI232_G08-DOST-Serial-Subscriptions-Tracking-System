@@ -55,6 +55,7 @@ function Sidebar() {
               width: 55,
               height: 55,
               borderRadius: 12,
+              cursor: 'pointer'
             }}
           />
           <div style={{
