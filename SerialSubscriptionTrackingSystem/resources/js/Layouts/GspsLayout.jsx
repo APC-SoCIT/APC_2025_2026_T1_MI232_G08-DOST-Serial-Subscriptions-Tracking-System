@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
@@ -6,6 +6,7 @@ import { FaTruck } from "react-icons/fa";
 import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
+import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 0 }}>{children}</span>
@@ -13,9 +14,10 @@ const Icon = ({ children }) => (
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
-  { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'dashboard-gsps-chat' },
-  { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-gsps-supplierinfo' },
-  { icon: <FaTruck />, label: 'Delivery Status', route: 'dashboard-gsps-deliverystatus' },
+  { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'gsps.chat' },
+  { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo' },
+  { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus' },
+  { icon: <MdMarkEmailRead />, label: 'Inspection Status', route: 'gsps.inspectionstatus' },
 ];
 
 function Sidebar() {
@@ -53,8 +55,9 @@ function Sidebar() {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item) => {
-            const isActive = currentRouteName.includes(item.route.replace('dashboard-gsps-', '')) || 
-                           (item.route === 'gsps.dashboard' && currentRouteName === 'gsps.dashboard');
+            const routePart = item.route.split('.').pop();
+            const isActive = currentRouteName.includes(routePart) || 
+                           (item.route === 'gsps.dashboard' && (currentRouteName === 'dashboard-gsps' || currentRouteName === ''));
             
             return (
               <li key={item.label}>
@@ -90,7 +93,7 @@ function Sidebar() {
   );
 }
 
-function TopBar() {
+function TopBar({ pageTitle }) {
   const [activeIcon, setActiveIcon] = useState(null);
   const user = usePage().props.auth.user;
 
@@ -118,7 +121,7 @@ function TopBar() {
       }}
     >
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        GSPS Dashboard
+        GSPS | {pageTitle || 'Dashboard'}
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
@@ -238,15 +241,53 @@ function TopBar() {
   );
 }
 
-export default function GSPSLayout({ children, title = 'GSPS Dashboard', hideTitle = false }) {
-  const isChatPage = title === 'GSPS Chat';
-  const isFullPage = hideTitle || isChatPage || title === 'Supplier Information' || title === 'Delivery Status' || title === 'Inspection Status';
+export default function GSPSLayout({ children, title, hideTitle = false }) {
+  const { isGsps, user } = useRole();
+  const currentUrl = usePage().url;
+  
+  // Get page title from sidebarItems based on current URL, or use passed title prop
+  const getPageTitle = () => {
+    if (title) return title;
+    const currentNav = sidebarItems.find(item => {
+      const routePath = item.route.split('.').pop();
+      return currentUrl.includes(routePath);
+    });
+    return currentNav ? currentNav.label : 'Dashboard';
+  };
+  
+  const pageTitle = getPageTitle();
+  const isChatPage = pageTitle === 'Chat';
+  const isFullPage = hideTitle || isChatPage || pageTitle === 'Supplier Info' || pageTitle === 'Delivery Status' || pageTitle === 'Inspection Status';
+
+  // Role verification - redirect if not GSPS
+  useEffect(() => {
+    if (user && !isGsps) {
+      const roleRoutes = {
+        admin: '/dashboard-admin',
+        supplier: '/dashboard-supplier',
+        tpu: '/dashboard-tpu',
+        inspection: '/inspection-dashboard',
+      };
+      const redirectPath = roleRoutes[user.role] || '/dashboard';
+      router.visit(redirectPath);
+    }
+  }, [user, isGsps]);
+
+  // Don't render layout if user is not GSPS
+  if (!user || !isGsps) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f4f8' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0f57a3', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <TopBar />
+        <TopBar pageTitle={pageTitle} />
         <div style={{ 
           flex: 1,
           padding: isFullPage ? '0' : '32px 40px',
@@ -257,14 +298,14 @@ export default function GSPSLayout({ children, title = 'GSPS Dashboard', hideTit
         }}>
           {!isFullPage && (
             <>
-              <h2 style={{ marginBottom: 8 }}>{title}</h2>
+              <h2 style={{ marginBottom: 8 }}>{pageTitle}</h2>
               <p style={{ color: '#666', marginBottom: 32 }}>
                 {(() => {
                   const hour = new Date().getHours();
                   if (hour < 12) return 'Good morning,';
                   if (hour < 18) return 'Good afternoon,';
                   return 'Good evening,';
-                })()} Welcome back!
+                })()} Welcome back, {user?.name || 'User'}!
               </p>
             </>
           )}

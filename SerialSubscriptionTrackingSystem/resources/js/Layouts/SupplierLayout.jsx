@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
@@ -8,6 +8,7 @@ import { FaTruckLoading } from "react-icons/fa";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
+import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -15,11 +16,11 @@ const Icon = ({ children }) => (
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'supplier.dashboard' },
-  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'dashboard-supplier-chat' },
-  { icon: <HiUsers />, label: 'List of Serials', route: 'dashboard-supplier-listofserial' },
-  { icon: <FaTruckFast />, label: 'Late', route: 'dashboard-supplier-late' },
-  { icon: <TbTruckOff />, label: 'Undelivered', route: 'dashboard-supplier-undelivered' },
-  { icon: <FaTruckLoading />, label: 'Delivered', route: 'dashboard-supplier-delivered' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'supplier.chat' },
+  { icon: <HiUsers />, label: 'List of Serials', route: 'supplier.listofserial' },
+  { icon: <FaTruckFast />, label: 'Late', route: 'supplier.late' },
+  { icon: <TbTruckOff />, label: 'Undelivered', route: 'supplier.undelivered' },
+  { icon: <FaTruckLoading />, label: 'Delivered', route: 'supplier.delivered' },
 ];
 
 function Sidebar() {
@@ -74,7 +75,9 @@ function Sidebar() {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item) => {
-            const isActive = currentRouteName.includes(item.route.replace('dashboard-supplier-', '').replace('supplier.dashboard', 'supplier'));
+            const routePart = item.route.split('.').pop();
+            const isActive = currentRouteName.includes(routePart) || 
+                           (item.route === 'supplier.dashboard' && (currentRouteName === 'dashboard-supplier' || currentRouteName === ''));
             
             return (
               <li key={item.label}>
@@ -136,7 +139,7 @@ function TopBar({ title }) {
       zIndex: 9
     }}>
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
-        {title || 'Supplier Dashboard'}
+        Supplier | {title || 'Dashboard'}
       </h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
@@ -193,7 +196,8 @@ function TopBar({ title }) {
                   <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>
                     {auth?.user?.name || 'Supplier'}
                   </h4>
-                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>Supplier Account</p>
+                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{auth?.user?.email || 'Supplier Account'}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: '#0B4DA1', textTransform: 'capitalize' }}>Role: {auth?.user?.role}</p>
                 </div>
               </div>
               <button
@@ -221,14 +225,52 @@ function TopBar({ title }) {
 }
 
 export default function SupplierLayout({ children, title }) {
-  const isChatPage = title === 'Supplier Chat';
-  const isFullPage = isChatPage || title === 'List of Serials' || title === 'Late Deliveries' || title === 'Undelivered' || title === 'Delivered';
+  const { isSupplier, user } = useRole();
+  const currentUrl = usePage().url;
+  
+  // Get page title from sidebarItems based on current URL, or use passed title prop
+  const getPageTitle = () => {
+    if (title) return title;
+    const currentNav = sidebarItems.find(item => {
+      const routePath = item.route.split('.').pop();
+      return currentUrl.includes(routePath);
+    });
+    return currentNav ? currentNav.label : 'Dashboard';
+  };
+  
+  const pageTitle = getPageTitle();
+  const isChatPage = pageTitle === 'Chat';
+  const isFullPage = isChatPage || pageTitle === 'List of Serials' || pageTitle === 'Late' || pageTitle === 'Undelivered' || pageTitle === 'Delivered';
+
+  // Role verification - redirect if not Supplier
+  useEffect(() => {
+    if (user && !isSupplier) {
+      const roleRoutes = {
+        admin: '/dashboard-admin',
+        gsps: '/dashboard-gsps',
+        tpu: '/dashboard-tpu',
+        inspection: '/inspection-dashboard',
+      };
+      const redirectPath = roleRoutes[user.role] || '/dashboard';
+      router.visit(redirectPath);
+    }
+  }, [user, isSupplier]);
+
+  // Don't render layout if user is not Supplier
+  if (!user || !isSupplier) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F6FA' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0B4DA1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <TopBar title={title} />
+        <TopBar title={pageTitle} />
         <div style={{ 
           flex: 1,
           padding: isChatPage ? '0' : '24px',
