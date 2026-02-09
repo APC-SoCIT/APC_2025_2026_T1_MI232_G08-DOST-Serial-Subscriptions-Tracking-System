@@ -1,29 +1,106 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function ListOfSerials() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterDate, setFilterDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
   const [filterYear, setFilterYear] = useState("");
+  const [serials, setSerials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const perPage = 4; // number of rows per page
 
-  const serials = [
-    { issueNo: "0094-2375", title: "Advanced Programming Concepts Journal", cost: 3600, date: "2025-12-10", status: "Approved" },
-    { issueNo: "0094-2376", title: "Business Analytics Review", cost: 4200, date: "2025-11-15", status: "Pending" },
-    { issueNo: "0094-2377", title: "Digital Marketing Insights", cost: 3000, date: "2025-10-10", status: "Rejected" },
-    { issueNo: "0094-2378", title: "Harvard Business Review", cost: 5000, date: "2025-12-01", status: "Approved" },
-    { issueNo: "0094-2380", title: "AI Research Journal", cost: 4000, date: "2025-12-20", status: "Approved" },
-    { issueNo: "0094-2381", title: "Cybersecurity Insights", cost: 3800, date: "2025-12-20", status: "Pending" },
-    { issueNo: "0094-2382", title: "Data Science Monthly", cost: 3500, date: "2025-12-21", status: "Approved" },
-    { issueNo: "0094-2383", title: "Machine Learning Digest", cost: 3000, date: "2025-12-19", status: "Rejected" },
-  ];
+  // Fetch serials from API
+  useEffect(() => {
+    fetchSerials();
+  }, []);
+
+  const fetchSerials = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await axios.get('/api/subscriptions/inspection-serials');
+      
+      if (response.data.success) {
+        setSerials(response.data.serials || []);
+      }
+    } catch (err) {
+      console.error('Error fetching serials:', err);
+      setError('Failed to load serials. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format date to readable words (e.g., "December 10, 2025")
+  const formatDateToWords = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  };
+
+  // Format inspection status for display
+  const formatInspectionStatus = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'Pending Inspection';
+      case 'inspected':
+        return 'Inspected';
+      case 'for_return':
+        return 'For Return';
+      default:
+        return status || 'Unknown';
+    }
+  };
+
+  // Get status badge styling
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'inspected':
+        return 'bg-green-100 text-green-800';
+      case 'for_return':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Normalize date to YYYY-MM-DD format
+  const normalizeDate = (dateString) => {
+    if (!dateString) return null;
+    // Handle various date formats and extract just the date part
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    // Return in YYYY-MM-DD format
+    return date.toISOString().split('T')[0];
+  };
 
   // Filter serials based on date, month, and year
   const filteredSerials = serials.filter((item) => {
-    const [year, month, day] = item.date.split("-");
+    const rawDate = item.receivedDate || item.deliveryDate;
+    const dateToUse = normalizeDate(rawDate);
     
-    if (filterDate && item.date !== filterDate) return false;
+    // If any filter is set but item has no date, exclude it
+    if ((filterDate || filterMonth || filterYear) && !dateToUse) return false;
+    
+    // If no filters are set, include all items
+    if (!filterDate && !filterMonth && !filterYear) return true;
+    
+    const [year, month, day] = dateToUse.split("-");
+    
+    if (filterDate) {
+      const normalizedFilterDate = normalizeDate(filterDate);
+      if (dateToUse !== normalizedFilterDate) return false;
+    }
     if (filterMonth && month !== filterMonth) return false;
     if (filterYear && year !== filterYear) return false;
     
@@ -35,8 +112,9 @@ export default function ListOfSerials() {
 
   return (
     <InspectionLayout header="List of Serials">
+      <h2 className="text-2xl font-bold mb-2" style={{ color: '#004A98' }}>List of Serials</h2>
       <p className="text-sm text-gray-500 mb-6">
-        Complete list of all serials in the system.
+        Complete list of all received serials in the system.
       </p>
 
       <div className="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
@@ -118,67 +196,86 @@ export default function ListOfSerials() {
           )}
         </div>
 
-        <table className="min-w-full text-base border-collapse">
-          <thead>
-            <tr className="text-gray-500 border-b border-gray-300">
-              <th className="text-left px-6 py-4">ISSUE NO.</th>
-              <th className="text-left px-6 py-4">SERIAL TITLE</th>
-              <th className="text-left px-6 py-4">COST</th>
-              <th className="text-left px-6 py-4">DATE</th>
-              <th className="text-left px-6 py-4">STATUS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedData.length > 0 ? (
-              paginatedData.map((item) => (
-                <tr key={item.issueNo} className="border-b border-gray-200 last:border-0">
-                  <td className="px-6 py-6 font-medium">{item.issueNo}</td>
-                  <td className="px-6 py-6">{item.title}</td>
-                  <td className="px-6 py-6">₱{item.cost.toLocaleString()}</td>
-                  <td className="px-6 py-6">{item.date}</td>
-                  <td className="px-6 py-6">
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        item.status === "Approved"
-                          ? "bg-green-100 text-green-800"
-                          : item.status === "Pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-500">
-                  No serials found for the selected filters
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Loading serials...</p>
+          </div>
+        )}
 
-        {/* Pagination Controls */}
-        <div className="flex justify-end mt-4 gap-2">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="px-3 py-1">{currentPage} / {totalPages}</span>
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12">
+            <p className="text-red-500 mb-4">{error}</p>
+            <button
+              onClick={fetchSerials}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Data Table */}
+        {!loading && !error && (
+          <>
+            <table className="min-w-full text-base border-collapse">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-300">
+                  <th className="text-left px-6 py-4">ISSN</th>
+                  <th className="text-left px-6 py-4">SERIAL TITLE</th>
+                  <th className="text-left px-6 py-4">SUPPLIER</th>
+                  <th className="text-left px-6 py-4">RECEIVED DATE</th>
+                  <th className="text-left px-6 py-4">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.length > 0 ? (
+                  paginatedData.map((item, index) => (
+                    <tr key={item.id || index} className="border-b border-gray-200 last:border-0">
+                      <td className="px-6 py-6 font-medium">{item.issn || 'N/A'}</td>
+                      <td className="px-6 py-6">{item.serialTitle || 'N/A'}</td>
+                      <td className="px-6 py-6">{item.supplierName || 'N/A'}</td>
+                      <td className="px-6 py-6">{formatDateToWords(item.receivedDate || item.deliveryDate)}</td>
+                      <td className="px-6 py-6">
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeClass(item.inspection_status)}`}
+                        >
+                          {formatInspectionStatus(item.inspection_status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-gray-500">
+                      No serials found for the selected filters
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Pagination Controls */}
+            <div className="flex justify-end mt-4 gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1">{currentPage} / {totalPages || 1}</span>
+              <button
+                disabled={currentPage === totalPages || totalPages === 0}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </InspectionLayout>
   );

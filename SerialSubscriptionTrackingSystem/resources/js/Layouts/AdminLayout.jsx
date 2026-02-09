@@ -1,22 +1,54 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { GoHome } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { MdOutlineNotificationsActive } from "react-icons/md";
+import { useRole } from "@/Components/RequireRole";
 
 /* ===================== NAV ITEMS ===================== */
 const navItems = [
-  { icon: <GoHome size={18} />, label: "Dashboard", href: "/dashboard" },
+  { icon: <GoHome size={18} />, label: "Dashboard", href: "/dashboard-admin" },
   { icon: <HiUsers size={18} />, label: "Account Approval", href: "/account-approval" },
   { icon: <ImStatsBars size={18} />, label: "List of Supplier", href: "/list-of-supplier" },
   { icon: <HiUsers size={18} />, label: "List of User", href: "/list-of-user" },
 ];
 
-export default function AdminLayout({ children, header }) {
+export default function AdminLayout({ children, header, title }) {
   const { url } = usePage();
+  const { isAdmin, user } = useRole();
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openAccount, setOpenAccount] = useState(false);
+
+  // Get page title from navItems based on current URL, or use passed title prop
+  const getPageTitle = () => {
+    if (title) return title;
+    const currentNav = navItems.find(item => url.startsWith(item.href));
+    return currentNav ? currentNav.label : 'Admin Dashboard';
+  };
+
+  // Role verification - redirect if not admin
+  useEffect(() => {
+    if (user && !isAdmin) {
+      const roleRoutes = {
+        supplier: '/dashboard-supplier',
+        gsps: '/dashboard-gsps',
+        tpu: '/dashboard-tpu',
+        inspection: '/inspection-dashboard',
+      };
+      const redirectPath = roleRoutes[user.role] || '/dashboard';
+      router.visit(redirectPath);
+    }
+  }, [user, isAdmin]);
+
+  // Don't render layout if user is not admin
+  if (!user || !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0f57a3]"></div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
@@ -119,7 +151,7 @@ export default function AdminLayout({ children, header }) {
         <header className="bg-white shadow-sm sticky top-0 z-20">
           <div className="px-6 py-5 flex items-center justify-between">
             <h2 className="text-[20px] font-semibold text-[#004A98]">
-              Admin Dashboard
+              Admin | {getPageTitle()}
             </h2>
 
             <div className="flex items-center gap-4">
@@ -163,14 +195,15 @@ export default function AdminLayout({ children, header }) {
                   }}
                   className="w-9 h-9 rounded-full bg-[#0f57a3] text-white font-semibold"
                 >
-                  A
+                  {user?.name?.charAt(0)?.toUpperCase() || 'A'}
                 </button>
 
                 {openAccount && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg p-4">
-                    <p className="text-sm font-semibold">Admin</p>
-                    <p className="text-xs text-gray-500 mb-4">
-                      System Administrator
+                    <p className="text-sm font-semibold">{user?.name || 'Admin'}</p>
+                    <p className="text-xs text-gray-500 mb-1">{user?.email}</p>
+                    <p className="text-xs text-blue-600 capitalize mb-4">
+                      Role: {user?.role || 'admin'}
                     </p>
 
                     <button

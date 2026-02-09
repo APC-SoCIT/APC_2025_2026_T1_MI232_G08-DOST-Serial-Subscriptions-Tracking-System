@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
@@ -9,6 +9,7 @@ import { VscAccount } from "react-icons/vsc";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { BsFillChatTextFill } from "react-icons/bs";
+import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -16,11 +17,11 @@ const Icon = ({ children }) => (
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'tpu.dashboard' },
-  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'dashboard-tpu-chat' },
-  { icon: <HiUsers />, label: 'Supplier Info', route: 'dashboard-tpu-supplierinfo' },
-  { icon: <ImStatsBars />, label: 'Subscription', route: 'dashboard-tpu-subscriptiontracking' },
-  { icon: <FaTruck />, label: 'Monitor Delivery', route: 'dashboard-tpu-monitordelivery' },
-  { icon: <FaUserPlus />, label: 'Add Account', route: 'dashboard-tpu-addaccount' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'tpu.chat' },
+  { icon: <HiUsers />, label: 'Supplier Info', route: 'tpu.supplierinfo' },
+  { icon: <ImStatsBars />, label: 'Subscription', route: 'tpu.subscriptiontracking' },
+  { icon: <FaTruck />, label: 'Monitor Delivery', route: 'tpu.monitordelivery' },
+  { icon: <FaUserPlus />, label: 'Add Account', route: 'tpu.addaccount' },
 ];
 
 function Sidebar({ currentRoute }) {
@@ -76,8 +77,9 @@ function Sidebar({ currentRoute }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const isActive = currentRouteName.includes(item.route.replace('dashboard-tpu-', '')) || 
-                           (item.route === 'tpu.dashboard' && currentRouteName === 'tpu.dashboard');
+            const routePart = item.route.split('.').pop();
+            const isActive = currentRouteName.includes(routePart) || 
+                           (item.route === 'tpu.dashboard' && (currentRouteName === 'dashboard-tpu' || currentRouteName === ''));
             
             return (
               <li key={item.label}>
@@ -115,7 +117,7 @@ function Sidebar({ currentRoute }) {
   );
 }
 
-function TopBar() {
+function TopBar({ pageTitle }) {
   const [activeIcon, setActiveIcon] = useState(null);
   const user = usePage().props.auth.user;
 
@@ -143,7 +145,7 @@ function TopBar() {
       }}
     >
       <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        TPU Dashboard
+        TPU | {pageTitle || 'Dashboard'}
       </h2>
       
 
@@ -245,15 +247,53 @@ function TopBar() {
   );
 }
 
-export default function TPULayout({ children, title = 'Dashboard', hideTitle = false }) {
-  const isChatPage = title === 'TPU Chat';
-  const isFullPage = hideTitle || isChatPage || title === 'Add Account' || title === 'Supplier Information' || title === 'Subscription Tracking' || title === 'Monitor Delivery';
+export default function TPULayout({ children, title, hideTitle = false }) {
+  const { isTpu, user } = useRole();
+  const currentUrl = usePage().url;
   
+  // Get page title from sidebarItems based on current URL, or use passed title prop
+  const getPageTitle = () => {
+    if (title) return title;
+    const currentNav = sidebarItems.find(item => {
+      const routePath = item.route.split('.').pop();
+      return currentUrl.includes(routePath);
+    });
+    return currentNav ? currentNav.label : 'Dashboard';
+  };
+  
+  const pageTitle = getPageTitle();
+  const isChatPage = pageTitle === 'Chat';
+  const isFullPage = hideTitle || isChatPage || pageTitle === 'Add Account' || pageTitle === 'Supplier Info' || pageTitle === 'Subscription' || pageTitle === 'Monitor Delivery';
+  
+  // Role verification - redirect if not TPU
+  useEffect(() => {
+    if (user && !isTpu) {
+      const roleRoutes = {
+        admin: '/dashboard-admin',
+        supplier: '/dashboard-supplier',
+        gsps: '/dashboard-gsps',
+        inspection: '/inspection-dashboard',
+      };
+      const redirectPath = roleRoutes[user.role] || '/dashboard';
+      router.visit(redirectPath);
+    }
+  }, [user, isTpu]);
+
+  // Don't render layout if user is not TPU
+  if (!user || !isTpu) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f4f8' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0f57a3', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <TopBar />
+        <TopBar pageTitle={pageTitle} />
         <div style={{ 
           flex: 1,
           padding: isFullPage ? '0' : '32px 40px',
@@ -264,14 +304,14 @@ export default function TPULayout({ children, title = 'Dashboard', hideTitle = f
         }}>
           {!isFullPage && (
             <>
-              <h2 style={{ marginBottom: 8 }}>{title}</h2>
+              <h2 style={{ marginBottom: 8 }}>{pageTitle}</h2>
               <p style={{ color: '#666', marginBottom: 32 }}>
                 {(() => {
                   const hour = new Date().getHours();
                   if (hour < 12) return 'Good morning,';
                   if (hour < 18) return 'Good afternoon,';
                   return 'Good evening,';
-                })()} Welcome back!
+                })()} Welcome back, {user?.name || 'User'}!
               </p>
             </>
           )}

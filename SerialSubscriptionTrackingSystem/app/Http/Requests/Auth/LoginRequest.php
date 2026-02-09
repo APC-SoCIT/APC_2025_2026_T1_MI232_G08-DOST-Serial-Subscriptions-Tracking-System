@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,15 @@ class LoginRequest extends FormRequest
         )) {
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
+            ]);
+        }
+
+        // Check if user is disabled
+        $user = Auth::user();
+        if ($user && ($user->is_disabled ?? false)) {
+            Auth::logout();
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been disabled. Please contact the administrator.',
             ]);
         }
     }

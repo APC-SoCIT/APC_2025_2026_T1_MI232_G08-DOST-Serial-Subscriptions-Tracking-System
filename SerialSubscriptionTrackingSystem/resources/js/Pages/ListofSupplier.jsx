@@ -27,10 +27,10 @@ export default function SupplierList() {
           phone: acc.phone,
           status: 'Active',
           date: new Date(acc.approved_at || acc.created_at).toLocaleDateString('en-US', { 
-            month: '2-digit', 
+            month: 'short', 
             day: '2-digit', 
-            year: '2-digit' 
-          }).replace(/\//g, '.'),
+            year: 'numeric' 
+          }),
         }));
         setAllSuppliers(suppliers);
       }

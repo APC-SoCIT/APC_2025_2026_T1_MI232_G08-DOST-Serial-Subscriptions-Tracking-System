@@ -108,6 +108,16 @@ class SupplierAccountController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
+        // Check for duplicate company name manually (MongoDB compatible)
+        $existingCompanyName = SupplierAccount::where('company_name', $validated['company_name'])->first();
+        if ($existingCompanyName) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => ['company_name' => ['This supplier name already exists.']],
+            ], 422);
+        }
+
         // Check for duplicate email manually (MongoDB compatible)
         $existingEmail = SupplierAccount::where('email', $validated['email'])->first();
         if ($existingEmail) {
@@ -185,6 +195,7 @@ class SupplierAccountController extends Controller
             'email' => $supplierAccount->email,
             'password' => $supplierAccount->getRawPassword(), // Raw password, will be hashed by User model
             'role' => 'supplier',
+            'email_verified_at' => now(), // Auto-verify since admin approved
         ]);
 
         // Link supplier account to user

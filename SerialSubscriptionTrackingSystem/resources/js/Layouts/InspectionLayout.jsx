@@ -1,22 +1,57 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { router, usePage, Link } from "@inertiajs/react";
 import { GoHome } from "react-icons/go";
-import { FaClipboardList, FaUserCircle } from "react-icons/fa";
+import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
 import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
+import { useRole } from "@/Components/RequireRole";
 
 const navItems = [
   { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
+  { icon: <FaClipboardCheck size={18} />, label: "Serials for Inspection", href: "/inspection-serialsforinspection" },
   { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", href: "/inspection-chat" },
 ];
 
 export default function InspectionLayout({ children, title }) {
   const { url } = usePage();
+  const { isInspection, user } = useRole();
   const [activeView, setActiveView] = useState("content");
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openAccount, setOpenAccount] = useState(false);
-  const isChatPage = title === 'Inspection Chat' || url.includes('/inspection-chat');
+  
+  // Get page title from navItems based on current URL, or use passed title prop
+  const getPageTitle = () => {
+    if (title) return title;
+    const currentNav = navItems.find(item => url.startsWith(item.href));
+    return currentNav ? currentNav.label : 'Dashboard';
+  };
+  
+  const pageTitle = getPageTitle();
+  const isChatPage = pageTitle === 'Chat' || url.includes('/inspection-chat');
+
+  // Role verification - redirect if not inspection
+  useEffect(() => {
+    if (user && !isInspection) {
+      const roleRoutes = {
+        admin: '/dashboard-admin',
+        supplier: '/dashboard-supplier',
+        gsps: '/dashboard-gsps',
+        tpu: '/dashboard-tpu',
+      };
+      const redirectPath = roleRoutes[user.role] || '/dashboard';
+      router.visit(redirectPath);
+    }
+  }, [user, isInspection]);
+
+  // Don't render layout if user is not inspection
+  if (!user || !isInspection) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0f57a3]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gray-100 text-gray-800 overflow-hidden">
@@ -110,7 +145,7 @@ export default function InspectionLayout({ children, title }) {
         <header className="sticky top-0 z-20 bg-white border-b">
           <div className="px-6 py-5 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#004A98]">
-              {title || 'Inspection Dashboard'}
+              Inspection | {pageTitle}
             </h2>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
@@ -183,11 +218,12 @@ export default function InspectionLayout({ children, title }) {
                         fontWeight: 'bold',
                         marginRight: 10,
                       }}>
-                        I
+                        {user?.name?.charAt(0)?.toUpperCase() || 'I'}
                       </div>
                       <div>
-                        <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>Inspection</h4>
-                        <p style={{ margin: 0, fontSize: 13, color: '#777' }}>Inspection Team</p>
+                        <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>{user?.name || 'Inspection'}</h4>
+                        <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{user?.email || 'Inspection Team'}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
                       </div>
                     </div>
 
