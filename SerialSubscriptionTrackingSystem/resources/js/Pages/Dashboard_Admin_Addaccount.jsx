@@ -1,19 +1,22 @@
-// resources/js/Pages/Dashboard_TPU_Addaccount.jsx
+// resources/js/Pages/Dashboard_Admin_Addaccount.jsx
 import React, { useState } from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import AdminLayout from '@/Layouts/AdminLayout';
 import { HiUserAdd } from "react-icons/hi";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';
 
+const ROLES = [
+  { value: 'tpu', label: 'TPU (Technical Processing Unit)' },
+  { value: 'gsps', label: 'GSPS (General Services & Procurement Section)' },
+  { value: 'inspection', label: 'Inspection' },
+];
+
 function AddAccount() {
   // Form state
   const [formData, setFormData] = useState({
-    company_name: '',
-    contact_person: '',
+    name: '',
     email: '',
-    phone: '',
-    address: '',
-    username: '',
+    role: '',
     password: '',
     password_confirmation: '',
   });
@@ -22,6 +25,7 @@ function AddAccount() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -33,32 +37,25 @@ function AddAccount() {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+    // Clear success message when editing
+    if (successMessage) {
+      setSuccessMessage('');
+    }
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.company_name.trim()) {
-      newErrors.company_name = 'Supplier name is required';
-    }
-    if (!formData.contact_person.trim()) {
-      newErrors.contact_person = 'Contact person is required';
+    if (!formData.name.trim()) {
+      newErrors.name = 'Full name is required';
     }
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email';
     }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    }
-    if (!formData.address.trim()) {
-      newErrors.address = 'Address is required';
-    }
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (formData.username.length < 4) {
-      newErrors.username = 'Username must be at least 4 characters';
+    if (!formData.role) {
+      newErrors.role = 'Please select a role';
     }
     if (!formData.password) {
       newErrors.password = 'Password is required';
@@ -82,43 +79,39 @@ function AddAccount() {
     
     if (validateForm()) {
       setSubmitting(true);
-      setErrors({}); // Clear previous errors
+      setErrors({});
+      setSuccessMessage('');
       
       try {
-        const response = await axios.post('/api/supplier-accounts', formData);
+        const response = await axios.post('/api/users', formData);
         
         if (response.data.success) {
           // Reset form
           setFormData({
-            company_name: '',
-            contact_person: '',
+            name: '',
             email: '',
-            phone: '',
-            address: '',
-            username: '',
+            role: '',
             password: '',
             password_confirmation: '',
           });
           
-          alert('Supplier account created successfully! Awaiting admin approval.');
+          const roleLabel = ROLES.find(r => r.value === formData.role)?.label || formData.role;
+          setSuccessMessage(`User account created successfully! Role: ${roleLabel}`);
         }
       } catch (error) {
         console.error('Error creating account:', error.response?.data || error);
         
         if (error.response?.status === 419) {
-          // CSRF token expired - global interceptor should have retried but might still fail
           alert('Session expired. Please refresh the page and try again.');
         } else if (error.response?.status === 403) {
-          alert('You do not have permission to create supplier accounts.');
+          alert('You do not have permission to create user accounts.');
         } else if (error.response?.data?.errors) {
-          // Handle Laravel validation errors
           const serverErrors = {};
           Object.keys(error.response.data.errors).forEach(key => {
             serverErrors[key] = error.response.data.errors[key][0];
           });
           setErrors(serverErrors);
         } else if (error.response?.data?.message) {
-          // Show the specific error message from the server
           alert(error.response.data.message);
         } else {
           alert('An error occurred while creating the account. Please try again.');
@@ -160,125 +153,92 @@ function AddAccount() {
         width: '100%',
         background: '#fff', 
         padding: '32px 48px',
+        borderRadius: 12,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
           <HiUserAdd style={{ fontSize: 28, color: '#004A98' }} />
-          <h2 style={{ color: '#004A98', margin: 0, fontSize: 22 }}>Create Supplier Account</h2>
+          <h2 style={{ color: '#004A98', margin: 0, fontSize: 22 }}>Create Staff Account</h2>
         </div>
 
+        {/* Success Message */}
+        {successMessage && (
+          <div style={{
+            background: '#d4edda',
+            border: '1px solid #c3e6cb',
+            color: '#155724',
+            padding: '12px 16px',
+            borderRadius: 8,
+            marginBottom: 20,
+            fontSize: 14,
+          }}>
+            {successMessage}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          {/* Supplier Name */}
+          {/* Full Name */}
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>
-              Supplier Name <span style={{ color: '#dc3545' }}>*</span>
+              Full Name <span style={{ color: '#dc3545' }}>*</span>
             </label>
             <input
               type="text"
-              name="company_name"
-              value={formData.company_name}
+              name="name"
+              value={formData.name}
               onChange={handleInputChange}
-              placeholder="Enter supplier name"
+              placeholder="Enter full name"
               style={{
                 ...inputStyle,
-                borderColor: errors.company_name ? '#dc3545' : '#ddd',
+                borderColor: errors.name ? '#dc3545' : '#ddd',
               }}
             />
-            {errors.company_name && <p style={errorStyle}>{errors.company_name}</p>}
+            {errors.name && <p style={errorStyle}>{errors.name}</p>}
           </div>
 
-          {/* Contact Person & Email Row */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>
-                Contact Person <span style={{ color: '#dc3545' }}>*</span>
-              </label>
-              <input
-                type="text"
-                name="contact_person"
-                value={formData.contact_person}
-                onChange={handleInputChange}
-                placeholder="Enter contact person"
-                style={{
-                  ...inputStyle,
-                  borderColor: errors.contact_person ? '#dc3545' : '#ddd',
-                }}
-              />
-              {errors.contact_person && <p style={errorStyle}>{errors.contact_person}</p>}
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>
-                Email Address <span style={{ color: '#dc3545' }}>*</span>
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="Enter email address"
-                style={{
-                  ...inputStyle,
-                  borderColor: errors.email ? '#dc3545' : '#ddd',
-                }}
-              />
-              {errors.email && <p style={errorStyle}>{errors.email}</p>}
-            </div>
-          </div>
-
-          {/* Phone & Address Row */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>
-                Phone Number <span style={{ color: '#dc3545' }}>*</span>
-              </label>
-              <input
-                type="text"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                placeholder="+63 XXX XXX XXXX"
-                style={{
-                  ...inputStyle,
-                  borderColor: errors.phone ? '#dc3545' : '#ddd',
-                }}
-              />
-              {errors.phone && <p style={errorStyle}>{errors.phone}</p>}
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>
-                Address <span style={{ color: '#dc3545' }}>*</span>
-              </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                placeholder="Enter address"
-                style={{
-                  ...inputStyle,
-                  borderColor: errors.address ? '#dc3545' : '#ddd',
-                }}
-              />
-              {errors.address && <p style={errorStyle}>{errors.address}</p>}
-            </div>
-          </div>
-
-          {/* Username */}
+          {/* Email */}
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>
-              Username <span style={{ color: '#dc3545' }}>*</span>
+              Email Address <span style={{ color: '#dc3545' }}>*</span>
             </label>
             <input
-              type="text"
-              name="username"
-              value={formData.username}
+              type="email"
+              name="email"
+              value={formData.email}
               onChange={handleInputChange}
-              placeholder="Enter username (min 4 characters)"
+              placeholder="Enter email address"
               style={{
                 ...inputStyle,
-                borderColor: errors.username ? '#dc3545' : '#ddd',
+                borderColor: errors.email ? '#dc3545' : '#ddd',
               }}
             />
-            {errors.username && <p style={errorStyle}>{errors.username}</p>}
+            {errors.email && <p style={errorStyle}>{errors.email}</p>}
+          </div>
+
+          {/* Role Selection */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>
+              Role <span style={{ color: '#dc3545' }}>*</span>
+            </label>
+            <select
+              name="role"
+              value={formData.role}
+              onChange={handleInputChange}
+              style={{
+                ...inputStyle,
+                borderColor: errors.role ? '#dc3545' : '#ddd',
+                cursor: 'pointer',
+                background: '#fff',
+              }}
+            >
+              <option value="">Select a role</option>
+              {ROLES.map(role => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+            {errors.role && <p style={errorStyle}>{errors.role}</p>}
           </div>
 
           {/* Password & Confirm Password Row */}
@@ -293,7 +253,7 @@ function AddAccount() {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="Enter password (min 8 characters)"
+                  placeholder="Enter password (min 8 characters, alphanumeric)"
                   style={{
                     ...inputStyle,
                     paddingRight: 40,
@@ -382,10 +342,10 @@ function AddAccount() {
   );
 }
 
-export default function Dashboard_TPU_Addaccount() {
+export default function Dashboard_Admin_Addaccount() {
   return (
-    <TPULayout title="Add Account">
+    <AdminLayout title="Add Account">
       <AddAccount />
-    </TPULayout>
+    </AdminLayout>
   );
 }

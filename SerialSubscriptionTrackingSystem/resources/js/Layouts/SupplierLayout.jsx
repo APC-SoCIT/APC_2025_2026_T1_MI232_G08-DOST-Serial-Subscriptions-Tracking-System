@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
-import { HiUsers } from "react-icons/hi";
-import { MdOutlineNotificationsActive } from "react-icons/md";
-import { VscAccount } from "react-icons/vsc";
+import { HiUsers, HiMenu, HiX } from "react-icons/hi";
+import { MdNotifications } from "react-icons/md";
+import { FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { FaTruckFast } from "react-icons/fa6";
 import { useRole } from "@/Components/RequireRole";
@@ -19,7 +19,7 @@ const sidebarItems = [
   { icon: <FaTruckFast />, label: 'Delivery', route: 'supplier.delivery' },
 ];
 
-function Sidebar() {
+function Sidebar({ isMobile, sidebarOpen }) {
   const currentRouteName = usePage().url;
   
   return (
@@ -33,9 +33,10 @@ function Sidebar() {
       flexDirection: 'column',
       alignItems: 'center',
       position: 'fixed',
-      left: 0,
+      left: isMobile ? (sidebarOpen ? 0 : -160) : 0,
       top: 0,
-      zIndex: 100
+      zIndex: 100,
+      transition: 'left 0.3s ease',
     }}>
       <Link href={route('supplier.dashboard')} style={{ textDecoration: 'none' }}>
         <div style={{
@@ -110,7 +111,7 @@ function Sidebar() {
   );
 }
 
-function TopBar({ title }) {
+function TopBar({ title, isMobile, sidebarOpen, setSidebarOpen }) {
   const [activeIcon, setActiveIcon] = useState(null);
   const { auth } = usePage().props;
 
@@ -128,20 +129,38 @@ function TopBar({ title }) {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '16px 32px',
+      padding: isMobile ? '12px 16px' : '16px 32px',
       boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
       background: '#fff',
       position: 'sticky',
       top: 0,
       zIndex: 9
     }}>
-      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
-        Supplier | {title || 'Dashboard'}
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {isMobile && (
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {sidebarOpen ? <HiX size={24} color="#0B4DA1" /> : <HiMenu size={24} color="#0B4DA1" />}
+          </button>
+        )}
+        <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: isMobile ? 16 : 20, margin: 0 }}>
+          Supplier | {title || 'Dashboard'}
+        </h2>
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdOutlineNotificationsActive />
+          <MdNotifications />
         </span>
         {activeIcon === 'notifications' && (
           <div style={{
@@ -161,7 +180,7 @@ function TopBar({ title }) {
         )}
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
-          <VscAccount size={22} />
+          <FaUserCircle size={22} />
           {activeIcon === 'account' && (
             <div style={{
               position: 'absolute',
@@ -174,28 +193,12 @@ function TopBar({ title }) {
               padding: '16px 18px',
               zIndex: 100,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  background: '#0B4DA1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  marginRight: 10,
-                }}>
-                  {auth?.user?.name?.charAt(0) || 'S'}
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>
-                    {auth?.user?.name || 'Supplier'}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{auth?.user?.email || 'Supplier Account'}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: '#0B4DA1', textTransform: 'capitalize' }}>Role: {auth?.user?.role}</p>
-                </div>
+              <div style={{ marginBottom: 12 }}>
+                <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>
+                  {auth?.user?.name || 'Supplier'}
+                </h4>
+                <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{auth?.user?.email || 'Supplier Account'}</p>
+                <p style={{ margin: 0, fontSize: 11, color: '#0B4DA1', textTransform: 'capitalize' }}>Role: {auth?.user?.role}</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -224,6 +227,21 @@ function TopBar({ title }) {
 export default function SupplierLayout({ children, title }) {
   const { isSupplier, user } = useRole();
   const currentUrl = usePage().url;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check screen size for responsive behavior
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(false);
+      }
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   
   // Get page title from sidebarItems based on current URL, or use passed title prop
   const getPageTitle = () => {
@@ -265,12 +283,24 @@ export default function SupplierLayout({ children, title }) {
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <TopBar title={pageTitle} />
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 99,
+          }}
+        />
+      )}
+      <Sidebar isMobile={isMobile} sidebarOpen={sidebarOpen} />
+      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', transition: 'margin-left 0.3s ease' }}>
+        <TopBar title={pageTitle} isMobile={isMobile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         <div style={{ 
           flex: 1,
-          padding: isChatPage ? '0' : '24px',
+          padding: isChatPage ? '0' : (isMobile ? '16px' : '24px'),
           overflow: isChatPage ? 'hidden' : 'auto',
           display: 'flex',
           flexDirection: 'column',
