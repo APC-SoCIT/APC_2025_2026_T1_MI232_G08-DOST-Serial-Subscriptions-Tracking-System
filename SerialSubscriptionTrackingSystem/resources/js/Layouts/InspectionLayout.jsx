@@ -28,7 +28,7 @@ export default function InspectionLayout({ children, title }) {
   };
   
   const pageTitle = getPageTitle();
-  const isChatPage = pageTitle === 'Chat' || url.includes('/inspection-chat');
+  const isChatPage = pageTitle?.toLowerCase().includes('chat') || url.includes('/inspection-chat');
 
   // Role verification - redirect if not inspection
   useEffect(() => {
@@ -47,14 +47,15 @@ export default function InspectionLayout({ children, title }) {
   // Don't render layout if user is not inspection
   if (!user || !isInspection) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0f57a3]"></div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F6FA' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0B4DA1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-100 text-gray-800 overflow-hidden">
+    <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       {/* ================= SIDEBAR ================= */}
       <aside style={{
         background: '#004A98',
@@ -142,11 +143,21 @@ export default function InspectionLayout({ children, title }) {
       {/* ================= MAIN ================= */}
       <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         {/* ================= TOPBAR ================= */}
-        <header className="sticky top-0 z-20 bg-white border-b">
-          <div className="px-6 py-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#004A98]">
-              Inspection | {pageTitle}
-            </h2>
+        <header style={{
+          fontSize: 22,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '16px 32px',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+          background: '#fff',
+          position: 'sticky',
+          top: 0,
+          zIndex: 9
+        }}>
+          <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
+            Inspection | {pageTitle}
+          </h2>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
               {/* Notifications */}
@@ -270,13 +281,19 @@ export default function InspectionLayout({ children, title }) {
                 )}
               </div>
             </div>
-          </div>
         </header>
 
         {/* ================= PAGE CONTENT ================= */}
-        <main className={`flex-1 bg-[#eef2f5] ${isChatPage ? 'p-0 overflow-hidden' : 'px-6 py-6 overflow-auto'} flex flex-col min-h-0`}>
+        <div style={{ 
+          flex: 1,
+          padding: isChatPage ? '0' : '24px',
+          overflow: isChatPage ? 'hidden' : 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
           {children}
-        </main>
+        </div>
       </div>
     </div>
   );

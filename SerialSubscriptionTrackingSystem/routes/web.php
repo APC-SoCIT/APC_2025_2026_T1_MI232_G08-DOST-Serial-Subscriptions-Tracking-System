@@ -86,7 +86,10 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
     })->name('tpu.monitordelivery');
     
     Route::get('/dashboard-tpu-addserial', function () {
-        return Inertia::render('Dashboard_TPU_AddSerial');
+        $approvedSuppliers = \App\Models\SupplierAccount::approved()->get();
+        return Inertia::render('Dashboard_TPU_AddSerial', [
+            'approvedSuppliers' => $approvedSuppliers,
+        ]);
     })->name('tpu.addserial');
     
     Route::get('/dashboard-tpu-addaccount', function () {
@@ -108,10 +111,6 @@ Route::middleware(['auth', 'verified', 'role:gsps'])->group(function () {
         return Inertia::render('Dashboard_GSPS_Deliverystatus');
     })->name('gsps.deliverystatus');
     
-    Route::get('/dashboard-gsps-inspectionstatus', function () {
-        return Inertia::render('Dashboard_GSPS_Inspectionstatus');
-    })->name('gsps.inspectionstatus');
-    
     Route::get('/dashboard-gsps-chat', function () {
         return Inertia::render('Dashboard_GSPS_Chat');
     })->name('gsps.chat');
@@ -127,17 +126,9 @@ Route::middleware(['auth', 'verified', 'role:supplier'])->group(function () {
         return Inertia::render('Dashboard_Supplier_ListofSerial');
     })->name('supplier.listofserial');
     
-    Route::get('/dashboard-supplier-late', function () {
-        return Inertia::render('Dashboard_Supplier_Late');
-    })->name('supplier.late');
-    
-    Route::get('/dashboard-supplier-undelivered', function () {
-        return Inertia::render('Dashboard_Supplier_Undelivered');
-    })->name('supplier.undelivered');
-    
-    Route::get('/dashboard-supplier-delivered', function () {
-        return Inertia::render('Dashboard_Supplier_Delivered');
-    })->name('supplier.delivered');
+    Route::get('/dashboard-supplier-delivery', function () {
+        return Inertia::render('Dashboard_Supplier_Delivery');
+    })->name('supplier.delivery');
     
     Route::get('/dashboard-supplier-chat', function () {
         return Inertia::render('Dashboard_Supplier_Chat');
@@ -149,6 +140,7 @@ Route::middleware(['auth', 'verified', 'role:inspection'])->group(function () {
     Route::get('/inspection-dashboard', fn () => Inertia::render('Dashboard_Inspection'))->name('inspection.dashboard');
     Route::get('/inspection-date', fn () => Inertia::render('View_by_date'))->name('inspection.date');
     Route::get('/inspection-serials', fn () => Inertia::render('ListofSerials'))->name('inspection.serials');
+    Route::get('/inspection-serialsforinspection', fn () => Inertia::render('Dashboard_Inspection_Serialsforinspection'))->name('inspection.serialsforinspection');
     Route::get('/inspection-chat', fn () => Inertia::render('Dashboard_Inspection_Chat'))->name('inspection.chat');
 });
 
@@ -186,9 +178,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::post('/api/supplier-accounts/{id}/reject', [SupplierAccountController::class, 'reject'])->name('supplier-accounts.reject');
 });
 
-// ===================== ADMIN + TPU API ROUTES =====================
-Route::middleware(['auth', 'role:admin,tpu'])->group(function () {
-    // Supplier Account Management - Admin and TPU can view
+// ===================== ADMIN + TPU + GSPS API ROUTES =====================
+Route::middleware(['auth', 'role:admin,tpu,gsps'])->group(function () {
+    // Supplier Account Management - Admin, TPU, and GSPS can view
     Route::prefix('api/supplier-accounts')->group(function () {
         Route::get('/', [SupplierAccountController::class, 'index'])->name('supplier-accounts.index');
         Route::get('/pending', [SupplierAccountController::class, 'pending'])->name('supplier-accounts.pending');
@@ -201,16 +193,24 @@ Route::middleware(['auth', 'role:admin,tpu'])->group(function () {
     Route::post('/api/supplier-accounts', [SupplierAccountController::class, 'store'])->name('supplier-accounts.store');
 });
 
-// ===================== TPU + GSPS + INSPECTION API ROUTES =====================
-Route::middleware(['auth', 'role:admin,tpu,gsps,inspection'])->group(function () {
+// ===================== TPU + GSPS + INSPECTION + SUPPLIER API ROUTES =====================
+Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(function () {
     // Subscription viewing - multiple roles can view
     Route::prefix('api/subscriptions')->group(function () {
         Route::get('/', [SubscriptionController::class, 'index'])->name('subscriptions.index');
         Route::get('/stats', [SubscriptionController::class, 'stats'])->name('subscriptions.stats');
         Route::get('/supplier-serials', [SubscriptionController::class, 'getSupplierSerials'])->name('subscriptions.supplierSerials');
         Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
+        Route::get('/monitored-deliveries', [SubscriptionController::class, 'getMonitoredDeliveries'])->name('subscriptions.monitoredDeliveries');
+        Route::get('/inspection-serials', [SubscriptionController::class, 'getSerialsForInspection'])->name('subscriptions.inspectionSerials');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
     });
+});
+
+// ===================== INSPECTION-ONLY API ROUTES =====================
+Route::middleware(['auth', 'role:inspection'])->group(function () {
+    // Inspection submit - only inspection role can submit inspections
+    Route::post('/api/subscriptions/{id}/submit-inspection', [SubscriptionController::class, 'submitInspection'])->name('subscriptions.submitInspection');
 });
 
 // ===================== TPU-ONLY API ROUTES =====================
@@ -225,11 +225,11 @@ Route::middleware(['auth', 'role:tpu'])->group(function () {
     });
 });
 
-// ===================== TPU + GSPS UPDATE ROUTES =====================
-Route::middleware(['auth', 'role:tpu,gsps'])->group(function () {
-    // Serial status updates - TPU and GSPS can update
+// ===================== TPU + GSPS + SUPPLIER UPDATE ROUTES =====================
+Route::middleware(['auth', 'role:tpu,gsps,supplier'])->group(function () {
+    // Serial status updates - TPU, GSPS, and Supplier can update
     Route::put('/api/subscriptions/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
-    Route::put('/api/subscriptions/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
+    Route::post('/api/subscriptions/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
 });
 
 require __DIR__.'/auth.php';
