@@ -2159,8 +2159,8 @@ function SubscriptionTracking() {
 
 export default function DashboardTPUSubscriptionTracking() {
   return (
-    <TPULayout hideTitle={true}>
-      <SubscriptionTracking />
-    </TPULayout>
+    <TPULayout title="Subscription Tracking">
+          <SubscriptionTracking />
+        </TPULayout>
   );
 }

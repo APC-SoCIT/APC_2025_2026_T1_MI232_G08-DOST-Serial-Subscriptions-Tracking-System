@@ -975,8 +975,8 @@ function SupplierInfo() {
 
 export default function DashboardTPUSupplierInfo() {
   return (
-    <TPULayout hideTitle={true}>
-      <SupplierInfo />
-    </TPULayout>
+    <TPULayout title="Supplier Info">
+          <SupplierInfo />
+        </TPULayout>
   );
 }

@@ -382,7 +382,7 @@ function AddAccount() {
 
 export default function Dashboard_TPU_Addaccount() {
   return (
-    <TPULayout hideTitle={true}>
+    <TPULayout title="Add Account">
       <AddAccount />
     </TPULayout>
   );

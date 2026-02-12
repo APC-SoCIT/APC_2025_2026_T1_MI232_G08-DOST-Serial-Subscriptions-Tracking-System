@@ -5,7 +5,7 @@ import ChatComponent from '@/Components/Chat/ChatComponent';
 
 export default function DashboardInspectionChat() {
   return (
-    <InspectionLayout title="Inspection Chat">
+    <InspectionLayout title="Chat">
       <ChatComponent 
         primaryColor="#004A98"
         currentUserRole="inspection"

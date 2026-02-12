@@ -133,7 +133,7 @@ function TopBar() {
         zIndex: 9
       }}
     >
-      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Serial Subscription Tracking System</h2>
+      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | List of Serials</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
