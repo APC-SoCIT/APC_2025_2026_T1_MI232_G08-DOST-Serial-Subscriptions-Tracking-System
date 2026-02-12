@@ -5,7 +5,7 @@ import ChatComponent from '@/Components/Chat/ChatComponent';
 
 export default function DashboardTPUChat() {
   return (
-    <TPULayout title="TPU Chat">
+    <TPULayout title="Chat">
       <ChatComponent 
         primaryColor="#004A98"
         currentUserRole="tpu"

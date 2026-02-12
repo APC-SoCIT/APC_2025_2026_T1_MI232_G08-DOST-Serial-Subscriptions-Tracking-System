@@ -5,7 +5,7 @@ import ChatComponent from '@/Components/Chat/ChatComponent';
 
 export default function DashboardGSPS_Chat() {
   return (
-    <GSPSLayout title="GSPS Chat">
+    <GSPSLayout title="Chat">
       <ChatComponent 
         primaryColor="#004A98"
         currentUserRole="gsps"

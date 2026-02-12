@@ -352,8 +352,8 @@ function MonitorDelivery() {
 
 export default function DashboardTPUMonitorDelivery() {
   return (
-    <TPULayout hideTitle={true}>
-      <MonitorDelivery />
-    </TPULayout>
+    <TPULayout title="Monitor Delivery">
+          <MonitorDelivery />
+        </TPULayout>
   );
 }
