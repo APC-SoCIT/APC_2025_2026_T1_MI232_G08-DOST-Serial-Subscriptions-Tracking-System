@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
-import { HiUsers } from "react-icons/hi";
-import { FaTruck } from "react-icons/fa";
-import { VscAccount } from "react-icons/vsc";
-import { MdOutlineNotificationsActive } from "react-icons/md";
-import { IoChatboxEllipsesOutline } from "react-icons/io5";
+import { HiUsers, HiMenu, HiX } from "react-icons/hi";
+import { FaTruck, FaUserCircle } from "react-icons/fa";
+import { MdNotifications } from "react-icons/md";
+import { BsFillChatTextFill } from "react-icons/bs";
 import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
@@ -14,43 +13,64 @@ const Icon = ({ children }) => (
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
-  { icon: <IoChatboxEllipsesOutline />, label: 'Chat', route: 'gsps.chat' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo' },
   { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus' },
 ];
 
-function Sidebar() {
+function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
   const currentRouteName = usePage().url.split('/').pop() || 'gsps.dashboard';
+  const sidebarWidth = isMobile ? 200 : 160;
   
   return (
     <div style={{
       background: '#004A98',
       color: '#fff',
-      width: 160,
+      width: sidebarWidth,
       minHeight: '100vh',
       padding: '20px 0',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       position: 'fixed',
-      left: 0,
+      left: isMobile ? (sidebarOpen ? 0 : -sidebarWidth) : 0,
       top: 0,
-      zIndex: 100
+      zIndex: 100,
+      transition: 'left 0.3s ease',
     }}>
+      {/* Close button for mobile */}
+      {isMobile && (
+        <button
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          <HiX size={24} />
+        </button>
+      )}
+
       <Link href={route('gsps.dashboard')} style={{ textDecoration: 'none' }}>
         <div style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           gap: 10,
-          marginBottom: 24
+          marginBottom: 24,
+          marginTop: isMobile ? 20 : 0,
         }}>
           <img
             src="/images/dost-logo1.png"
             alt="LOGO"
             style={{
-              width: 55,
-              height: 55,
+              width: isMobile ? 45 : 55,
+              height: isMobile ? 45 : 55,
               borderRadius: 12,
               cursor: 'pointer'
             }}
@@ -58,7 +78,7 @@ function Sidebar() {
           <div style={{
             color: '#fff',
             fontWeight: 600,
-            fontSize: 16,
+            fontSize: isMobile ? 14 : 16,
             letterSpacing: 1,
             fontFamily: 'Montserrat Bold',
             textAlign: 'left',
@@ -80,18 +100,19 @@ function Sidebar() {
               <li key={item.label}>
                 <Link
                   href={route(item.route)}
+                  onClick={() => isMobile && setSidebarOpen(false)}
                   style={{
                     margin: '10px 0',
                     display: 'flex',
                     alignItems: 'center',
                     cursor: 'pointer',
-                    fontSize: 16,
+                    fontSize: isMobile ? 14 : 16,
                     fontWeight: 500,
                     color: '#fff',
                     background: isActive ? '#0062f4ff' : 'transparent',
                     borderRadius: 6,
                     padding: '8px 12px',
-                    width: '140px',
+                    width: isMobile ? '170px' : '140px',
                     marginLeft: '10px',
                     transition: 'background 0.2s, transform 0.1s',
                     boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
@@ -99,7 +120,7 @@ function Sidebar() {
                   }}
                 >
                   <Icon>{item.icon}</Icon>
-                  <span style={{ fontSize: 15 }}>{item.label}</span>
+                  <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
                 </Link>
               </li>
             );
@@ -110,7 +131,7 @@ function Sidebar() {
   );
 }
 
-function TopBar({ pageTitle }) {
+function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
   const [activeIcon, setActiveIcon] = useState(null);
   const user = usePage().props.auth.user;
 
@@ -129,7 +150,7 @@ function TopBar({ pageTitle }) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '16px 32px',
+        padding: isMobile ? '12px 16px' : '16px 32px',
         boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
         background: '#fff',
         position: 'sticky',
@@ -137,13 +158,29 @@ function TopBar({ pageTitle }) {
         zIndex: 99
       }}
     >
-      <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: 20 }}>
-        GSPS | {pageTitle || 'Dashboard'}
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Hamburger menu for mobile */}
+        {isMobile && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 4,
+            }}
+          >
+            <HiMenu size={24} color="#004A98" />
+          </button>
+        )}
+        <h2 style={{ color: '#004A98', fontWeight: 600, fontSize: isMobile ? 16 : 20 }}>
+          GSPS | {pageTitle || 'Dashboard'}
+        </h2>
+      </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer', position: 'relative' }}>
-          <MdOutlineNotificationsActive />
+          <MdNotifications />
           
           {activeIcon === 'notifications' && (
             <div
@@ -154,7 +191,7 @@ function TopBar({ pageTitle }) {
                 background: '#fff',
                 borderRadius: 10,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                width: 200,
+                width: isMobile ? 180 : 200,
                 padding: '16px 18px',
                 zIndex: 10000,
                 transition: 'all 0.2s ease',
@@ -166,7 +203,7 @@ function TopBar({ pageTitle }) {
         </span>
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
-          <VscAccount size={22} />
+          <FaUserCircle size={22} />
           
           {activeIcon === 'account' && (
             <div
@@ -177,59 +214,21 @@ function TopBar({ pageTitle }) {
                 background: '#fff',
                 borderRadius: 10,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                width: 200,
+                width: isMobile ? 180 : 200,
                 padding: '16px 18px',
                 zIndex: 1000,
                 transition: 'all 0.2s ease',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    background: '#004A98',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    marginRight: 10,
-                  }}
-                >
-                  {user?.name?.charAt(0) || 'G'}
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>
-                    {user?.name || 'GSPS User'}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: 13, color: '#777' }}>
-                    {user?.email || 'Government Serial Procurement'}
-                  </p>
-                </div>
+              <div style={{ marginBottom: 12 }}>
+                <h4 style={{ margin: 0, fontSize: 14, color: '#222' }}>
+                  {user?.name || 'GSPS User'}
+                </h4>
+                <p style={{ margin: 0, fontSize: 11, color: '#777' }}>
+                  {user?.email || 'Government Serial Procurement'}
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
               </div>
-
-              <Link
-                href={route('profile.edit')}
-                style={{
-                  width: '100%',
-                  display: 'block',
-                  background: '#f8f9fa',
-                  color: '#333',
-                  border: 'none',
-                  padding: '8px 0',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  textAlign: 'center',
-                  textDecoration: 'none',
-                  marginBottom: 8,
-                }}
-              >
-                Profile
-              </Link>
 
               <button
                 onClick={handleLogout}
@@ -261,6 +260,22 @@ function TopBar({ pageTitle }) {
 export default function GSPSLayout({ children, title, hideTitle = false }) {
   const { isGsps, user } = useRole();
   const currentUrl = usePage().url;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(false);
+      }
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   
   // Get page title from sidebarItems based on current URL, or use passed title prop
   const getPageTitle = () => {
@@ -302,12 +317,33 @@ export default function GSPSLayout({ children, title, hideTitle = false }) {
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar />
-      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <TopBar pageTitle={pageTitle} />
+      {/* Mobile Overlay */}
+      {isMobile && sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 90,
+          }}
+        />
+      )}
+
+      <Sidebar isMobile={isMobile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <div style={{ 
+        flex: 1, 
+        marginLeft: isMobile ? 0 : 160, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100vh', 
+        overflow: 'hidden',
+        transition: 'margin-left 0.3s ease',
+      }}>
+        <TopBar pageTitle={pageTitle} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
         <div style={{ 
           flex: 1,
-          padding: isChatPage ? '0' : '24px',
+          padding: isChatPage ? '0' : (isMobile ? '16px' : '24px'),
           overflow: isChatPage ? 'hidden' : 'auto',
           display: 'flex',
           flexDirection: 'column',
