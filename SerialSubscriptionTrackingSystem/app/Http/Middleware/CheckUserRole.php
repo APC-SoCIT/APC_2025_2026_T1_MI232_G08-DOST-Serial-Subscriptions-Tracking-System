@@ -31,7 +31,13 @@ class CheckUserRole
             }
         }
 
-        // User doesn't have the required role - redirect to their dashboard
+        // User doesn't have the required role
+        // For API requests, return JSON response
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Insufficient permissions.'], 403);
+        }
+        
+        // For regular requests, redirect to their dashboard
         return redirect()->to($this->getRoleDashboard($user));
     }
 

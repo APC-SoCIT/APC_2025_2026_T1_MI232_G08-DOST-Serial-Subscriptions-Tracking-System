@@ -529,11 +529,21 @@ class SubscriptionController extends Controller
         
         $validated = $request->validate([
             'serial_issn' => 'required|string',
+            'attachment' => 'nullable|image|max:5120', // 5MB max
         ]);
         
         $serials = $subscription->serials ?? [];
         $updated = false;
         $receivedDate = now()->toISOString();
+        $attachmentUrl = null;
+        
+        // Handle file upload
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = 'serial_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $file->storeAs('public/serial-attachments', $filename);
+            $attachmentUrl = '/storage/serial-attachments/' . $filename;
+        }
         
         foreach ($serials as &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
@@ -541,6 +551,10 @@ class SubscriptionController extends Controller
                 $serial['receivedDate'] = $receivedDate;
                 // Set inspection status to pending when received
                 $serial['inspection_status'] = 'pending';
+                // Store attachment URL if uploaded
+                if ($attachmentUrl) {
+                    $serial['attachmentUrl'] = $attachmentUrl;
+                }
                 $updated = true;
                 break;
             }
@@ -560,6 +574,7 @@ class SubscriptionController extends Controller
             'success' => true,
             'message' => 'Serial marked as received',
             'receivedDate' => $receivedDate,
+            'attachmentUrl' => $attachmentUrl,
             'subscription' => $subscription,
         ]);
     }
@@ -630,15 +645,31 @@ class SubscriptionController extends Controller
         $validated = $request->validate([
             'serial_issn' => 'required|string',
             'inspector_name' => 'required|string|max:255',
-            'condition' => 'required|string|in:Good,For Return',
-            'checklist' => 'nullable|array',
+            'condition' => 'required|string|in:Acceptable,For Return',
+            'checklist' => 'nullable',
             'other_description' => 'nullable|string',
             'remarks' => 'nullable|string',
+            'attachment' => 'nullable|image|max:5120', // 5MB max
         ]);
+        
+        // Parse checklist if it's a JSON string
+        $checklist = $validated['checklist'] ?? null;
+        if (is_string($checklist)) {
+            $checklist = json_decode($checklist, true);
+        }
         
         $serials = $subscription->serials ?? [];
         $updated = false;
         $inspectionDate = now()->toISOString();
+        $attachmentUrl = null;
+        
+        // Handle file upload
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = 'inspection_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $file->storeAs('public/inspection-attachments', $filename);
+            $attachmentUrl = '/storage/inspection-attachments/' . $filename;
+        }
         
         // Determine inspection status based on condition
         $inspectionStatus = $validated['condition'] === 'For Return' ? 'for_return' : 'inspected';
@@ -656,9 +687,14 @@ class SubscriptionController extends Controller
                 $serial['inspector_name'] = $validated['inspector_name'];
                 $serial['condition'] = $validated['condition'];
                 $serial['inspection_date'] = $inspectionDate;
-                $serial['inspection_checklist'] = $validated['checklist'] ?? null;
+                $serial['inspection_checklist'] = $checklist;
                 $serial['other_description'] = $validated['other_description'] ?? null;
                 $serial['inspection_remarks'] = $validated['remarks'] ?? null;
+                
+                // Store attachment URL if uploaded
+                if ($attachmentUrl) {
+                    $serial['inspection_attachment'] = $attachmentUrl;
+                }
                 
                 // Calculate serial cost (quantity * unitPrice)
                 $quantity = floatval($serial['quantity'] ?? 1);
@@ -679,7 +715,7 @@ class SubscriptionController extends Controller
         
         $subscription->serials = $serials;
         
-        // Update delivered_cost when serial is marked as delivered (Good condition)
+        // Update delivered_cost when serial is marked as delivered (Acceptable condition)
         // Only add cost if it wasn't already inspected before (to prevent double-counting)
         if ($inspectionStatus === 'inspected' && !$wasAlreadyInspected && $serialCost > 0) {
             $subscription->delivered_cost = ($subscription->delivered_cost ?? 0) + $serialCost;
@@ -701,6 +737,7 @@ class SubscriptionController extends Controller
             'message' => 'Inspection submitted successfully',
             'inspection_status' => $inspectionStatus,
             'inspection_date' => $inspectionDate,
+            'attachmentUrl' => $attachmentUrl,
             'subscription' => $subscription,
         ]);
     }

@@ -156,7 +156,7 @@ function MonitorDelivery() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Delivery Monitoring</h2>
-            <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Track serials that have been inspected</p>
+            <p style={{ color: '#666', margin: 0, fontSize: 14 }}></p>
           </div>
           <button
             onClick={fetchMonitoredDeliveries}
