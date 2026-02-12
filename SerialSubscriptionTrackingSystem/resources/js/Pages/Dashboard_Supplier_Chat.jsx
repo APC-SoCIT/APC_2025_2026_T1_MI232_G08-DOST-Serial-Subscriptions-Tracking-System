@@ -5,7 +5,7 @@ import ChatComponent from '@/Components/Chat/ChatComponent';
 
 export default function Dashboard_Supplier_Chat() {
   return (
-    <SupplierLayout title="Supplier Chat">
+    <SupplierLayout title="Chat">
       <ChatComponent 
         primaryColor="#004A98"
         currentUserRole="supplier"

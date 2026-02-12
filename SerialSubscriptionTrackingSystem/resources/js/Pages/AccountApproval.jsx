@@ -27,10 +27,10 @@ export default function AccountApproval() {
           email: acc.email,
           contact: acc.phone,
           date: new Date(acc.created_at).toLocaleDateString('en-US', { 
-            month: '2-digit', 
-            day: '2-digit', 
+            month: 'long', 
+            day: 'numeric', 
             year: 'numeric' 
-          }).replace(/\//g, '.'),
+          }),
           role: 'Supplier',
           originalData: acc,
         }));

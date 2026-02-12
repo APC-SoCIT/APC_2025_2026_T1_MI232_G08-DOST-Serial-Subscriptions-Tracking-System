@@ -35,7 +35,8 @@ function SubscriptionTracking() {
     issn: '',
     frequency: 'Monthly',
     authorPublisher: '',
-    category: ''
+    category: '',
+    customCategory: ''
   });
   const [editSubmitting, setEditSubmitting] = useState(false);
   
@@ -47,14 +48,20 @@ function SubscriptionTracking() {
   const [serialFormData, setSerialFormData] = useState({
     serialTitle: '',
     issn: '',
-    language: 'English',
+    language: '',
     authorPublisher: '',
     supplierName: '',
     deliveryDate: '',
-    frequency: 'Biweekly',
+    frequency: '',
     category: '',
-    quantity: 1,
-    unitPrice: '0.00'
+    customCategory: '',
+    amount: 0,
+    unitPrice: '0.00',
+    issuesNo: '',
+    volumeStart: '',
+    volumeNumber: '',
+    issuesStart: '',
+    dateOfPublication: ''
   });
   const [serialItems, setSerialItems] = useState([]);
   
@@ -67,9 +74,9 @@ function SubscriptionTracking() {
   const [addedSuppliers, setAddedSuppliers] = useState([]);
 
   // Dropdown options for serial form
-  const languageOptions = ['English', 'French', 'Spanish', 'German', 'Japanese', 'Chinese'];
+  const languageOptions = ['English', 'Filipino'];
   const frequencyOptions = ['Biweekly', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
-  const categories = ['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education'];
+  const categories = ['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education', 'Others'];
   
   // Load suppliers from localStorage (fallback) but prioritize approved suppliers from backend
   // Also validate localStorage against approved suppliers to remove deleted ones
@@ -243,6 +250,9 @@ function SubscriptionTracking() {
 
   // Edit subscription handlers
   const handleEditSubscription = (subscription) => {
+    const existingCategory = subscription.category || subscription.serials?.[0]?.category || '';
+    const isCustomCategory = existingCategory && !['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education'].includes(existingCategory);
+    
     setEditSubscription(subscription);
     setEditFormData({
       serialTitle: subscription.serialTitle || '',
@@ -254,7 +264,8 @@ function SubscriptionTracking() {
       issn: subscription.issn || subscription.serials?.[0]?.issn || '',
       frequency: subscription.frequency || subscription.serials?.[0]?.frequency || 'Monthly',
       authorPublisher: subscription.authorPublisher || subscription.author_publisher || '',
-      category: subscription.category || subscription.serials?.[0]?.category || ''
+      category: isCustomCategory ? 'Others' : existingCategory,
+      customCategory: isCustomCategory ? existingCategory : ''
     });
     setShowEditModal(true);
   };
@@ -272,13 +283,19 @@ function SubscriptionTracking() {
       issn: '',
       frequency: 'Monthly',
       authorPublisher: '',
-      category: ''
+      category: '',
+      customCategory: ''
     });
   };
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
-    setEditFormData({ ...editFormData, [name]: value });
+    // If category is changed and it's not "Others", clear customCategory
+    if (name === 'category' && value !== 'Others') {
+      setEditFormData({ ...editFormData, [name]: value, customCategory: '' });
+    } else {
+      setEditFormData({ ...editFormData, [name]: value });
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -286,6 +303,11 @@ function SubscriptionTracking() {
       alert('Please fill in Serial Title and Supplier Name');
       return;
     }
+
+    // Use customCategory if category is "Others"
+    const finalCategory = editFormData.category === 'Others' 
+      ? editFormData.customCategory 
+      : editFormData.category;
 
     setEditSubmitting(true);
     try {
@@ -299,7 +321,7 @@ function SubscriptionTracking() {
         issn: editFormData.issn,
         frequency: editFormData.frequency,
         author_publisher: editFormData.authorPublisher,
-        category: editFormData.category
+        category: finalCategory
       });
 
       if (response.data.success) {
@@ -379,47 +401,108 @@ function SubscriptionTracking() {
     setSerialFormData({
       serialTitle: '',
       issn: '',
-      language: 'English',
+      language: '',
       authorPublisher: '',
       supplierName: '',
       deliveryDate: '',
-      frequency: 'Biweekly',
+      frequency: '',
       category: '',
-      quantity: 1,
-      unitPrice: '0.00'
+      customCategory: '',
+      amount: 0,
+      unitPrice: '0.00',
+      issuesNo: '',
+      volumeStart: '',
+      volumeNumber: '',
+      issuesStart: '',
+      dateOfPublication: ''
     });
     setSerialItems([]);
   };
 
+  // Calculate next delivery date based on frequency
+  const calculateDeliveryDate = (frequency) => {
+    const today = new Date();
+    let nextDate = new Date(today);
+    
+    switch (frequency) {
+      case 'Weekly':
+        nextDate.setDate(today.getDate() + 7);
+        break;
+      case 'Biweekly':
+        nextDate.setDate(today.getDate() + 14);
+        break;
+      case 'Monthly':
+        nextDate.setMonth(today.getMonth() + 1);
+        break;
+      case 'Quarterly':
+        nextDate.setMonth(today.getMonth() + 3);
+        break;
+      case 'Annually':
+        nextDate.setFullYear(today.getFullYear() + 1);
+        break;
+      default:
+        return '';
+    }
+    
+    // Format as YYYY-MM-DD for date input
+    return nextDate.toISOString().split('T')[0];
+  };
+
   const handleSerialInputChange = (e) => {
     const { name, value } = e.target;
-    setSerialFormData({ ...serialFormData, [name]: value });
+    
+    // If frequency is changed, automatically set the delivery date
+    if (name === 'frequency') {
+      const newDeliveryDate = calculateDeliveryDate(value);
+      setSerialFormData({ 
+        ...serialFormData, 
+        [name]: value,
+        deliveryDate: newDeliveryDate
+      });
+    } else if (name === 'category' && value !== 'Others') {
+      // If category is changed and it's not "Others", clear customCategory
+      setSerialFormData({ ...serialFormData, [name]: value, customCategory: '' });
+    } else {
+      setSerialFormData({ ...serialFormData, [name]: value });
+    }
   };
 
   const handleAddSerialItem = () => {
     if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierName || !serialFormData.deliveryDate) {
-      alert('Please fill in all required fields (Serial Title, ISSN, Supplier Name, Delivery Date)');
+      alert('Please fill in all required fields (Serial Title, ISSN, Supplier Name, Delivery Date). Volume and Issues fields are optional.');
       return;
     }
+
+    // Use customCategory if category is "Others"
+    const finalCategory = serialFormData.category === 'Others' 
+      ? serialFormData.customCategory 
+      : serialFormData.category;
 
     const newItem = {
       id: Date.now(),
       ...serialFormData,
-      totalPrice: (serialFormData.quantity * (parseFloat(serialFormData.unitPrice) || 0)).toFixed(2)
+      category: finalCategory,
+      totalPrice: (serialFormData.amount * (parseFloat(serialFormData.unitPrice) || 0)).toFixed(2)
     };
     setSerialItems([...serialItems, newItem]);
 
     setSerialFormData({
       serialTitle: '',
       issn: '',
-      language: 'English',
+      language: '',
       authorPublisher: '',
       supplierName: '',
       deliveryDate: '',
-      frequency: 'Biweekly',
+      frequency: '',
       category: '',
-      quantity: 1,
-      unitPrice: '0.00'
+      customCategory: '',
+      amount: 0,
+      unitPrice: '0.00',
+      issuesNo: '',
+      volumeStart: '',
+      volumeNumber: '',
+      issuesStart: '',
+      dateOfPublication: ''
     });
   };
 
@@ -449,7 +532,7 @@ function SubscriptionTracking() {
       const createdSubscriptions = [];
       
       for (const [supplierName, items] of Object.entries(supplierGroups)) {
-        const totalCost = items.reduce((sum, item) => sum + (item.quantity * parseFloat(item.unitPrice || 0)), 0);
+        const totalCost = items.reduce((sum, item) => sum + (item.amount * parseFloat(item.unitPrice || 0)), 0);
         const firstItem = items[0];
         
         const subscriptionData = {
@@ -468,7 +551,7 @@ function SubscriptionTracking() {
             deliveryDate: item.deliveryDate || null,
             language: item.language,
             category: item.category,
-            quantity: item.quantity,
+            amount: item.amount,
             unitPrice: item.unitPrice
           })),
           transactions: [
@@ -1042,19 +1125,20 @@ function SubscriptionTracking() {
                       background: '#fff'
                     }}
                   >
+                    <option value="">Select Language</option>
                     {languageOptions.map(lang => (
                       <option key={lang} value={lang}>{lang}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Author/Publisher</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Publisher</label>
                   <input
                     type="text"
                     name="authorPublisher"
                     value={serialFormData.authorPublisher}
                     onChange={handleSerialInputChange}
-                    placeholder="Enter author/publisher"
+                    placeholder="Enter publisher"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1129,6 +1213,7 @@ function SubscriptionTracking() {
                       background: '#fff'
                     }}
                   >
+                    <option value="">Select Frequency</option>
                     {frequencyOptions.map(freq => (
                       <option key={freq} value={freq}>{freq}</option>
                     ))}
@@ -1154,15 +1239,33 @@ function SubscriptionTracking() {
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                  {serialFormData.category === 'Others' && (
+                    <input
+                      type="text"
+                      name="customCategory"
+                      value={serialFormData.customCategory}
+                      onChange={handleSerialInputChange}
+                      placeholder="Enter custom category"
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #ddd',
+                        fontSize: '14px',
+                        background: '#fff',
+                        marginTop: '8px'
+                      }}
+                    />
+                  )}
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Quantity</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Amount</label>
                   <input
                     type="number"
-                    name="quantity"
-                    value={serialFormData.quantity}
+                    name="amount"
+                    value={serialFormData.amount}
                     onChange={handleSerialInputChange}
-                    min="1"
+                    min="0"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1182,6 +1285,95 @@ function SubscriptionTracking() {
                     onChange={handleSerialInputChange}
                     placeholder="0.00"
                     step="0.01"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issues No.</label>
+                  <input
+                    type="text"
+                    name="issuesNo"
+                    value={serialFormData.issuesNo}
+                    onChange={handleSerialInputChange}
+                    placeholder="e.g., 1-12"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Volume Start</label>
+                  <input
+                    type="text"
+                    name="volumeStart"
+                    value={serialFormData.volumeStart}
+                    onChange={handleSerialInputChange}
+                    placeholder="e.g., 1"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Volume Number</label>
+                  <input
+                    type="text"
+                    name="volumeNumber"
+                    value={serialFormData.volumeNumber}
+                    onChange={handleSerialInputChange}
+                    placeholder="e.g., Vol. 5"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issues Start</label>
+                  <input
+                    type="text"
+                    name="issuesStart"
+                    value={serialFormData.issuesStart}
+                    onChange={handleSerialInputChange}
+                    placeholder="e.g., Issue 1"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Date of Publication</label>
+                  <input
+                    type="date"
+                    name="dateOfPublication"
+                    value={serialFormData.dateOfPublication}
+                    onChange={handleSerialInputChange}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1229,7 +1421,7 @@ function SubscriptionTracking() {
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>ISSN</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Supplier</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Delivery Date</th>
-                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Qty</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Amount</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Unit Price</th>
                         <th style={{ padding: '12px', textAlign: 'center', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Action</th>
                       </tr>
@@ -1241,7 +1433,7 @@ function SubscriptionTracking() {
                           <td style={{ padding: '12px', fontSize: '13px', color: '#666' }}>{item.issn}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>{item.supplierName}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>{item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
-                          <td style={{ padding: '12px', fontSize: '13px' }}>{item.quantity}</td>
+                          <td style={{ padding: '12px', fontSize: '13px' }}>{item.amount}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>₱{parseFloat(item.unitPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
                             <button
@@ -1652,13 +1844,13 @@ function SubscriptionTracking() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Author/Publisher</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Publisher</label>
                   <input
                     type="text"
                     name="authorPublisher"
                     value={editFormData.authorPublisher}
                     onChange={handleEditInputChange}
-                    placeholder="Enter author/publisher"
+                    placeholder="Enter publisher"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1709,6 +1901,24 @@ function SubscriptionTracking() {
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                  {editFormData.category === 'Others' && (
+                    <input
+                      type="text"
+                      name="customCategory"
+                      value={editFormData.customCategory}
+                      onChange={handleEditInputChange}
+                      placeholder="Enter custom category"
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #ddd',
+                        fontSize: '14px',
+                        background: '#fff',
+                        marginTop: '8px'
+                      }}
+                    />
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Delivery Date</label>
@@ -1949,8 +2159,8 @@ function SubscriptionTracking() {
 
 export default function DashboardTPUSubscriptionTracking() {
   return (
-    <TPULayout hideTitle={true}>
-      <SubscriptionTracking />
-    </TPULayout>
+    <TPULayout title="Subscription Tracking">
+          <SubscriptionTracking />
+        </TPULayout>
   );
 }

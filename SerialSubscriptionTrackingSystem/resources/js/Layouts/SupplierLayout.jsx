@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
-import { FaTruckFast } from "react-icons/fa6";
-import { TbTruckOff } from "react-icons/tb";
-import { FaTruckLoading } from "react-icons/fa";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
+import { FaTruckFast } from "react-icons/fa6";
 import { useRole } from "@/Components/RequireRole";
 
 const Icon = ({ children }) => (
@@ -18,9 +16,7 @@ const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'supplier.dashboard' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'supplier.chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: 'supplier.listofserial' },
-  { icon: <FaTruckFast />, label: 'Late', route: 'supplier.late' },
-  { icon: <TbTruckOff />, label: 'Undelivered', route: 'supplier.undelivered' },
-  { icon: <FaTruckLoading />, label: 'Delivered', route: 'supplier.delivered' },
+  { icon: <FaTruckFast />, label: 'Delivery', route: 'supplier.delivery' },
 ];
 
 function Sidebar() {
@@ -56,6 +52,7 @@ function Sidebar() {
               width: 55,
               height: 55,
               borderRadius: 12,
+              cursor: 'pointer'
             }}
           />
           <div style={{
@@ -239,7 +236,7 @@ export default function SupplierLayout({ children, title }) {
   };
   
   const pageTitle = getPageTitle();
-  const isChatPage = pageTitle === 'Chat';
+  const isChatPage = pageTitle?.toLowerCase().includes('chat');
   const isFullPage = isChatPage || pageTitle === 'List of Serials' || pageTitle === 'Late' || pageTitle === 'Undelivered' || pageTitle === 'Delivered';
 
   // Role verification - redirect if not Supplier

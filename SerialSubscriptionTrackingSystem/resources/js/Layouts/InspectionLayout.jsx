@@ -28,7 +28,7 @@ export default function InspectionLayout({ children, title }) {
   };
   
   const pageTitle = getPageTitle();
-  const isChatPage = pageTitle === 'Chat' || url.includes('/inspection-chat');
+  const isChatPage = pageTitle?.toLowerCase().includes('chat') || url.includes('/inspection-chat');
 
   // Role verification - redirect if not inspection
   useEffect(() => {
@@ -47,51 +47,117 @@ export default function InspectionLayout({ children, title }) {
   // Don't render layout if user is not inspection
   if (!user || !isInspection) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0f57a3]"></div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F6FA' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0B4DA1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-100 text-gray-800 overflow-hidden">
+    <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       {/* ================= SIDEBAR ================= */}
-      <aside className="fixed left-0 top-0 h-screen w-52 bg-[#0f57a3] text-white">
-        <div className="px-5 py-5 flex items-center gap-3 border-b border-blue-800">
-          <img src="/images/dost-logo1.png" className="w-9 h-9 rounded" />
-          <span className="font-semibold text-sm">DOST STII</span>
-        </div>
+      <aside style={{
+        background: '#004A98',
+        color: '#fff',
+        width: 160,
+        minHeight: '100vh',
+        padding: '20px 0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        zIndex: 100
+      }}>
+        <Link href="/inspection-dashboard" style={{ textDecoration: 'none' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 24
+          }}>
+            <img
+              src="/images/dost-logo1.png"
+              alt="LOGO"
+              style={{
+                width: 55,
+                height: 55,
+                borderRadius: 12,
+                cursor: 'pointer'
+              }}
+            />
+            <div style={{
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: 16,
+              letterSpacing: 1,
+              fontFamily: 'Montserrat Bold',
+              textAlign: 'left',
+            }}>
+              DOST <br />
+              STII
+            </div>
+          </div>
+        </Link>
 
-        <nav className="mt-4 px-2">
-          <ul className="space-y-1">
-            {navItems.map((item) => (
-              <li key={item.label}>
-                <Link
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm
-                    ${
-                      url.startsWith(item.href)
-                        ? "bg-blue-600"
-                        : "hover:bg-blue-600/70"
-                    }`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            ))}
+        <nav style={{ width: '100%' }}>
+          <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
+            {navItems.map((item) => {
+              const isActive = url.startsWith(item.href);
+              
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    style={{
+                      margin: '10px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: '#fff',
+                      background: isActive ? '#0062f4ff' : 'transparent',
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      width: '140px',
+                      marginLeft: '10px',
+                      transition: 'background 0.2s, transform 0.1s',
+                      boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span style={{ marginRight: 8 }}>{item.icon}</span>
+                    <span style={{ fontSize: 15 }}>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </aside>
 
       {/* ================= MAIN ================= */}
-      <div className="ml-52 flex flex-col h-screen overflow-hidden">
+      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         {/* ================= TOPBAR ================= */}
-        <header className="sticky top-0 z-20 bg-white border-b">
-          <div className="px-6 py-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#004A98]">
-              Inspection | {pageTitle}
-            </h2>
+        <header style={{
+          fontSize: 22,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '16px 32px',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+          background: '#fff',
+          position: 'sticky',
+          top: 0,
+          zIndex: 9
+        }}>
+          <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
+            Inspection | {pageTitle}
+          </h2>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
               {/* Notifications */}
@@ -215,13 +281,19 @@ export default function InspectionLayout({ children, title }) {
                 )}
               </div>
             </div>
-          </div>
         </header>
 
         {/* ================= PAGE CONTENT ================= */}
-        <main className={`flex-1 bg-[#eef2f5] ${isChatPage ? 'p-0 overflow-hidden' : 'px-6 py-6 overflow-auto'} flex flex-col min-h-0`}>
+        <div style={{ 
+          flex: 1,
+          padding: isChatPage ? '0' : '24px',
+          overflow: isChatPage ? 'hidden' : 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
           {children}
-        </main>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 // resources/js/Pages/Dashboard_TPU_Addaccount.jsx
 import React, { useState } from 'react';
-import TPULayout from '@/Layouts/TpuLayout';
+import TPULayout from '@/Layouts/TPULayout';
 import { HiUserAdd } from "react-icons/hi";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';
@@ -80,6 +80,8 @@ function AddAccount() {
     
     if (validateForm()) {
       setSubmitting(true);
+      setErrors({}); // Clear previous errors
+      
       try {
         const response = await axios.post('/api/supplier-accounts', formData);
         
@@ -100,7 +102,13 @@ function AddAccount() {
         }
       } catch (error) {
         console.error('Error creating account:', error.response?.data || error);
-        if (error.response?.data?.errors) {
+        
+        if (error.response?.status === 419) {
+          // CSRF token expired - global interceptor should have retried but might still fail
+          alert('Session expired. Please refresh the page and try again.');
+        } else if (error.response?.status === 403) {
+          alert('You do not have permission to create supplier accounts.');
+        } else if (error.response?.data?.errors) {
           // Handle Laravel validation errors
           const serverErrors = {};
           Object.keys(error.response.data.errors).forEach(key => {
@@ -111,7 +119,7 @@ function AddAccount() {
           // Show the specific error message from the server
           alert(error.response.data.message);
         } else {
-          alert('An error occurred while creating the account.');
+          alert('An error occurred while creating the account. Please try again.');
         }
       } finally {
         setSubmitting(false);
@@ -374,7 +382,7 @@ function AddAccount() {
 
 export default function Dashboard_TPU_Addaccount() {
   return (
-    <TPULayout hideTitle={true}>
+    <TPULayout title="Add Account">
       <AddAccount />
     </TPULayout>
   );

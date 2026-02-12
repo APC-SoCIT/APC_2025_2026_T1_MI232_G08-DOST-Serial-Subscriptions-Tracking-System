@@ -3,22 +3,18 @@ import { Link, router, usePage } from "@inertiajs/react";
 import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
-import { FaTruckFast } from "react-icons/fa6";
-import { TbTruckOff } from "react-icons/tb";
-import { FaTruckLoading } from "react-icons/fa";
 import { IoSearchOutline } from "react-icons/io5"; // Added for search icon
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi"; // Added for sort icon
+import { FaTruckFast } from "react-icons/fa6";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
-  { icon: <FaTruckFast />, label: 'Late', route: '/dashboard-supplier-late' },
-  { icon: <TbTruckOff />, label: 'Undelivered', route: '/dashboard-supplier-undelivered' },
-  { icon: <FaTruckLoading />, label: 'Delivered', route: '/dashboard-supplier-delivered' },
+  { icon: <FaTruckFast />, label: 'Delivery', route: '/dashboard-supplier-delivery' },
 ];
 
 function Sidebar({ active, setActive }) {
@@ -137,7 +133,7 @@ function TopBar() {
         zIndex: 9
       }}
     >
-      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Serial Subscription Tracking System</h2>
+      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | List of Serials</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
@@ -514,7 +510,7 @@ function Dashboard_Supplier_ListofSerial() {
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
       <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
         <TopBar />
         {activeSidebar === 2 && (
           <div style={{ padding: "40px 60px" }}>
@@ -674,9 +670,9 @@ function Dashboard_Supplier_ListofSerial() {
                                   }}
                                   onMouseOver={(e) => { e.target.style.background = '#721c24'; e.target.style.color = '#fff'; }}
                                   onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#721c24'; }}
-                                  title="View reason for return"
+                                  title="View remarks for return"
                                 >
-                                  Reason
+                                  Remarks
                                 </button>
                               )}
                             </div>
@@ -832,7 +828,7 @@ function Dashboard_Supplier_ListofSerial() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <div>
-                <h3 style={{ margin: '0 0 4px', fontSize: 22, color: '#721c24' }}>Return Reason</h3>
+                <h3 style={{ margin: '0 0 4px', fontSize: 22, color: '#721c24' }}>Return Remarks</h3>
                 <p style={{ margin: 0, fontSize: 14, color: '#666' }}>
                   {reasonModal.serialData.title || 'Serial'} - {reasonModal.serialData.issn || 'N/A'}
                 </p>

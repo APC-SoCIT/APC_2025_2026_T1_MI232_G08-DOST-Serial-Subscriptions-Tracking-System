@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import GSPSLayout from '@/Layouts/GSPSLayout';
-import { MdSearch, MdFilterList } from "react-icons/md";
+import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage } from "react-icons/md";
 
 // Delivery Status Component - MATCHING YOUR IMAGE EXACTLY
 function DeliveryStatus() {
@@ -9,6 +9,12 @@ function DeliveryStatus() {
   const [filter, setFilter] = useState('All');
   const [showFilter, setShowFilter] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, item: null });
+  
+  // Attachment state for image upload
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   
   // API data state
   const [deliveryData, setDeliveryData] = useState([]);
@@ -38,31 +44,96 @@ function DeliveryStatus() {
     }
   };
 
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check if it's an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (JPG, PNG, etc.)');
+        return;
+      }
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      setAttachmentFile(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachmentPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove attachment
+  const handleRemoveAttachment = () => {
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Close modal and reset attachment
+  const handleCloseConfirmModal = () => {
+    setConfirmModal({ show: false, item: null });
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
+  };
+
   // Handle confirm receipt
   const handleConfirmReceipt = async () => {
     if (!confirmModal.item) return;
     
+    // Require attachment
+    if (!attachmentFile) {
+      alert('Please upload an image of the received serial before confirming.');
+      return;
+    }
+    
+    setUploading(true);
+    
     try {
-      const response = await axios.put(`/api/subscriptions/${confirmModal.item.subscription_id}/serial-received`, {
-        serial_issn: confirmModal.item.issn
-      });
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('serial_issn', confirmModal.item.issn);
+      formData.append('attachment', attachmentFile);
+      
+      const response = await axios.post(
+        `/api/subscriptions/${confirmModal.item.subscription_id}/serial-received`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
       
       if (response.data.success) {
-        // Update local state with received date
+        // Update local state with received date and attachment
         setDeliveryData(prev => prev.map(item => 
           item.id === confirmModal.item.id 
-            ? { ...item, status: 'received', receivedDate: response.data.receivedDate }
+            ? { 
+                ...item, 
+                status: 'received', 
+                receivedDate: response.data.receivedDate,
+                attachmentUrl: response.data.attachmentUrl 
+              }
             : item
         ));
+        handleCloseConfirmModal();
       } else {
         alert('Failed to confirm receipt. Please try again.');
       }
     } catch (err) {
       console.error('Error confirming receipt:', err);
       alert('Failed to confirm receipt. Please try again.');
+    } finally {
+      setUploading(false);
     }
-    
-    setConfirmModal({ show: false, item: null });
   };
 
   // Filter data
@@ -341,7 +412,7 @@ function DeliveryStatus() {
             justifyContent: 'center',
             zIndex: 10000,
           }}
-          onClick={() => setConfirmModal({ show: false, item: null })}
+          onClick={handleCloseConfirmModal}
         >
           <div
             style={{
@@ -350,7 +421,8 @@ function DeliveryStatus() {
               padding: '32px 40px',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
               textAlign: 'center',
-              maxWidth: 400,
+              maxWidth: 500,
+              width: '90%',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -358,49 +430,146 @@ function DeliveryStatus() {
               Confirm Receipt
             </h3>
             <p style={{ margin: '0 0 8px', fontSize: 15, color: '#666' }}>
-              Are you sure you have received this delivery?
+              Upload an image of the received serial to confirm delivery.
             </p>
             {confirmModal.item && (
-              <p style={{ margin: '0 0 24px', fontSize: 14, color: '#004A98', fontWeight: 600 }}>
+              <p style={{ margin: '0 0 20px', fontSize: 14, color: '#004A98', fontWeight: 600 }}>
                 "{confirmModal.item.serialTitle}" from {confirmModal.item.supplierName}
               </p>
             )}
+            
+            {/* Image Upload Section */}
+            <div style={{ marginBottom: 24 }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/*"
+                style={{ display: 'none' }}
+              />
+              
+              {!attachmentPreview ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: '2px dashed #ddd',
+                    borderRadius: 8,
+                    padding: '30px 20px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    background: '#f9f9f9',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.borderColor = '#004A98';
+                    e.currentTarget.style.background = '#f0f4f8';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.borderColor = '#ddd';
+                    e.currentTarget.style.background = '#f9f9f9';
+                  }}
+                >
+                  <MdCloudUpload size={40} color="#004A98" />
+                  <p style={{ margin: '10px 0 5px', fontSize: 14, color: '#333', fontWeight: 500 }}>
+                    Click to upload image
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: '#888' }}>
+                    JPG, PNG (max 5MB)
+                  </p>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <img
+                    src={attachmentPreview}
+                    alt="Preview"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: 200,
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                    }}
+                  />
+                  <button
+                    onClick={handleRemoveAttachment}
+                    style={{
+                      position: 'absolute',
+                      top: -10,
+                      right: -10,
+                      background: '#dc3545',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 28,
+                      height: 28,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MdClose size={18} />
+                  </button>
+                  <p style={{ margin: '10px 0 0', fontSize: 12, color: '#28a745', fontWeight: 500 }}>
+                    <MdImage style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    {attachmentFile?.name}
+                  </p>
+                </div>
+              )}
+            </div>
+            
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
               <button
                 onClick={handleConfirmReceipt}
+                disabled={uploading || !attachmentFile}
                 style={{
                   padding: '10px 32px',
                   borderRadius: 6,
                   border: 'none',
-                  background: '#28a745',
+                  background: uploading || !attachmentFile ? '#ccc' : '#28a745',
                   color: '#fff',
-                  cursor: 'pointer',
+                  cursor: uploading || !attachmentFile ? 'not-allowed' : 'pointer',
                   fontSize: 14,
                   fontWeight: 600,
                   transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                 }}
-                onMouseOver={(e) => e.target.style.background = '#218838'}
-                onMouseOut={(e) => e.target.style.background = '#28a745'}
+                onMouseOver={(e) => {
+                  if (!uploading && attachmentFile) e.target.style.background = '#218838';
+                }}
+                onMouseOut={(e) => {
+                  if (!uploading && attachmentFile) e.target.style.background = '#28a745';
+                }}
               >
-                Yes
+                {uploading ? 'Uploading...' : 'Confirm Receipt'}
               </button>
               <button
-                onClick={() => setConfirmModal({ show: false, item: null })}
+                onClick={handleCloseConfirmModal}
+                disabled={uploading}
                 style={{
                   padding: '10px 32px',
                   borderRadius: 6,
                   border: '1px solid #dc3545',
                   background: '#fff',
                   color: '#dc3545',
-                  cursor: 'pointer',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
                   fontSize: 14,
                   fontWeight: 600,
                   transition: 'all 0.2s',
+                  opacity: uploading ? 0.6 : 1,
                 }}
-                onMouseOver={(e) => { e.target.style.background = '#dc3545'; e.target.style.color = '#fff'; }}
-                onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#dc3545'; }}
+                onMouseOver={(e) => { 
+                  if (!uploading) {
+                    e.target.style.background = '#dc3545'; 
+                    e.target.style.color = '#fff'; 
+                  }
+                }}
+                onMouseOut={(e) => { 
+                  e.target.style.background = '#fff'; 
+                  e.target.style.color = '#dc3545'; 
+                }}
               >
-                No
+                Cancel
               </button>
             </div>
           </div>

@@ -1,23 +1,20 @@
-import React, { useState, useMemo } from "react";
-import { Link, router } from "@inertiajs/react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Link, router, usePage } from "@inertiajs/react";
+import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
-import { FaTruckFast } from "react-icons/fa6";
-import { TbTruckOff } from "react-icons/tb";
-import { FaTruckLoading } from "react-icons/fa";
+import { IoSearchOutline } from "react-icons/io5";
 import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
-import { IoSearchOutline } from "react-icons/io5";
 import { BiSortAlt2 } from "react-icons/bi";
+import { FaTruckFast } from "react-icons/fa6";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
-  { icon: <FaTruckFast />, label: 'Late', route: '/dashboard-supplier-late' },
-  { icon: <TbTruckOff />, label: 'Undelivered', route: '/dashboard-supplier-undelivered' },
-  { icon: <FaTruckLoading />, label: 'Delivered', route: '/dashboard-supplier-delivered' },
+  { icon: <FaTruckFast />, label: 'Delivery', route: '/dashboard-supplier-delivery' },
 ];
 
 function Sidebar({ active, setActive }) {
@@ -136,7 +133,7 @@ function TopBar() {
         zIndex: 9
       }}
     >
-      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Serial Subscription Tracking System</h2>
+      <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | Delivery</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
         <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
@@ -217,51 +214,78 @@ function TopBar() {
   );
 }
 
-const serialsData = [
+// Sample data - in production, this would come from the API
+// Combined data with status field for unified table
+const allSerials = [
   {
-    no: 1,
+    id: 1,
     serial_title: "Time Magazine",
     purchase_order_no: "PO-2025-0001",
-    total_issues_delivered: "52",
-    no_of_late_issues: "4",
+    issues: "4",
+    amount: "₱430",
+    date: "2025-01-15",
     remarks: "Jan-Feb issues delivered in March",
-    date: new Date("2025-01-15"),
+    status: "late",
   },
   {
-    no: 2,
-    serial_title: "National Geographic",
-    purchase_order_no: "PO-2025-0002",
-    total_issues_delivered: "12",
-    no_of_late_issues: "0",
-    remarks: "All issues on time",
-    date: new Date("2025-01-10"),
+    id: 2,
+    serial_title: "Nature",
+    purchase_order_no: "PO-2024-1256",
+    issues: "48",
+    amount: "₱14,500",
+    date: "2024-12-15",
+    remarks: "",
+    status: "delivered",
   },
   {
-    no: 3,
-    serial_title: "IEEE Spectrum",
-    purchase_order_no: "PO-2025-0003",
-    total_issues_delivered: "12",
-    no_of_late_issues: "0",
-    remarks: "All issues on time",
-    date: new Date("2025-01-05"),
+    id: 3,
+    serial_title: "Time Magazine",
+    purchase_order_no: "PO-2025-0001",
+    issues: "4",
+    amount: "₱430",
+    date: "",
+    remarks: "Pending shipment",
+    status: "undelivered",
   },
   {
-    no: 4,
+    id: 4,
     serial_title: "The Economist",
     purchase_order_no: "PO-2025-0004",
-    total_issues_delivered: "51",
-    no_of_late_issues: "3",
+    issues: "3",
+    amount: "₱900",
+    date: "2024-12-28",
     remarks: "Issues delivered one month late",
-    date: new Date("2024-12-28"),
+    status: "late",
   },
   {
-    no: 5,
-    serial_title: "Philippines Journal of Science",
-    purchase_order_no: "PO-2025-0005",
-    total_issues_delivered: "4",
-    no_of_late_issues: "0",
-    remarks: "All issues on time",
-    date: new Date("2024-12-20"),
+    id: 5,
+    serial_title: "Science",
+    purchase_order_no: "PO-2024-1302",
+    issues: "52",
+    amount: "₱18,200",
+    date: "2024-11-28",
+    remarks: "",
+    status: "delivered",
+  },
+  {
+    id: 6,
+    serial_title: "The Economist",
+    purchase_order_no: "PO-2025-0004",
+    issues: "1",
+    amount: "₱300",
+    date: "",
+    remarks: "Awaiting stock",
+    status: "undelivered",
+  },
+  {
+    id: 7,
+    serial_title: "The Lancet",
+    purchase_order_no: "PO-2024-1378",
+    issues: "24",
+    amount: "₱9,800",
+    date: "2024-12-10",
+    remarks: "",
+    status: "delivered",
   },
 ];
 
@@ -330,51 +354,91 @@ function Pagination({ current, total, onPage }) {
   );
 }
 
-function Dashbooard_Supplier_Late() {
+function Dashboard_Supplier_Delivery() {
   const [activeSidebar, setActiveSidebar] = useState(3);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSortNewest, setIsSortNewest] = useState(true);
-  const totalPages = 10;
+  
+  // Status filter dropdown: 'all', 'late', 'delivered', 'undelivered'
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const filteredAndSortedSerials = useMemo(() => {
-    let filtered = serialsData.filter((serial) => {
-      const query = searchQuery.toLowerCase();
-      return (
-        serial.serial_title.toLowerCase().includes(query) ||
-        serial.purchase_order_no.toLowerCase().includes(query) ||
-        serial.remarks.toLowerCase().includes(query)
+  const itemsPerPage = 10;
+
+  // Status badge component
+  const StatusBadge = ({ status }) => {
+    const colors = {
+      late: { bg: '#fff3cd', text: '#856404', border: '#ffc107' },
+      delivered: { bg: '#d4edda', text: '#155724', border: '#28a745' },
+      undelivered: { bg: '#f8d7da', text: '#721c24', border: '#dc3545' },
+    };
+    const style = colors[status] || colors.undelivered;
+    
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          padding: '4px 12px',
+          borderRadius: 20,
+          background: style.bg,
+          color: style.text,
+          border: `1px solid ${style.border}`,
+          fontSize: 12,
+          fontWeight: 600,
+          textTransform: 'capitalize',
+        }}
+      >
+        {status}
+      </span>
+    );
+  };
+
+  // Filter data based on dropdown selection
+  const filteredSerials = useMemo(() => {
+    let result = allSerials.filter(item => {
+      if (statusFilter === 'all') return true;
+      return item.status === statusFilter;
+    });
+
+    // Search filter
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.serial_title.toLowerCase().includes(lowerQuery) ||
+          item.purchase_order_no.toLowerCase().includes(lowerQuery)
       );
-    });
+    }
 
-    filtered.sort((a, b) => {
-      if (isSortNewest) {
-        return b.date - a.date;
-      } else {
-        return a.date - b.date;
-      }
-    });
+    // Sort by status order: Late, Delivered, Undelivered
+    const statusOrder = { late: 0, delivered: 1, undelivered: 2 };
+    result.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
-    return filtered;
-  }, [searchQuery, isSortNewest]);
+    return result;
+  }, [statusFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSerials.length / itemsPerPage));
+  const paginatedSerials = filteredSerials.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  // Count by status for filter labels
+  const lateCount = allSerials.filter(s => s.status === 'late').length;
+  const deliveredCount = allSerials.filter(s => s.status === 'delivered').length;
+  const undeliveredCount = allSerials.filter(s => s.status === 'undelivered').length;
 
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
       <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
         <TopBar />
-        {activeSidebar === 3 && (
-          <div style={{ padding: "40px 60px" }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 32, color: "#222" }}>
-              Late Deliveries
-            </h1>
-
-            <div
+        <div style={{ padding: "40px 60px" }}>
+          <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 32, color: "#222" }}>
+            Delivery
+          </h1>
+          
+          <div
               style={{
                 background: "#fff",
                 borderRadius: 12,
                 boxShadow: "0 2px 8px #0001",
-                padding: "0 0 24px 0",
               }}
             >
               <div
@@ -383,12 +447,11 @@ function Dashbooard_Supplier_Late() {
                   borderTopLeftRadius: 12,
                   borderTopRightRadius: 12,
                   height: 32,
-                  marginBottom: 0,
                 }}
               ></div>
 
-              {/* === SEARCH AND SORT CONTROLS === */}
-              <div style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {/* Search Bar and Filters */}
+              <div style={{ padding: "20px 24px", borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                 {/* Search */}
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <IoSearchOutline style={{ position: 'absolute', left: 12, color: '#666', fontSize: 18 }} />
@@ -396,7 +459,10 @@ function Dashbooard_Supplier_Late() {
                     type="text" 
                     placeholder="Search Serial or PO No..." 
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPage(1);
+                    }}
                     style={{
                       padding: '10px 10px 10px 40px',
                       borderRadius: 8,
@@ -410,88 +476,84 @@ function Dashbooard_Supplier_Late() {
                   />
                 </div>
 
-                {/* Sort */}
-                <button 
-                  onClick={() => setIsSortNewest(!isSortNewest)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 16px',
-                    borderRadius: 8,
-                    border: '1px solid #004A98',
-                    background: isSortNewest ? '#004A98' : '#fff',
-                    color: isSortNewest ? '#fff' : '#004A98',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <BiSortAlt2 size={18} />
-                  {isSortNewest ? 'New' : 'Old'}
-                </button>
+                {/* Status Filter Dropdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#555' }}>Status:</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      outline: 'none',
+                      fontSize: 14,
+                      color: '#333',
+                      background: '#f9f9f9',
+                      cursor: 'pointer',
+                      minWidth: 160,
+                    }}
+                  >
+                    <option value="all">All Status ({allSerials.length})</option>
+                    <option value="late">Late ({lateCount})</option>
+                    <option value="delivered">Delivered ({deliveredCount})</option>
+                    <option value="undelivered">Undelivered ({undeliveredCount})</option>
+                  </select>
+                </div>
               </div>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: 16,
-                  marginTop: 0,
-                }}
-              >
+
+              {/* Table */}
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
                 <thead>
-                  <tr style={{ color: "#222", fontWeight: 700 }}>
+                  <tr style={{ color: "#222", fontWeight: 700, borderBottom: '1px solid #eee' }}>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 60 }}>NO.</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>Serial Title</th>
-                    <th style={{ padding: "12px 8px", textAlign: "left", width: 340 }}>Purchase Order No.</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>Total Issues Delivered</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>No. of Late Issues</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>Remarks</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Serial Title</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left" }}>Purchase Order No.</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Issues</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Amount</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Date</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Status</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAndSortedSerials.length > 0 ? (
-                    filteredAndSortedSerials.map((row, idx) => (
-                      <tr
-                        key={row.no}
-                        style={{
-                          background: idx % 2 === 0 ? "#f5f5f5" : "#fff",
-                        }}
-                      >
-                        <td style={{ padding: "12px 8px", textAlign: "center", width: 60, fontWeight: 500 }}>
-                          {row.no}
-                        </td>
-                        <td style={{ padding: "12px 8px", textAlign: "center", width: 340, fontWeight: 700 }}>
-                          {row.serial_title}
-                        </td>
-                        <td style={{ padding: "12px 8px", textAlign: "left", width: 120 }}>{row.purchase_order_no}</td>
-                        <td style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>{row.total_issues_delivered}</td>
-                        <td style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>{row.no_of_late_issues}</td>
-                        <td style={{ padding: "12px 8px", textAlign: "center", width: 340, fontWeight: 700 }}>{row.remarks}</td>
+                  {paginatedSerials.length > 0 ? (
+                    paginatedSerials.map((row, idx) => (
+                      <tr key={row.id} style={{ background: idx % 2 === 0 ? "#f9f9f9" : "#fff", borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 500 }}>{(page - 1) * itemsPerPage + idx + 1}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 700, color: "#004A98" }}>{row.serial_title}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "left" }}>{row.purchase_order_no}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center" }}>{row.issues}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center" }}>{row.amount}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555" }}>{row.date || '-'}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center" }}><StatusBadge status={row.status} /></td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555", maxWidth: 200 }}>{row.remarks || '-'}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" style={{ padding: "32px", textAlign: "center", color: "#999" }}>
-                        No results found for "{searchQuery}"
+                      <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                        No serials found {searchQuery && `matching "${searchQuery}"`}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, padding: "0 16px" }}>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px" }}>
                 <Pagination current={page} total={totalPages} onPage={setPage} />
                 <span style={{ color: "#444", fontSize: 15 }}>
-                  Showing {filteredAndSortedSerials.length} of {totalPages * serialsData.length} results
+                  Showing {filteredSerials.length} results
                 </span>
               </div>
             </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-export default Dashbooard_Supplier_Late;
+export default Dashboard_Supplier_Delivery;

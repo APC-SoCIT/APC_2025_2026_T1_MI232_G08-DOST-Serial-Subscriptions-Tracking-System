@@ -22,11 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\CheckUserRole::class,
         ]);
 
-        // Exclude chat API routes from CSRF verification (they use auth middleware)
+        // Exclude API routes from CSRF verification (they use auth middleware)
         $middleware->validateCsrfTokens(except: [
             'api/chats/*',
             'api/users/*',
             'api/messages/*',
+            'api/subscriptions/*',
+            'api/supplier-accounts/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
