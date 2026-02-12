@@ -25,7 +25,17 @@ const sidebarItems = [
 ];
 
 function Sidebar({ currentRoute }) {
-  const currentRouteName = usePage().url.split('/').pop() || 'tpu.dashboard';
+  const currentUrl = usePage().url;
+  
+  // Map routes to their URL paths for exact matching
+  const routeToPath = {
+    'tpu.dashboard': '/dashboard-tpu',
+    'tpu.chat': '/chat',
+    'tpu.supplierinfo': '/supplierinfo',
+    'tpu.subscriptiontracking': '/subscriptiontracking',
+    'tpu.monitordelivery': '/monitordelivery',
+    'tpu.addaccount': '/addaccount',
+  };
   
   return (
     <div style={{
@@ -77,9 +87,8 @@ function Sidebar({ currentRoute }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const routePart = item.route.split('.').pop();
-            const isActive = currentRouteName.includes(routePart) || 
-                           (item.route === 'tpu.dashboard' && (currentRouteName === 'dashboard-tpu' || currentRouteName === ''));
+            const expectedPath = routeToPath[item.route] || '';
+            const isActive = currentUrl === expectedPath || currentUrl.startsWith(expectedPath + '/');
             
             return (
               <li key={item.label}>
@@ -93,7 +102,7 @@ function Sidebar({ currentRoute }) {
                     fontSize: 16,
                     fontWeight: 500,
                     color: '#fff',
-                    background: isActive ? '#0062f4ff' : 'transparent',
+                    background: isActive ? '#0062f4' : 'transparent',
                     borderRadius: 6,
                     padding: '8px 12px',
                     width: '140px',
@@ -262,8 +271,8 @@ export default function TPULayout({ children, title, hideTitle = false }) {
   };
   
   const pageTitle = getPageTitle();
-  const isChatPage = pageTitle === 'Chat';
-  const isFullPage = hideTitle || isChatPage || pageTitle === 'Add Account' || pageTitle === 'Supplier Info' || pageTitle === 'Subscription' || pageTitle === 'Monitor Delivery';
+  const isChatPage = pageTitle?.toLowerCase().includes('chat');
+  const isFullPage = hideTitle || isChatPage || pageTitle === 'Dashboard' || pageTitle === 'Add Account' || pageTitle === 'Supplier Info' || pageTitle === 'Subscription' || pageTitle === 'Monitor Delivery';
   
   // Role verification - redirect if not TPU
   useEffect(() => {
@@ -282,43 +291,29 @@ export default function TPULayout({ children, title, hideTitle = false }) {
   // Don't render layout if user is not TPU
   if (!user || !isTpu) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f4f8' }}>
-        <div style={{ width: 48, height: 48, border: '4px solid #0f57a3', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F6FA' }}>
+        <div style={{ width: 48, height: 48, border: '4px solid #0B4DA1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', fontFamily: 'Segoe UI, Arial, sans-serif', background: '#f0f4f8', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <TopBar pageTitle={pageTitle} />
         <div style={{ 
           flex: 1,
-          padding: isFullPage ? '0' : '32px 40px',
-          overflow: isChatPage ? 'hidden' : (isFullPage ? 'auto' : 'visible'),
+          padding: isChatPage ? '0' : '24px',
+          overflow: isChatPage ? 'hidden' : 'auto',
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0
         }}>
-          {!isFullPage && (
-            <>
-              <h2 style={{ marginBottom: 8 }}>{pageTitle}</h2>
-              <p style={{ color: '#666', marginBottom: 32 }}>
-                {(() => {
-                  const hour = new Date().getHours();
-                  if (hour < 12) return 'Good morning,';
-                  if (hour < 18) return 'Good afternoon,';
-                  return 'Good evening,';
-                })()} Welcome back, {user?.name || 'User'}!
-              </p>
-            </>
-          )}
           {children}
         </div>
       </div>
     </div>
-    
   );
 }

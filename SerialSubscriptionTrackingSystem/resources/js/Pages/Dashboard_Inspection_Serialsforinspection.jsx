@@ -1,7 +1,7 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
 import { FaClipboardCheck } from "react-icons/fa";
-import { MdSearch, MdFilterList } from "react-icons/md";
-import { useState, useEffect } from "react";
+import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage } from "react-icons/md";
+import { useState, useEffect, useRef } from "react";
 import { usePage } from "@inertiajs/react";
 import axios from "axios";
 
@@ -13,7 +13,7 @@ export default function InspectionSerialsForInspection() {
   // ===================== STATE =====================
   const [showModal, setShowModal] = useState(false);
   const [selectedSerial, setSelectedSerial] = useState(null);
-  const [condition, setCondition] = useState("Good");
+  const [condition, setCondition] = useState("Acceptable");
   const [inspectorName, setInspectorName] = useState(user?.name || "");
   const [remark, setRemark] = useState("");
   const [otherDescription, setOtherDescription] = useState("");
@@ -30,6 +30,11 @@ export default function InspectionSerialsForInspection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Attachment state
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const fileInputRef = useRef(null);
   
   // Search and filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,8 +106,43 @@ export default function InspectionSerialsForInspection() {
       misprint: false,
       other: false,
     });
-    setCondition("Good");
+    setCondition("Acceptable");
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
     setShowModal(true);
+  };
+
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check if it's an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (JPG, PNG, etc.)');
+        return;
+      }
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      setAttachmentFile(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachmentPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove attachment
+  const handleRemoveAttachment = () => {
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const submitInspection = async () => {
@@ -114,14 +154,28 @@ export default function InspectionSerialsForInspection() {
     try {
       setSubmitting(true);
       
-      const response = await axios.post(`/api/subscriptions/${selectedSerial.subscription_id}/submit-inspection`, {
-        serial_issn: selectedSerial.issn,
-        inspector_name: inspectorName,
-        condition: condition,
-        checklist: checklist,
-        other_description: otherDescription,
-        remarks: remark,
-      });
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('serial_issn', selectedSerial.issn);
+      formData.append('inspector_name', inspectorName);
+      formData.append('condition', condition);
+      formData.append('checklist', JSON.stringify(checklist));
+      formData.append('other_description', otherDescription);
+      formData.append('remarks', remark);
+      
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile);
+      }
+      
+      const response = await axios.post(
+        `/api/subscriptions/${selectedSerial.subscription_id}/submit-inspection`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
 
       if (response.data.success) {
         // Update local state
@@ -134,6 +188,7 @@ export default function InspectionSerialsForInspection() {
                   inspector_name: inspectorName,
                   condition: condition,
                   inspection_date: response.data.inspection_date,
+                  attachmentUrl: response.data.attachmentUrl,
                 }
               : s
           )
@@ -430,8 +485,8 @@ export default function InspectionSerialsForInspection() {
                 onChange={(e) => {
                   const newCondition = e.target.value;
                   setCondition(newCondition);
-                  // Reset checklist when switching to Good
-                  if (newCondition === "Good") {
+                  // Reset checklist when switching to Acceptable
+                  if (newCondition === "Acceptable") {
                     setChecklist({
                       missingPages: false,
                       tornPages: false,
@@ -443,7 +498,7 @@ export default function InspectionSerialsForInspection() {
                   }
                 }}
               >
-                <option>Good</option>
+                <option>Acceptable</option>
                 <option>For Return</option>
               </select>
 
@@ -485,6 +540,49 @@ export default function InspectionSerialsForInspection() {
                 onChange={(e) => setRemark(e.target.value)}
               />
 
+              {/* Attachment Upload Section */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachment 
+                </label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+                
+                {!attachmentPreview ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
+                  >
+                    <MdCloudUpload className="mx-auto text-4xl text-blue-600 mb-2" />
+                    <p className="text-sm font-medium text-gray-700">Click to upload image</p>
+                    <p className="text-xs text-gray-500">JPG, PNG (max 5MB)</p>
+                  </div>
+                ) : (
+                  <div className="relative inline-block">
+                    <img
+                      src={attachmentPreview}
+                      alt="Preview"
+                      className="max-w-full max-h-40 rounded-lg border"
+                    />
+                    <button
+                      onClick={handleRemoveAttachment}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                      type="button"
+                    >
+                      <MdClose size={16} />
+                    </button>
+                    <p className="mt-2 text-xs text-green-600 font-medium flex items-center gap-1">
+                      <MdImage /> {attachmentFile?.name}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowModal(false)}
@@ -496,7 +594,7 @@ export default function InspectionSerialsForInspection() {
                 <button
                   onClick={submitInspection}
                   className={`px-4 py-2 rounded text-white ${condition === 'For Return' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-                  disabled={submitting}
+                  disabled={submitting || !attachmentFile}
                 >
                   {submitting ? 'Processing...' : (condition === 'For Return' ? 'For Return' : 'Submit')}
                 </button>
