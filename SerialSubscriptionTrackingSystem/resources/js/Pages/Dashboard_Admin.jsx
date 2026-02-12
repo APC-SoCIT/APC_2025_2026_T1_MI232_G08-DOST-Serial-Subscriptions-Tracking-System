@@ -117,6 +117,8 @@ return Math.max(diffDays / 365, 0.25);
 export default function Dashboard() {
   // Real user stats from database
   const [userStats, setUserStats] = useState({ total: 0, approved: 0, pending: 0 });
+  // Supplier account stats (pending accounts for approval)
+  const [supplierStats, setSupplierStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
 
   // Fetch user stats from database on mount
   useEffect(() => {
@@ -131,6 +133,21 @@ export default function Dashboard() {
       }
     };
     fetchUserStats();
+  }, []);
+
+  // Fetch supplier account stats (for pending accounts awaiting approval)
+  useEffect(() => {
+    const fetchSupplierStats = async () => {
+      try {
+        const response = await axios.get('/api/supplier-accounts/stats');
+        if (response.data.success) {
+          setSupplierStats(response.data.stats);
+        }
+      } catch (error) {
+        console.error('Error fetching supplier account stats:', error);
+      }
+    };
+    fetchSupplierStats();
   }, []);
 
   // FILTER MODE: year | month | week | custom
@@ -531,7 +548,7 @@ onClick={() => {
 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
   <KPI title="Total Users" value={userStats.total} />
   <KPI title="Approved Users" value={userStats.approved} />
-  <KPI title="Pending Users" value={userStats.pending} />
+  <KPI title="Pending Accounts" value={supplierStats.pending} />
 
   <KPI
     title="Approval Backlog (>7 days)"
