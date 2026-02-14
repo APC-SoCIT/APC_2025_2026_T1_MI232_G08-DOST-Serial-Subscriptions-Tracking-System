@@ -55,6 +55,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('/list-of-user', function () {
         return Inertia::render('ListofUser');
     })->name('admin.users');
+    
+    Route::get('/admin-add-account', function () {
+        return Inertia::render('Dashboard_Admin_Addaccount');
+    })->name('admin.addaccount');
 });
 
 // ===================== TPU ROUTES =====================
@@ -168,6 +172,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::prefix('api/users')->group(function () {
         Route::get('/', [UserController::class, 'index'])->name('users.index');
         Route::get('/stats', [UserController::class, 'stats'])->name('users.stats');
+        Route::post('/', [UserController::class, 'store'])->name('users.store');
         Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
         Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
         Route::put('/{id}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggleDisable');

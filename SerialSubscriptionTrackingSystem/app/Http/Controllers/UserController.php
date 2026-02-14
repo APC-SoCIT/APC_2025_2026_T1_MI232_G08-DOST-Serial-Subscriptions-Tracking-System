@@ -211,21 +211,40 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'role' => 'required|string',
-            'password' => 'required|confirmed|min:6',
-        ]);
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users',
+                'role' => 'required|string|in:tpu,gsps,inspection',
+                'password' => 'required|confirmed|min:8|regex:/^(?=.*[a-zA-Z])(?=.*[0-9])/',
+            ], [
+                'password.regex' => 'Password must contain both letters and numbers',
+            ]);
 
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => $request->role,
-            'password' => Hash::make($request->password),
-        ]);
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'role' => $request->role,
+                'password' => Hash::make($request->password),
+                'email_verified_at' => now(), // Auto-verify admin-created accounts
+            ]);
 
-        return redirect('/dashboard')
-            ->with('success', 'User created successfully');
+            return response()->json([
+                'success' => true,
+                'message' => 'User created successfully',
+                'user' => $user,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create user: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

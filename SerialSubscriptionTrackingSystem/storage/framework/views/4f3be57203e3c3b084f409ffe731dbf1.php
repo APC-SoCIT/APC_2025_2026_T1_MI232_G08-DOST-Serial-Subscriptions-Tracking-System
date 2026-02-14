@@ -5,7 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
 
-        <title inertia><?php echo e(config('app.name', 'Laravel')); ?></title>
+        <title inertia><?php echo e(config('app.name', 'Serial Subscriptions Tracking System')); ?></title>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/png" href="/images/dost-logo1.png">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

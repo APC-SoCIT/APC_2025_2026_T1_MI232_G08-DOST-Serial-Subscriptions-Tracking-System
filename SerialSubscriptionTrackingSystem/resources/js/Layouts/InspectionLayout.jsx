@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage, Link } from "@inertiajs/react";
-import { GoHome } from "react-icons/go";
+import { GoHomeFill } from "react-icons/go";
 import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
-import { IoChatboxEllipsesOutline } from "react-icons/io5";
-import { MdOutlineNotificationsActive } from "react-icons/md";
+import { BsFillChatTextFill } from "react-icons/bs";
+import { MdNotifications } from "react-icons/md";
+import { HiMenu, HiX } from "react-icons/hi";
 import { useRole } from "@/Components/RequireRole";
 
 const navItems = [
-  { icon: <GoHome size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
+  { icon: <GoHomeFill size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
   { icon: <FaClipboardCheck size={18} />, label: "Serials for Inspection", href: "/inspection-serialsforinspection" },
-  { icon: <IoChatboxEllipsesOutline size={18} />, label: "Chat", href: "/inspection-chat" },
+  { icon: <BsFillChatTextFill size={18} />, label: "Chat", href: "/inspection-chat" },
 ];
 
 export default function InspectionLayout({ children, title }) {
@@ -19,6 +20,21 @@ export default function InspectionLayout({ children, title }) {
   const [activeView, setActiveView] = useState("content");
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openAccount, setOpenAccount] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check screen size for responsive behavior
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(false);
+      }
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   
   // Get page title from navItems based on current URL, or use passed title prop
   const getPageTitle = () => {
@@ -56,6 +72,19 @@ export default function InspectionLayout({ children, title }) {
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
+      {/* ================= MOBILE OVERLAY ================= */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 99,
+          }}
+        />
+      )}
+
       {/* ================= SIDEBAR ================= */}
       <aside style={{
         background: '#004A98',
@@ -67,9 +96,10 @@ export default function InspectionLayout({ children, title }) {
         flexDirection: 'column',
         alignItems: 'center',
         position: 'fixed',
-        left: 0,
+        left: isMobile ? (sidebarOpen ? 0 : -160) : 0,
         top: 0,
-        zIndex: 100
+        zIndex: 100,
+        transition: 'left 0.3s ease',
       }}>
         <Link href="/inspection-dashboard" style={{ textDecoration: 'none' }}>
           <div style={{
@@ -141,23 +171,41 @@ export default function InspectionLayout({ children, title }) {
       </aside>
 
       {/* ================= MAIN ================= */}
-      <div style={{ flex: 1, marginLeft: 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', transition: 'margin-left 0.3s ease' }}>
         {/* ================= TOPBAR ================= */}
         <header style={{
           fontSize: 22,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '16px 32px',
+          padding: isMobile ? '12px 16px' : '16px 32px',
           boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
           background: '#fff',
           position: 'sticky',
           top: 0,
           zIndex: 9
         }}>
-          <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>
-            Inspection | {pageTitle}
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {sidebarOpen ? <HiX size={24} color="#0B4DA1" /> : <HiMenu size={24} color="#0B4DA1" />}
+              </button>
+            )}
+            <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: isMobile ? 16 : 20, margin: 0 }}>
+              Inspection | {pageTitle}
+            </h2>
+          </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
               {/* Notifications */}
@@ -169,7 +217,7 @@ export default function InspectionLayout({ children, title }) {
                   }}
                   style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
                 >
-                  <MdOutlineNotificationsActive size={20} />
+                  <MdNotifications size={20} />
                 </button>
 
                 {openNotifications && (
@@ -216,47 +264,11 @@ export default function InspectionLayout({ children, title }) {
                     zIndex: 1000,
                     transition: 'all 0.2s ease',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-                      <div style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: '50%',
-                        background: '#004A98',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                        marginRight: 10,
-                      }}>
-                        {user?.name?.charAt(0)?.toUpperCase() || 'I'}
-                      </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>{user?.name || 'Inspection'}</h4>
-                        <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{user?.email || 'Inspection Team'}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
-                      </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <h4 style={{ margin: 0, fontSize: 16, color: '#222' }}>{user?.name || 'Inspection'}</h4>
+                      <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{user?.email || 'Inspection Team'}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
                     </div>
-
-                    <a
-                      href={route('profile.edit')}
-                      style={{
-                        width: '100%',
-                        display: 'block',
-                        background: '#f8f9fa',
-                        color: '#333',
-                        border: 'none',
-                        padding: '8px 0',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        textAlign: 'center',
-                        textDecoration: 'none',
-                        marginBottom: 8,
-                      }}>
-                      Profile
-                    </a>
 
                     <button
                       onClick={() => router.post(route('logout'))}
@@ -286,7 +298,7 @@ export default function InspectionLayout({ children, title }) {
         {/* ================= PAGE CONTENT ================= */}
         <div style={{ 
           flex: 1,
-          padding: isChatPage ? '0' : '24px',
+          padding: isChatPage ? '0' : (isMobile ? '16px' : '24px'),
           overflow: isChatPage ? 'hidden' : 'auto',
           display: 'flex',
           flexDirection: 'column',
