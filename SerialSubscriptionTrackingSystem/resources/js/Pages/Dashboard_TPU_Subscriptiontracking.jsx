@@ -11,7 +11,7 @@ function SubscriptionTracking() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [periodFilter, setPeriodFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('serialTitle');
+  const [sortBy, setSortBy] = useState('deliveryDate');
   const [loading, setLoading] = useState(true);
   
   // Add Serial Modal state
@@ -172,7 +172,10 @@ function SubscriptionTracking() {
       const bCost = parseFloat(b.remainingCost.replace(/[^0-9.]/g, '') || 0);
       return bCost - aCost;
     }
-    return 0;
+    // Default sort by delivery date (period) - earliest first
+    const aDate = a.period ? new Date(a.period) : new Date('9999-12-31');
+    const bDate = b.period ? new Date(b.period) : new Date('9999-12-31');
+    return aDate - bDate;
   });
 
   // Calculate total stats
@@ -1188,6 +1191,7 @@ function SubscriptionTracking() {
                     name="deliveryDate"
                     value={serialFormData.deliveryDate}
                     onChange={handleSerialInputChange}
+                    min={new Date().toISOString().split('T')[0]}
                     style={{
                       width: '100%',
                       padding: '12px 14px',

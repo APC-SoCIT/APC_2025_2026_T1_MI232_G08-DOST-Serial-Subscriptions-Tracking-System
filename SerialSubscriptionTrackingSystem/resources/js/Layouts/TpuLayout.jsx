@@ -24,6 +24,7 @@ const sidebarItems = [
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
   const currentUrl = usePage().url;
   const sidebarWidth = isMobile ? 200 : 160;
+  const [hoveredItem, setHoveredItem] = useState(null);
   
   // Map routes to their URL paths for exact matching
   const routeToPath = {
@@ -113,6 +114,8 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
                 <Link
                   href={item.route !== '#' ? route(item.route) : '#'}
                   onClick={() => isMobile && setSidebarOpen(false)}
+                  onMouseEnter={() => setHoveredItem(idx)}
+                  onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     margin: '10px 0',
                     display: 'flex',
@@ -121,7 +124,7 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
                     fontSize: isMobile ? 14 : 16,
                     fontWeight: 500,
                     color: '#fff',
-                    background: isActive ? '#0062f4' : 'transparent',
+                    background: isActive ? '#0062f4' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                     borderRadius: 6,
                     padding: '8px 12px',
                     width: isMobile ? '170px' : '140px',
@@ -131,7 +134,6 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
                     textDecoration: 'none',
                     opacity: item.route === '#' ? 0.6 : 1
                   }}
-                 
                 >
                   <Icon>{item.icon}</Icon>
                   <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
@@ -224,6 +226,36 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
                 </p>
                 <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
               </div>
+
+              <Link
+                href={route('profile.edit')}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  background: 'transparent',
+                  color: '#004A98',
+                  border: '1px solid #004A98',
+                  padding: '8px 0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  marginBottom: 8,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#004A98';
+                  e.target.style.color = '#fff';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#004A98';
+                }}
+              >
+                Profile
+              </Link>
 
               <button
                 onClick={handleLogout}
