@@ -21,6 +21,7 @@ const sidebarItems = [
 
 function Sidebar({ isMobile, sidebarOpen }) {
   const currentRouteName = usePage().url;
+  const [hoveredItem, setHoveredItem] = useState(null);
   
   return (
     <div style={{
@@ -72,7 +73,7 @@ function Sidebar({ isMobile, sidebarOpen }) {
       
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
-          {sidebarItems.map((item) => {
+          {sidebarItems.map((item, idx) => {
             const routePart = item.route.split('.').pop();
             const isActive = currentRouteName.includes(routePart) || 
                            (item.route === 'supplier.dashboard' && (currentRouteName === 'dashboard-supplier' || currentRouteName === ''));
@@ -81,6 +82,8 @@ function Sidebar({ isMobile, sidebarOpen }) {
               <li key={item.label}>
                 <Link
                   href={route(item.route)}
+                  onMouseEnter={() => setHoveredItem(idx)}
+                  onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     margin: '10px 0',
                     display: 'flex',
@@ -89,7 +92,7 @@ function Sidebar({ isMobile, sidebarOpen }) {
                     fontSize: 16,
                     fontWeight: 500,
                     color: '#fff',
-                    background: isActive ? '#0062f4ff' : 'transparent',
+                    background: isActive ? '#0062f4ff' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                     borderRadius: 6,
                     padding: '8px 12px',
                     width: '140px',
@@ -200,6 +203,35 @@ function TopBar({ title, isMobile, sidebarOpen, setSidebarOpen }) {
                 <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{auth?.user?.email || 'Supplier Account'}</p>
                 <p style={{ margin: 0, fontSize: 11, color: '#0B4DA1', textTransform: 'capitalize' }}>Role: {auth?.user?.role}</p>
               </div>
+              <Link
+                href={route('profile.edit')}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  background: 'transparent',
+                  color: '#0B4DA1',
+                  border: '1px solid #0B4DA1',
+                  padding: '8px 0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  marginBottom: 8,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#0B4DA1';
+                  e.target.style.color = '#fff';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#0B4DA1';
+                }}
+              >
+                Profile
+              </Link>
               <button
                 onClick={handleLogout}
                 style={{
