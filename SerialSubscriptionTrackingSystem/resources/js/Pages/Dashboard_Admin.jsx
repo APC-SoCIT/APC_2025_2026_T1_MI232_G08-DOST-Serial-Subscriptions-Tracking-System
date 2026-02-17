@@ -14,7 +14,7 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -22,13 +22,6 @@ const MONTHS = [
 ];
 
 const COLORS = ["#2563eb", "#22c55e", "#facc15", "#ef4444"];
-
-const BASE_YEAR_DATA = {
-  2022: { approved: 140, pending: 40, disabled: 20, rejected: 10 },
-  2023: { approved: 145, pending: 65, disabled: 18, rejected: 12 },
-  2024: { approved: 160, pending: 55, disabled: 22, rejected: 15 },
-  2025: { approved: 180, pending: 70, disabled: 30, rejected: 20 },
-};
 
 /* ================= HELPERS ================= */
 
@@ -115,49 +108,27 @@ return Math.max(diffDays / 365, 0.25);
 /* ================= COMPONENT ================= */
 
 export default function Dashboard() {
-  // Real user stats from database
-  const [userStats, setUserStats] = useState({ total: 0, approved: 0, pending: 0 });
-  // Supplier account stats (pending accounts for approval)
-  const [supplierStats, setSupplierStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
-
-  // Fetch user stats from database on mount
-  useEffect(() => {
-    const fetchUserStats = async () => {
-      try {
-        const response = await axios.get('/api/users/stats');
-        if (response.data.success) {
-          setUserStats(response.data.stats);
-        }
-      } catch (error) {
-        console.error('Error fetching user stats:', error);
-      }
-    };
-    fetchUserStats();
-  }, []);
-
-  // Fetch supplier account stats (for pending accounts awaiting approval)
-  useEffect(() => {
-    const fetchSupplierStats = async () => {
-      try {
-        const response = await axios.get('/api/supplier-accounts/stats');
-        if (response.data.success) {
-          setSupplierStats(response.data.stats);
-        }
-      } catch (error) {
-        console.error('Error fetching supplier account stats:', error);
-      }
-    };
-    fetchSupplierStats();
-  }, []);
+  // Dashboard statistics from database
+  const [dashboardStats, setDashboardStats] = useState({
+    users: { total: 0, approved: 0, pending: 0, disabled: 0 },
+    suppliers: { total: 0, pending: 0, approved: 0, rejected: 0, avg_approval_time: 0, approval_backlog: 0, inactive_suppliers: 0 },
+    subscriptions: { total: 0, active: 0 },
+  });
+  const [chartData, setChartData] = useState({
+    monthly: [],
+    supplier_status_pie: [],
+    user_status_pie: [],
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   // FILTER MODE: year | month | week | custom
 const [filterMode, setFilterMode] = useState("year");
 
-const [year, setYear] = useState(2024);
+const [year, setYear] = useState(2026);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2024, "January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2024, "December"));
+const [startDate, setStartDate] = useState(firstDayOfMonth(2025, "January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(2025, "December"));
 
 const [showFilterModal, setShowFilterModal] = useState(false);
 const [tempYear, setTempYear] = useState(year);
@@ -169,6 +140,30 @@ const [tempEndDate, setTempEndDate] = useState(endDate);
 // calendar month for Week mode
 const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
 const [calendarYear, setCalendarYear] = useState(year);
+
+  // Fetch dashboard stats from database
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get('/api/admin/dashboard-stats', {
+          params: {
+            start_date: startDate,
+            end_date: endDate,
+          }
+        });
+        if (response.data.success) {
+          setDashboardStats(response.data.stats);
+          setChartData(response.data.charts);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardStats();
+  }, [startDate, endDate]);
 
 
 const selectWeek = (day) => {
@@ -234,108 +229,76 @@ const selectedMonthIndex =
   MONTHS.includes(startMonth) ? monthIndex(startMonth) : 0;
 
 
-  /* ================= KPI DATA ================= */
+  /* ================= KPI DATA (FROM DATABASE) ================= */
 
-const stats = useMemo(() => {
-  const base = BASE_YEAR_DATA[year];
+// Use real data from database
+const approvalBacklog = dashboardStats.suppliers.approval_backlog || 0;
+const avgApprovalTime = dashboardStats.suppliers.avg_approval_time || 0;
+const inactiveSuppliers = dashboardStats.suppliers.inactive_suppliers || 0;
 
-  // Year mode = full year
-  if (filterMode === "year") {
-    return base;
+
+  /* ================= CHART DATA (FROM DATABASE) ================= */
+
+// Use monthly chart data from database, filtered by selected month range
+const approvalTrend = useMemo(() => {
+  if (!chartData.monthly || chartData.monthly.length === 0) {
+    // Return placeholder data if no data from database
+    return months.map(m => ({ month: m, approved: 0 }));
   }
+  
+  // Filter chart data by selected months
+  return chartData.monthly
+    .filter(item => months.includes(item.month))
+    .map(item => ({
+      month: item.month,
+      approved: item.approved || 0,
+    }));
+}, [chartData.monthly, months]);
 
-  // Month mode = cumulative to month
-  if (filterMode === "month") {
-    const monthProgress = (selectedMonthIndex + 1) / 12;
 
-    return {
-      approved: Math.round(base.approved * monthProgress),
-      pending: Math.round(base.pending * monthProgress),
-      disabled: Math.round(base.disabled * monthProgress),
-      rejected: Math.round(base.rejected * monthProgress),
-      total: Math.round(
-        (base.approved + base.pending) * monthProgress
-      ),
-    };
+// Approval vs Pending chart data from database
+const approvalVsPending = useMemo(() => {
+  if (!chartData.monthly || chartData.monthly.length === 0) {
+    return months.map(m => ({ month: m, approved: 0, pending: 0 }));
   }
-
-  // Week / Custom = scale by days
-  return {
-    approved: Math.round(base.approved * dFactor),
-    pending: Math.round(base.pending * dFactor),
-    disabled: Math.round(base.disabled * dFactor),
-    rejected: Math.round(base.rejected * dFactor),
-    total: Math.round(
-      (base.approved + base.pending) * dFactor
-    ),
-  };
-}, [year, startMonth, dFactor, filterMode]);
+  
+  return chartData.monthly
+    .filter(item => months.includes(item.month))
+    .map(item => ({
+      month: item.month,
+      approved: item.approved || 0,
+      pending: item.pending || 0,
+    }));
+}, [chartData.monthly, months]);
 
 
-// Approval backlog (>7 days)
-const approvalBacklog = Math.max(
-  1,
-  Math.round(stats.pending * 0.25 * dFactor)
-);
-
-// Average approval time (days)
-const avgApprovalTime = Math.max(
-  0.5,
-  Number((2.5 * (1 - dFactor + 0.2)).toFixed(1))
-);
-
-// Inactive approved suppliers
-const inactiveSuppliers = Math.max(
-  1,
-  Math.round(stats.approved * 0.07 * dFactor)
-);
+// Supplier creation chart data from database
+const supplierCreation = useMemo(() => {
+  if (!chartData.monthly || chartData.monthly.length === 0) {
+    return months.map(m => ({ month: m, created: 0 }));
+  }
+  
+  return chartData.monthly
+    .filter(item => months.includes(item.month))
+    .map(item => ({
+      month: item.month,
+      created: item.created || 0,
+    }));
+}, [chartData.monthly, months]);
 
 
-
-  /* ================= CHART DATA ================= */
-
-const approvalTrend = months.map((m, i) => {
-  const idx = monthIndex(m);
-  return {
-    month: m,
-    approved: Math.round(
-  (10 + idx) *
-  yFactor *
-  (filterMode === "week" || filterMode === "custom" ? dFactor : 1)
-)
-
-  };
-});
-
-
-
-const approvalVsPending = months.map((m) => {
-  const idx = monthIndex(m);
-  return {
-    month: m,
-    approved: Math.round((15 + idx) * yFactor * dFactor),
-    pending: Math.max(1, Math.round((12 - idx) * dFactor)),
-  };
-});
-
-
-
- const supplierCreation = months.map((m) => {
-  const idx = monthIndex(m);
-  return {
-    month: m,
-    created: Math.round((15 + idx * 2) * yFactor * dFactor),
-  };
-});
-
-
-
-  const pieData = [
-    { name: "Approved", value: stats.approved },
-    { name: "Pending", value: stats.pending },
-    { name: "Disabled", value: stats.disabled },
-    { name: "Rejected", value: stats.rejected },
+// Pie chart data from database - supplier account status distribution
+const pieData = useMemo(() => {
+  if (chartData.supplier_status_pie && chartData.supplier_status_pie.length > 0) {
+    return chartData.supplier_status_pie;
+  }
+  // Fallback to live stats
+  return [
+    { name: "Approved", value: dashboardStats.suppliers.approved || 0 },
+    { name: "Pending", value: dashboardStats.suppliers.pending || 0 },
+    { name: "Rejected", value: dashboardStats.suppliers.rejected || 0 },
   ];
+}, [chartData.supplier_status_pie, dashboardStats.suppliers]);
 
   return (
     <AdminLayout>
@@ -383,8 +346,14 @@ const approvalVsPending = months.map((m) => {
   
   {/* ================= FILTER MODAL ================= */}
 {showFilterModal && (
-  <div className="absolute right-6 top-20 z-50">
-    <div className="bg-white w-[420px] rounded-xl shadow-2xl border p-6 space-y-4">
+  <>
+    {/* Backdrop overlay - click to close */}
+    <div 
+      className="fixed inset-0 z-40" 
+      onClick={() => setShowFilterModal(false)}
+    />
+    <div className="absolute right-6 top-20 z-50" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white w-[420px] rounded-xl shadow-2xl border p-6 space-y-4">
 
 
       {/* Header */}
@@ -540,29 +509,30 @@ onClick={() => {
 
     </div>
   </div>
+  </>
 )}
 
 
         {/* KPIs */}
         {/* ================= KPIs ================= */}
 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-  <KPI title="Total Users" value={userStats.total} />
-  <KPI title="Approved Users" value={userStats.approved} />
-  <KPI title="Pending Accounts" value={supplierStats.pending} />
+  <KPI title="Total Users" value={isLoading ? '...' : dashboardStats.users.total} />
+  <KPI title="Approved Users" value={isLoading ? '...' : dashboardStats.users.approved} />
+  <KPI title="Pending Accounts" value={isLoading ? '...' : dashboardStats.suppliers.pending} />
 
   <KPI
     title="Approval Backlog (>7 days)"
-    value={approvalBacklog}
+    value={isLoading ? '...' : approvalBacklog}
   />
 
   <KPI
     title="Avg Approval Time (days)"
-    value={avgApprovalTime}
+    value={isLoading ? '...' : avgApprovalTime}
   />
 
   <KPI
     title="Inactive Approved Suppliers"
-    value={inactiveSuppliers}
+    value={isLoading ? '...' : inactiveSuppliers}
   />
 </div>
 

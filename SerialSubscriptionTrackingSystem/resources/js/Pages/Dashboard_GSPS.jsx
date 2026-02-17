@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import GSPSLayout from "@/Layouts/GSPSLayout";
 import { Head } from "@inertiajs/react";
+import axios from 'axios';
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -12,7 +13,7 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -74,10 +75,21 @@ const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent })
 
 export default function DashboardGSPS() {
 
+  /* ===== DASHBOARD DATA FROM DATABASE ===== */
+  const [dashboardStats, setDashboardStats] = useState({
+    received: 0,
+    forwarded: 0,
+    pending: 0,
+    returned: 0,
+    success_rate: 0,
+  });
+  const [chartData, setChartData] = useState({ monthly: [] });
+  const [isLoading, setIsLoading] = useState(true);
+
   /* ===== FILTER STATE (APPLIED) ===== */
 
   const [filterMode, setFilterMode] = useState("year");
-  const [year, setYear] = useState(2025);
+  const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
   const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
@@ -126,6 +138,30 @@ export default function DashboardGSPS() {
     setTempEndDate(sunday.toISOString().split("T")[0]);
   };
 
+  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get('/api/gsps/dashboard-stats', {
+          params: {
+            start_date: startDate,
+            end_date: endDate,
+          }
+        });
+        if (response.data.success) {
+          setDashboardStats(response.data.stats);
+          setChartData(response.data.charts);
+        }
+      } catch (error) {
+        console.error('Error fetching GSPS dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardStats();
+  }, [startDate, endDate]);
+
   /* ===== FACTOR ===== */
 
   const factor = useMemo(()=>{
@@ -165,54 +201,70 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= KPIs ================= */
+  /* ================= KPIs (FROM DATABASE) ================= */
 
- const kpis = useMemo(()=>{
-  const received = Math.round(150 * factor);
-
-  // Forwarded depends on efficiency
-  const forwarded = Math.round(received * efficiency);
-
-  // Returned increases when efficiency drops
-  const returned = Math.round(received * (1 - efficiency) * 0.8);
-
-  const pending = Math.max(received - forwarded - returned,0);
-
-  return {
-    received,
-    forwarded,
-    pending,
-    returned,
-    success: Math.round((forwarded/Math.max(received,1))*100)
+  // Use real data from database
+  const kpis = {
+    received: dashboardStats.received || 0,
+    forwarded: dashboardStats.forwarded || 0,
+    pending: dashboardStats.pending || 0,
+    returned: dashboardStats.returned || 0,
+    success: dashboardStats.success_rate || 0,
   };
-},[factor, efficiency]);
 
 
 
-  /* ================= CHART DATA ================= */
+  /* ================= CHART DATA (FROM DATABASE) ================= */
 
-  const intakeTrend = months.map((m,i)=>({
-    month:m,
-    received: Math.round((10+i*2)*factor)
-  }));
+  const intakeTrend = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          received: item.received || 0,
+        }));
+    }
+    return months.map((m) => ({ month: m, received: 0 }));
+  }, [chartData.monthly, months]);
 
-  const pipelineData = months.map((m,i)=>({
-    month:m,
-    received: Math.round((12+i)*factor),
-    pending: Math.round((3-i*0.2)*factor),
-    forwarded: Math.round((10+i)*factor),
-    returned: Math.round((1+i*0.1)*factor)
-  }));
+  const pipelineData = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          received: item.received || 0,
+          pending: item.pending || 0,
+          forwarded: item.forwarded || 0,
+          returned: item.returned || 0,
+        }));
+    }
+    return months.map((m) => ({
+      month: m,
+      received: 0,
+      pending: 0,
+      forwarded: 0,
+      returned: 0,
+    }));
+  }, [chartData.monthly, months]);
 
-  const forwardedMonthly = months.map((m,i)=>({
-    month:m,
-    forwarded: Math.round((9+i*1.5)*factor)
-  }));
+  const forwardedMonthly = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          forwarded: item.forwarded || 0,
+        }));
+    }
+    return months.map((m) => ({ month: m, forwarded: 0 }));
+  }, [chartData.monthly, months]);
 
   const pieData = [
-  { name:"Forwarded", value:kpis.forwarded },
-  { name:"Returned", value:kpis.returned }
-];
+    { name: "Forwarded", value: kpis.forwarded },
+    { name: "Returned", value: kpis.returned }
+  ];
 
   /* ================= UI ================= */
 
@@ -251,7 +303,13 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
           {/* ===== POPUP ===== */}
           {showFilter && (
-            <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50">
+            <>
+              {/* Backdrop overlay - click to close */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowFilter(false)}
+              />
+              <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50" onClick={(e) => e.stopPropagation()}>
 
               <div className="flex justify-between">
                 <h3 className="font-bold">Filter by</h3>
@@ -355,6 +413,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                 Apply
               </button>
             </div>
+            </>
           )}
         </div>
 
