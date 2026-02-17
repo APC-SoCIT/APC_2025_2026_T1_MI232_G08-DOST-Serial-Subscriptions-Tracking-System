@@ -23,6 +23,7 @@ export default function AdminLayout({ children, header, title }) {
   const [openAccount, setOpenAccount] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState(null);
 
   // Check screen size
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function AdminLayout({ children, header, title }) {
         {/* NAV */}
         <nav style={{ width: '100%' }}>
           <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
-            {navItems.map((item) => {
+            {navItems.map((item, idx) => {
               const isActive = url.startsWith(item.href);
               
               return (
@@ -170,6 +171,8 @@ export default function AdminLayout({ children, header, title }) {
                       if (isMobile) setSidebarOpen(false);
                       router.get(item.href);
                     }}
+                    onMouseEnter={() => setHoveredItem(idx)}
+                    onMouseLeave={() => setHoveredItem(null)}
                     style={{
                       margin: '10px 0',
                       display: 'flex',
@@ -178,7 +181,7 @@ export default function AdminLayout({ children, header, title }) {
                       fontSize: isMobile ? 14 : 16,
                       fontWeight: 500,
                       color: '#fff',
-                      background: isActive ? '#0062f4ff' : 'transparent',
+                      background: isActive ? '#0062f4ff' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                       borderRadius: 6,
                       padding: '8px 12px',
                       width: isMobile ? '170px' : '140px',
@@ -283,6 +286,13 @@ export default function AdminLayout({ children, header, title }) {
                     <p className="text-xs text-blue-600 capitalize mb-4">
                       Role: {user?.role || 'admin'}
                     </p>
+
+                    <button
+                      onClick={() => router.get(route('profile.edit'))}
+                      className="w-full bg-transparent text-[#0f57a3] border border-[#0f57a3] py-2 rounded-md text-sm mb-2 hover:bg-[#0f57a3] hover:text-white transition-all"
+                    >
+                      Profile
+                    </button>
 
                     <button
                       onClick={() => router.post(route('logout'))}

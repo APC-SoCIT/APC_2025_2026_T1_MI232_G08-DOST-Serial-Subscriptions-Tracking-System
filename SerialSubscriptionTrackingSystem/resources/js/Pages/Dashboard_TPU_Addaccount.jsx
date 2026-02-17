@@ -35,6 +35,17 @@ function AddAccount() {
     }
   };
 
+  const handlePhoneChange = (e) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 11);
+    setFormData(prev => ({
+      ...prev,
+      phone: value
+    }));
+    if (errors.phone) {
+      setErrors(prev => ({ ...prev, phone: '' }));
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -51,6 +62,11 @@ function AddAccount() {
     }
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
+    } else {
+      const digitsOnly = formData.phone.replace(/\D/g, '');
+      if (digitsOnly.length !== 11) {
+        newErrors.phone = 'Phone number must be exactly 11 digits';
+      }
     }
     if (!formData.address.trim()) {
       newErrors.address = 'Address is required';
@@ -231,11 +247,12 @@ function AddAccount() {
                 Phone Number <span style={{ color: '#dc3545' }}>*</span>
               </label>
               <input
-                type="text"
+                type="tel"
                 name="phone"
                 value={formData.phone}
-                onChange={handleInputChange}
-                placeholder="+63 XXX XXX XXXX"
+                onChange={handlePhoneChange}
+                placeholder="09XXXXXXXXX"
+                maxLength={11}
                 style={{
                   ...inputStyle,
                   borderColor: errors.phone ? '#dc3545' : '#ddd',

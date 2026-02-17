@@ -22,6 +22,7 @@ export default function InspectionLayout({ children, title }) {
   const [openAccount, setOpenAccount] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState(null);
 
   // Check screen size for responsive behavior
   useEffect(() => {
@@ -135,13 +136,15 @@ export default function InspectionLayout({ children, title }) {
 
         <nav style={{ width: '100%' }}>
           <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
-            {navItems.map((item) => {
+            {navItems.map((item, idx) => {
               const isActive = url.startsWith(item.href);
               
               return (
                 <li key={item.label}>
                   <Link
                     href={item.href}
+                    onMouseEnter={() => setHoveredItem(idx)}
+                    onMouseLeave={() => setHoveredItem(null)}
                     style={{
                       margin: '10px 0',
                       display: 'flex',
@@ -150,7 +153,7 @@ export default function InspectionLayout({ children, title }) {
                       fontSize: 16,
                       fontWeight: 500,
                       color: '#fff',
-                      background: isActive ? '#0062f4ff' : 'transparent',
+                      background: isActive ? '#0062f4ff' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                       borderRadius: 6,
                       padding: '8px 12px',
                       width: '140px',
@@ -269,6 +272,36 @@ export default function InspectionLayout({ children, title }) {
                       <p style={{ margin: 0, fontSize: 13, color: '#777' }}>{user?.email || 'Inspection Team'}</p>
                       <p style={{ margin: 0, fontSize: 11, color: '#0f57a3', textTransform: 'capitalize' }}>Role: {user?.role}</p>
                     </div>
+
+                    <Link
+                      href={route('profile.edit')}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        background: 'transparent',
+                        color: '#004A98',
+                        border: '1px solid #004A98',
+                        padding: '8px 0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        textAlign: 'center',
+                        textDecoration: 'none',
+                        marginBottom: 8,
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseOver={(e) => {
+                        e.target.style.background = '#004A98';
+                        e.target.style.color = '#fff';
+                      }}
+                      onMouseOut={(e) => {
+                        e.target.style.background = 'transparent';
+                        e.target.style.color = '#004A98';
+                      }}
+                    >
+                      Profile
+                    </Link>
 
                     <button
                       onClick={() => router.post(route('logout'))}
