@@ -6,8 +6,9 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';
 
 const ROLES = [
+  { value: 'admin', label: 'Admin' },
   { value: 'tpu', label: 'TPU (Technical Processing Unit)' },
-  { value: 'gsps', label: 'GSPS (General Services & Procurement Section)' },
+  { value: 'gsps', label: 'GSPS (General Services & Service Section)' },
   { value: 'inspection', label: 'Inspection' },
 ];
 

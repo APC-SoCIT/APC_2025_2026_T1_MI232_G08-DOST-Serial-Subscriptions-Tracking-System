@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import InspectionLayout from "@/Layouts/InspectionLayout";
 import { Head } from "@inertiajs/react";
+import axios from 'axios';
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -12,7 +13,7 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -76,10 +77,21 @@ const getDaysInMonth = (year, month) => {
 
 export default function InspectionDashboard() {
 
+  /* ===== DASHBOARD DATA FROM DATABASE ===== */
+  const [dashboardStats, setDashboardStats] = useState({
+    received: 0,
+    inspected: 0,
+    pending: 0,
+    returned: 0,
+    success_rate: 0,
+  });
+  const [chartData, setChartData] = useState({ monthly: [] });
+  const [isLoading, setIsLoading] = useState(true);
+
  /* ===== FILTER STATE (same as Supplier) ===== */
 
 const [filterMode, setFilterMode] = useState("year");
-const [year, setYear] = useState(2025);
+const [year, setYear] = useState(2026);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
 const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
@@ -127,6 +139,30 @@ const selectWeek = (day) => {
   setTempEndDate(sunday.toISOString().split("T")[0]);
 };
 
+  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get('/api/inspection/dashboard-stats', {
+          params: {
+            start_date: startDate,
+            end_date: endDate,
+          }
+        });
+        if (response.data.success) {
+          setDashboardStats(response.data.stats);
+          setChartData(response.data.charts);
+        }
+      } catch (error) {
+        console.error('Error fetching Inspection dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardStats();
+  }, [startDate, endDate]);
+
   /* ===== FACTOR ===== */
 
 const factor = useMemo(() => {
@@ -146,73 +182,69 @@ const factor = useMemo(() => {
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= PERFORMANCE MODEL ================= */
+  /* ================= KPIs (FROM DATABASE) ================= */
 
-  const baseEfficiency =
-    year === 2022 ? 0.85 :
-    year === 2023 ? 0.88 :
-    year === 2024 ? 0.90 :
-    year === 2025 ? 0.92 :
-    0.90;
-
-  const rangeImpact =
-    filterMode === "year" ? 1 :
-    filterMode === "month" ? 0.96 :
-    filterMode === "week" ? 0.92 :
-    0.94;
-
-  const spanImpact = dateRangeFactor(startDate,endDate);
-  const normalizedSpan = 0.85 + spanImpact * 0.15;
-
-  const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
-
-  /* ================= KPIs ================= */
-
-const kpis = useMemo(() => {
-
-  const received = Math.round(160 * factor);
-
-  const inspected = Math.round(received * efficiency);
-
-  const returned = Math.round(received * (1 - efficiency) * 0.9);
-
-  const pending = Math.max(received - inspected - returned, 0);
-
-  return {
-    received,
-    inspected,
-    returned,
-    pending,
-    success: Math.round((inspected / Math.max(received, 1)) * 100)
+  // Use real data from database
+  const kpis = {
+    received: dashboardStats.received || 0,
+    inspected: dashboardStats.inspected || 0,
+    pending: dashboardStats.pending || 0,
+    returned: dashboardStats.returned || 0,
+    success: dashboardStats.success_rate || 0,
   };
 
-}, [factor, efficiency]);
 
+  /* ================= CHART DATA (FROM DATABASE) ================= */
 
-  /* ================= CHART DATA ================= */
+  const intakeTrend = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          received: item.received || 0,
+        }));
+    }
+    return months.map((m) => ({ month: m, received: 0 }));
+  }, [chartData.monthly, months]);
 
-  const intakeTrend = months.map((m,i)=>({
-    month:m,
-    received: Math.round((10+i*2)*factor)
-  }));
+  const pipelineData = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          received: item.received || 0,
+          pending: item.pending || 0,
+          inspected: item.inspected || 0,
+          returned: item.returned || 0,
+        }));
+    }
+    return months.map((m) => ({
+      month: m,
+      received: 0,
+      pending: 0,
+      inspected: 0,
+      returned: 0,
+    }));
+  }, [chartData.monthly, months]);
 
-  const pipelineData = months.map((m,i)=>({
-    month:m,
-    received: Math.round((12+i)*factor),
-    pending: Math.round((4-i*0.2)*factor),
-    inspected: Math.round((10+i*1.2)*factor),
-    returned: Math.round((1+i*0.2)*factor)
-  }));
-
-  const inspectedVolume = months.map((m,i)=>({
-    month:m,
-    inspected: Math.round((9+i*1.6)*factor)
-  }));
+  const inspectedVolume = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          inspected: item.inspected || 0,
+        }));
+    }
+    return months.map((m) => ({ month: m, inspected: 0 }));
+  }, [chartData.monthly, months]);
 
   const pieData = [
-  { name:"Inspected (Passed)", value: kpis.inspected },
-  { name:"Returned", value: kpis.returned }
-];
+    { name: "Inspected (Passed)", value: kpis.inspected },
+    { name: "Returned", value: kpis.returned }
+  ];
 
   /* ================= UI ================= */
 
@@ -252,7 +284,13 @@ const kpis = useMemo(() => {
 
   {/* ===== POPUP ===== */}
   {showFilter && (
-    <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50">
+    <>
+      {/* Backdrop overlay - click to close */}
+      <div 
+        className="fixed inset-0 z-40" 
+        onClick={() => setShowFilter(false)}
+      />
+      <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50" onClick={(e) => e.stopPropagation()}>
 
       <div className="flex justify-between">
         <h3 className="font-bold">Filter by</h3>
@@ -362,6 +400,7 @@ const kpis = useMemo(() => {
         Apply
       </button>
     </div>
+    </>
   )}
 </div>
 
