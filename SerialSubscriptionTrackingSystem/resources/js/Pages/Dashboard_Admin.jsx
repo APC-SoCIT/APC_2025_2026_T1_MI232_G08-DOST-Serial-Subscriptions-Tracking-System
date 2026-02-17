@@ -406,7 +406,7 @@ const approvalVsPending = months.map((m) => {
             onClick={() => setFilterMode(mode)}
             className={`px-3 py-1 rounded-full text-sm font-semibold border
               ${filterMode === mode
-                ? "bg-green-700 text-white"
+                ? "bg-blue-700 text-white"
                 : "bg-gray-100"}`}
           >
             {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -423,7 +423,7 @@ const approvalVsPending = months.map((m) => {
               onClick={() => setTempYear(y)}
               className={`p-3 rounded-lg border font-semibold
                 ${tempYear === y
-                  ? "bg-green-700 text-white"
+                  ? "bg-blue-700 text-white"
                   : "bg-gray-100"}`}
             >
               {y}
@@ -453,7 +453,7 @@ onClick={() => {
 
               className={`p-2 text-sm rounded border
                 ${tempStartMonth === m
-                  ? "bg-green-700 text-white"
+                  ? "bg-blue-700 text-white"
                   : "bg-gray-100"}`}
             >
               {m}
@@ -506,7 +506,7 @@ onClick={() => {
           disabled={!day}
           onClick={() => day && selectWeek(day)}
           className={`p-2 rounded-lg text-sm
-            ${day ? "hover:bg-green-100" : ""}
+            ${day ? "hover:bg-blue-100" : ""}
           `}
         >
           {day || ""}
@@ -533,7 +533,7 @@ onClick={() => {
       {/* APPLY BUTTON */}
       <button
         onClick={applyFilter}
-        className="w-full bg-green-800 text-white py-3 rounded-lg font-bold"
+        className="w-full bg-blue-800 text-white py-3 rounded-lg font-bold"
       >
         Apply
       </button>
