@@ -4,6 +4,8 @@ import { MdSearch, MdFilterList, MdOutlineInfo, MdAddCircle, MdClose, MdDelete, 
 import { FiTrendingUp, FiTrendingDown } from "react-icons/fi";
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 // Subscription Tracking Component
 function SubscriptionTracking() {
@@ -303,7 +305,7 @@ function SubscriptionTracking() {
 
   const handleSaveEdit = async () => {
     if (!editFormData.serialTitle || !editFormData.supplierName) {
-      alert('Please fill in Serial Title and Supplier Name');
+      Swal.fire({ title: 'Please fill in Serial Title and Supplier Name', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
 
@@ -335,7 +337,7 @@ function SubscriptionTracking() {
       }
     } catch (error) {
       console.error('Error updating subscription:', error);
-      alert('Failed to update subscription. Please try again.');
+      Swal.fire({ title: 'Failed to update subscription. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setEditSubmitting(false);
     }
@@ -367,7 +369,7 @@ function SubscriptionTracking() {
       }
     } catch (error) {
       console.error('Error deleting subscription:', error);
-      alert('Failed to remove subscription. Please try again.');
+      Swal.fire({ title: 'Failed to remove subscription. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setDeleteSubmitting(false);
     }
@@ -472,7 +474,7 @@ function SubscriptionTracking() {
 
   const handleAddSerialItem = () => {
     if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierName || !serialFormData.deliveryDate) {
-      alert('Please fill in all required fields (Serial Title, ISSN, Supplier Name, Delivery Date). Volume and Issues fields are optional.');
+      Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Name, Delivery Date). Volume and Issues fields are optional.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
 
@@ -515,7 +517,7 @@ function SubscriptionTracking() {
 
   const handleSaveSerials = async () => {
     if (serialItems.length === 0) {
-      alert('Please add at least one serial item');
+      Swal.fire({ title: 'Please add at least one serial item', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
     
@@ -584,7 +586,7 @@ function SubscriptionTracking() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error creating subscription:', error);
-      alert('Failed to create subscription. Please try again.');
+      Swal.fire({ title: 'Failed to create subscription. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setSubmitting(false);
     }

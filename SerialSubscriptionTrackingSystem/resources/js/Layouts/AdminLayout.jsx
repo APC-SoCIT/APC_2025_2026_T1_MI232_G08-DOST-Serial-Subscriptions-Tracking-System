@@ -6,6 +6,7 @@ import { ImStatsBars } from "react-icons/im";
 import { MdNotifications } from "react-icons/md";
 import { FaUserCircle } from "react-icons/fa";
 import { useRole } from "@/Components/RequireRole";
+import ChatNotification from "@/Components/Chat/ChatNotification";
 
 /* ===================== NAV ITEMS ===================== */
 const navItems = [
@@ -312,6 +313,7 @@ export default function AdminLayout({ children, header, title }) {
           {children}
         </main>
       </div>
+      <ChatNotification />
     </div>
   );
 }
