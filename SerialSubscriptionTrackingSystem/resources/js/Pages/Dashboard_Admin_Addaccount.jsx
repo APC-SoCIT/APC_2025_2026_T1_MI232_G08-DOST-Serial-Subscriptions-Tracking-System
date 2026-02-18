@@ -8,8 +8,9 @@ import Swal from 'sweetalert2';
 import 'animate.css';
 
 const ROLES = [
+  { value: 'admin', label: 'Admin' },
   { value: 'tpu', label: 'TPU (Technical Processing Unit)' },
-  { value: 'gsps', label: 'GSPS (General Services & Procurement Section)' },
+  { value: 'gsps', label: 'GSPS (General Services & Service Section)' },
   { value: 'inspection', label: 'Inspection' },
 ];
 

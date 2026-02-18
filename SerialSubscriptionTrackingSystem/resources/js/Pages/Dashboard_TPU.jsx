@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import TPULayout from "@/Layouts/TPULayout";
 import { Head } from "@inertiajs/react";
+import axios from 'axios';
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -12,7 +13,7 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 const PIPELINE_COLORS = {
   awarded: "#3b82f6",     // Blue
   delivered: "#22c55e",   // Green
@@ -64,12 +65,27 @@ const getDaysInMonth = (year, month) => {
 
 export default function TPUDashboard() {
 
+  /* ===== DASHBOARD DATA FROM DATABASE ===== */
+  const [dashboardStats, setDashboardStats] = useState({
+    total_serials: 0,
+    awarded: 0,
+    delivered: 0,
+    for_delivery: 0,
+    inspected: 0,
+    returned: 0,
+    pending: 0,
+    prepare: 0,
+    efficiency: 0,
+  });
+  const [chartData, setChartData] = useState({ monthly: [], pipeline: [] });
+  const [isLoading, setIsLoading] = useState(true);
+
   /* ===== FILTER STATE ===== */
 
   const [filterMode, setFilterMode] = useState("year");       // applied
 const [tempFilterMode, setTempFilterMode] = useState("year"); // popup
 
-  const [year, setYear] = useState(2025);
+  const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
   const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
@@ -140,6 +156,30 @@ useEffect(() => {
     setTempEndDate(sunday.toISOString().split("T")[0]);
   };
 
+  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get('/api/tpu/dashboard-stats', {
+          params: {
+            start_date: startDate,
+            end_date: endDate,
+          }
+        });
+        if (response.data.success) {
+          setDashboardStats(response.data.stats);
+          setChartData(response.data.charts);
+        }
+      } catch (error) {
+        console.error('Error fetching TPU dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardStats();
+  }, [startDate, endDate]);
+
   /* ================= MASTER FACTOR ================= */
 
   const filterFactor = useMemo(() => {
@@ -192,70 +232,62 @@ useEffect(() => {
     setShowFilter(false);
   };
 
-  /* ================= KPI ================= */
+  /* ================= KPI (FROM DATABASE) ================= */
 
-const total = Math.round(320 * filterFactor);
-
-// Base efficiency reacts to filter mode
-let baseEfficiency =
-  filterMode === "week" ? 0.75 :
-  filterMode === "month" ? 0.8 :
-  filterMode === "custom" ? 0.78 :
-  0.82;
-
-// Year impact (performance improves over years)
-const yearEfficiencyFactor =
-  year === 2022 ? 0.9 :
-  year === 2023 ? 0.95 :
-  year === 2024 ? 1 :
-  year === 2025 ? 1.05 :
-  1;
-
-// Final efficiency
-const deliveryEfficiency = baseEfficiency * yearEfficiencyFactor;
-
-// Cap at realistic range
-const delivered = Math.round(
-  total * Math.min(deliveryEfficiency, 0.98)
-);
-
-
-
+  // Use real data from database
   const kpis = {
-  total,
-  delivered,
-  awaiting: Math.round(35 * filterFactor),
-  returned: Math.round(25 * filterFactor),
-  inspected: Math.round(250 * filterFactor),
-  success: Math.round((delivered / Math.max(total,1)) * 100)
-};
+    total: dashboardStats.total_serials || dashboardStats.awarded || 0,
+    delivered: dashboardStats.delivered || 0,
+    awaiting: dashboardStats.for_delivery || 0,
+    returned: dashboardStats.returned || 0,
+    inspected: dashboardStats.inspected || 0,
+    pending: dashboardStats.pending || 0,
+    prepare: dashboardStats.prepare || 0,
+    success: dashboardStats.efficiency || 0,
+  };
 
-  /* ================= CHART DATA ================= */
+  /* ================= CHART DATA (FROM DATABASE) ================= */
 
-  const pipelineData = months.map((m,i)=>({
-    month:m,
-    awarded: Math.round((30+i*2) * filterFactor),
-    delivered: Math.round((25+i*2) * filterFactor),
-    forDelivery: Math.round((15+i) * filterFactor),
-    inspected: Math.round((10+i) * filterFactor),
-    returned: Math.round((5+i*0.5) * filterFactor)
-  }));
+  // Use chart data from database or generate fallback
+  const pipelineData = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly.filter(item => months.includes(item.month));
+    }
+    // Fallback to placeholder data
+    return months.map((m) => ({
+      month: m,
+      awarded: 0,
+      delivered: 0,
+      forDelivery: 0,
+      inspected: 0,
+      returned: 0,
+    }));
+  }, [chartData.monthly, months]);
 
-  const deliveryTrend = months.map((m,i)=>({
-    month:m,
-    delivered: Math.round((15+i*1.5) * filterFactor)
-  }));
+  const deliveryTrend = useMemo(() => {
+    if (chartData.monthly && chartData.monthly.length > 0) {
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          delivered: item.delivered || 0,
+        }));
+    }
+    return months.map((m) => ({ month: m, delivered: 0 }));
+  }, [chartData.monthly, months]);
+
+  const inspectionPie = useMemo(() => {
+    return [
+      { name: "Inspected", value: dashboardStats.inspected || 0 },
+      { name: "Returned", value: dashboardStats.returned || 0 },
+    ];
+  }, [dashboardStats]);
 
   const supplierRanking = [
-    { name:"ABC Books", value: Math.min(100, Math.round(98 * filterFactor)) },
-    { name:"Med Pub Ltd", value: Math.min(100, Math.round(95 * filterFactor)) },
-    { name:"Global Periodicals", value: Math.min(100, Math.round(80 * filterFactor)) },
-    { name:"Nat Geo", value: Math.min(100, Math.round(72 * filterFactor)) }
-  ];
-
-  const inspectionPie = [
-    { name:"Inspected", value: Math.round(275 * filterFactor) },
-    { name:"Returned", value: Math.round(22 * filterFactor) }
+    { name:"ABC Books", value: 100 },
+    { name:"Med Pub Ltd", value: 95 },
+    { name:"Global Periodicals", value: 80 },
+    { name:"Nat Geo", value: 72 }
   ];
 
   const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -297,7 +329,13 @@ const delivered = Math.round(
 
           {/* POPUP */}
           {showFilter && (
-            <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50">
+            <>
+              {/* Backdrop overlay - click to close */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowFilter(false)}
+              />
+              <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50" onClick={(e) => e.stopPropagation()}>
 
               <div className="flex justify-between">
                 <h3 className="font-bold">Filter by</h3>
@@ -377,6 +415,7 @@ const delivered = Math.round(
                 Apply
               </button>
             </div>
+            </>
           )}
         </div>
 
