@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import GSPSLayout from '@/Layouts/GSPSLayout';
 import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage } from "react-icons/md";
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 // Delivery Status Component - MATCHING YOUR IMAGE EXACTLY
 function DeliveryStatus() {
@@ -50,12 +52,12 @@ function DeliveryStatus() {
     if (file) {
       // Check if it's an image
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file (JPG, PNG, etc.)');
+        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
+        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       setAttachmentFile(file);
@@ -90,7 +92,7 @@ function DeliveryStatus() {
     
     // Require attachment
     if (!attachmentFile) {
-      alert('Please upload an image of the received serial before confirming.');
+      Swal.fire({ title: 'Please upload an image of the received serial before confirming.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
     
@@ -126,11 +128,11 @@ function DeliveryStatus() {
         ));
         handleCloseConfirmModal();
       } else {
-        alert('Failed to confirm receipt. Please try again.');
+        Swal.fire({ title: 'Failed to confirm receipt. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       }
     } catch (err) {
       console.error('Error confirming receipt:', err);
-      alert('Failed to confirm receipt. Please try again.');
+      Swal.fire({ title: 'Failed to confirm receipt. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setUploading(false);
     }

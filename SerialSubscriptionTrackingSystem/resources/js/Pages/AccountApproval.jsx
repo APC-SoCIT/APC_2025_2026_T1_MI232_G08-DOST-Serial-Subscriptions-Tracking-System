@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 export default function AccountApproval() {
   const [allAccounts, setAllAccounts] = useState([]);
@@ -52,11 +54,23 @@ export default function AccountApproval() {
       if (response.data.success) {
         // Remove the approved account from the list
         setAllAccounts(prev => prev.filter(acc => acc.id !== account.id));
-        alert(`${account.name} has been approved successfully!`);
+        Swal.fire({
+          title: `${account.name} has been approved successfully!`,
+          icon: 'success',
+          confirmButtonColor: '#0062f4',
+          showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+          hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+        });
       }
     } catch (error) {
       console.error('Error approving account:', error);
-      alert('Failed to approve account. Please try again.');
+      Swal.fire({
+        title: 'Failed to approve account. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#0062f4',
+        showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+        hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+      });
     } finally {
       setProcessingId(null);
     }
@@ -65,7 +79,19 @@ export default function AccountApproval() {
   const handleReject = async (account) => {
     if (processingId) return;
     
-    const reason = prompt('Enter rejection reason (optional):');
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Enter rejection reason (optional):',
+      input: 'text',
+      inputPlaceholder: 'Reason for rejection...',
+      showCancelButton: true,
+      confirmButtonText: 'Reject',
+      confirmButtonColor: '#0062f4',
+      cancelButtonColor: '#6b7280',
+      showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+      hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+    });
+
+    if (!isConfirmed) return;
     
     setProcessingId(account.id);
     try {
@@ -75,11 +101,23 @@ export default function AccountApproval() {
       if (response.data.success) {
         // Remove the rejected account from the list
         setAllAccounts(prev => prev.filter(acc => acc.id !== account.id));
-        alert(`${account.name} has been rejected.`);
+        Swal.fire({
+          title: `${account.name} has been rejected.`,
+          icon: 'info',
+          confirmButtonColor: '#0062f4',
+          showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+          hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+        });
       }
     } catch (error) {
       console.error('Error rejecting account:', error);
-      alert('Failed to reject account. Please try again.');
+      Swal.fire({
+        title: 'Failed to reject account. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#0062f4',
+        showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+        hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+      });
     } finally {
       setProcessingId(null);
     }

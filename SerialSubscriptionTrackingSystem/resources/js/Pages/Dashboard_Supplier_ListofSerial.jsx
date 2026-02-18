@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, router, usePage } from "@inertiajs/react";
 import axios from "axios";
+import Swal from 'sweetalert2';
+import 'animate.css';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { IoSearchOutline } from "react-icons/io5"; // Added for search icon
@@ -403,11 +405,11 @@ function Dashboard_Supplier_ListofSerial() {
         ));
       } else {
         console.error('Failed to update status:', response.data.message);
-        alert('Failed to update status. Please try again.');
+        Swal.fire({ title: 'Failed to update status. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       }
     } catch (err) {
       console.error('Error updating serial status:', err);
-      alert('Failed to update status. Please try again.');
+      Swal.fire({ title: 'Failed to update status. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
     
     setConfirmModal({ show: false, serialId: null, serialData: null, type: null });

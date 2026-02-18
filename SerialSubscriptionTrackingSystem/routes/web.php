@@ -164,6 +164,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/chats/get-or-create', [ChatController::class, 'getOrCreateChat'])->name('chats.getOrCreate');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'storeMessage'])->name('messages.store');
     Route::get('/api/chats/{message}/download', [ChatController::class, 'downloadAttachment'])->name('file.download');
+    Route::post('/api/chats/{chat}/read', [ChatController::class, 'markAsRead'])->name('chats.markAsRead');
     Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
     Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
 });

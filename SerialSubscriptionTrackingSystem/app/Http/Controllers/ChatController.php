@@ -64,7 +64,7 @@ class ChatController extends Controller
 
         $chats = Chat::where('user_id_1', $userId)
             ->orWhere('user_id_2', $userId)
-            ->with(['latestMessage', 'messages'])
+            ->with(['messages'])
             ->orderBy('last_message_at', 'desc')
             ->get()
             ->map(function ($chat) use ($userId) {
@@ -75,13 +75,20 @@ class ChatController extends Controller
                 $otherName = $chatUserId1 === $userId ? $chat->user_2_name : $chat->user_1_name;
                 $otherRole = $chatUserId1 === $userId ? $chat->user_2_role : $chat->user_1_role;
 
+                $latestMessage = $chat->messages->last();
+
+                // Count unread messages (sent by the other user and not yet read)
+                $unreadCount = $chat->messages->filter(function ($msg) use ($userId) {
+                    return (string) $msg->sender_id !== $userId && is_null($msg->read_at);
+                })->count();
+
                 return [
                     'id' => (string) $chat->_id,
                     'name' => $otherName,
                     'role' => $otherRole,
-                    'lastMessage' => $chat->latestMessage?->content ?? 'No messages yet',
+                    'lastMessage' => $latestMessage?->content ?? 'No messages yet',
                     'timestamp' => $chat->last_message_at ? $chat->last_message_at->toISOString() : null,
-                    'unread' => 0,
+                    'unread' => $unreadCount,
                 ];
             });
 
@@ -341,6 +348,30 @@ class ChatController extends Controller
             \Log::error('Error updating message', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Mark all messages in a chat as read for the current user
+     */
+    public function markAsRead($chatId)
+    {
+        $chat = Chat::findOrFail($chatId);
+        $userId = (string) Auth::id();
+        $chatUserId1 = (string) $chat->user_id_1;
+        $chatUserId2 = (string) $chat->user_id_2;
+
+        // Verify user is part of this chat
+        if ($chatUserId1 !== $userId && $chatUserId2 !== $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Mark all messages from other user as read
+        Message::where('chat_id', $chatId)
+            ->where('sender_id', '!=', $userId)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
     }
 
     /**

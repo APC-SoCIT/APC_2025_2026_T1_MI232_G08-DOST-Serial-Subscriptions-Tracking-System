@@ -6,6 +6,8 @@ import { FaFileAlt, FaFilePdf, FaFileWord, FaFileExcel, FaFileImage } from "reac
 import EmojiPicker from './EmojiPicker';
 import ChatSkeleton from './ChatSkeleton';
 import MessageStatus from './MessageStatus';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
@@ -68,9 +70,11 @@ export default function ChatComponent({
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [newChatSearchTerm, setNewChatSearchTerm] = useState('');
   
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const contactsPollRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const currentChatIdRef = useRef(null);
@@ -78,6 +82,22 @@ export default function ChatComponent({
   useEffect(() => {
     fetchContacts();
     fetchAvailableUsers();
+
+    // Poll contacts to keep sidebar up to date
+    contactsPollRef.current = setInterval(async () => {
+      try {
+        const data = await apiGet('/api/chats');
+        setContacts(data);
+      } catch (e) {
+        // silent
+      }
+    }, POLL_INTERVAL);
+
+    return () => {
+      if (contactsPollRef.current) {
+        clearInterval(contactsPollRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -130,6 +150,7 @@ export default function ChatComponent({
     try {
       setLoading(true);
       const data = await apiGet('/api/chats');
+      
       setContacts(data);
       setLoading(false);
     } catch (error) {
@@ -158,7 +179,7 @@ export default function ChatComponent({
     }
   };
 
-  const handleChatSelect = (index) => {
+  const handleChatSelect = async (index) => {
     if (activeChat === index) return;
     
     setActiveChat(index);
@@ -168,6 +189,19 @@ export default function ChatComponent({
       setMessages([]);
       currentChatIdRef.current = newChatId;
       setCurrentChatId(newChatId);
+
+      // Mark messages as read
+      if (selectedContact.unread > 0) {
+        try {
+          await apiPost(`/api/chats/${newChatId}/read`, {});
+          // Update the contact's unread count locally
+          setContacts(prev => prev.map(c => 
+            c.id === newChatId ? { ...c, unread: 0 } : c
+          ));
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
+      }
     }
   };
 
@@ -211,7 +245,7 @@ export default function ChatComponent({
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...msg, status: 'failed' } : msg)));
-      alert('Error sending message: ' + (error.response?.data?.error || error.message));
+      Swal.fire({ title: 'Error sending message: ' + (error.response?.data?.error || error.message), icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setSending(false);
     }
@@ -309,7 +343,7 @@ export default function ChatComponent({
       setActiveChat(0);
     } catch (error) {
       console.error('Error creating chat:', error);
-      alert('Error creating chat: ' + (error.response?.data?.error || error.message));
+      Swal.fire({ title: 'Error creating chat: ' + (error.response?.data?.error || error.message), icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
   };
 
@@ -321,7 +355,7 @@ export default function ChatComponent({
       fetchContacts();
     } catch (error) {
       console.error('Error deleting message:', error);
-      alert('Error deleting message: ' + (error.response?.data?.error || error.message));
+      Swal.fire({ title: 'Error deleting message: ' + (error.response?.data?.error || error.message), icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
   };
 
@@ -342,7 +376,7 @@ export default function ChatComponent({
       fetchContacts();
     } catch (error) {
       console.error('Error editing message:', error);
-      alert('Error editing message: ' + (error.response?.data?.error || error.message));
+      Swal.fire({ title: 'Error editing message: ' + (error.response?.data?.error || error.message), icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
   };
 
@@ -356,10 +390,16 @@ export default function ChatComponent({
     setEditingContent('');
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.role?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredContacts = contacts
+    .filter(contact =>
+      contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.role?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
 
   const shouldShowDateSeparator = (currentMsg, prevMsg) => {
     if (!prevMsg) return true;
@@ -795,14 +835,15 @@ export default function ChatComponent({
                   padding: '16px 20px',
                   borderBottom: '1px solid #f8f9fa',
                   cursor: 'pointer',
-                  background: activeChat === index ? '#e7f1ff' : 'transparent',
+                  background: activeChat === index ? '#e7f1ff' : contact.unread > 0 ? '#f0f6ff' : 'transparent',
+                  borderLeft: contact.unread > 0 && activeChat !== index ? `3px solid ${primaryColor}` : '3px solid transparent',
                   transition: 'background 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  if (activeChat !== index) e.currentTarget.style.background = '#f8f9fa';
+                  if (activeChat !== index) e.currentTarget.style.background = contact.unread > 0 ? '#e7f1ff' : '#f8f9fa';
                 }}
                 onMouseLeave={(e) => {
-                  if (activeChat !== index) e.currentTarget.style.background = 'transparent';
+                  if (activeChat !== index) e.currentTarget.style.background = contact.unread > 0 ? '#f0f6ff' : 'transparent';
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -827,15 +868,19 @@ export default function ChatComponent({
                       <h4 style={{ 
                         margin: 0, 
                         fontSize: '15px', 
-                        fontWeight: '600',
-                        color: '#212529',
+                        fontWeight: contact.unread > 0 ? '700' : '600',
+                        color: contact.unread > 0 ? '#000' : '#212529',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}>
                         {contact.name}
                       </h4>
-                      <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                      <span style={{ 
+                        fontSize: '12px', 
+                        color: contact.unread > 0 ? primaryColor : '#6c757d',
+                        fontWeight: contact.unread > 0 ? '600' : '400'
+                      }}>
                         {formatContactTime(contact.timestamp)}
                       </span>
                     </div>
@@ -853,7 +898,8 @@ export default function ChatComponent({
                       <p style={{ 
                         margin: 0, 
                         fontSize: '13px', 
-                        color: '#495057',
+                        color: contact.unread > 0 ? '#212529' : '#495057',
+                        fontWeight: contact.unread > 0 ? '600' : '400',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -1224,7 +1270,7 @@ export default function ChatComponent({
             }}>
               <h3 style={{ margin: 0, fontSize: 18, color: '#212529' }}>Start New Chat</h3>
               <button
-                onClick={() => setShowNewChatModal(false)}
+                onClick={() => { setShowNewChatModal(false); setNewChatSearchTerm(''); }}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -1236,8 +1282,39 @@ export default function ChatComponent({
                 <IoClose />
               </button>
             </div>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #e9ecef' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                background: '#f8f9fa',
+                borderRadius: '8px',
+                padding: '10px 16px'
+              }}>
+                <BiSearch style={{ color: '#6c757d', marginRight: '10px' }} />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={newChatSearchTerm}
+                  onChange={(e) => setNewChatSearchTerm(e.target.value)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    width: '100%',
+                    fontSize: '14px',
+                    color: '#495057'
+                  }}
+                />
+              </div>
+            </div>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {availableUsers.map((user) => (
+              {[...availableUsers]
+                .filter(user =>
+                  user.name?.toLowerCase().includes(newChatSearchTerm.toLowerCase()) ||
+                  user.role?.toLowerCase().includes(newChatSearchTerm.toLowerCase())
+                )
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .map((user) => (
                 <div
                   key={user.id}
                   onClick={() => startNewChat(user)}
@@ -1276,6 +1353,15 @@ export default function ChatComponent({
                   </div>
                 </div>
               ))}
+              {[...availableUsers]
+                .filter(user =>
+                  user.name?.toLowerCase().includes(newChatSearchTerm.toLowerCase()) ||
+                  user.role?.toLowerCase().includes(newChatSearchTerm.toLowerCase())
+                ).length === 0 && (
+                <div style={{ padding: '24px 20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
+                  No users found
+                </div>
+              )}
             </div>
           </div>
         </div>

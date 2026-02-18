@@ -6,6 +6,7 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { MdNotifications } from "react-icons/md";
 import { HiMenu, HiX } from "react-icons/hi";
 import { useRole } from "@/Components/RequireRole";
+import ChatNotification from "@/Components/Chat/ChatNotification";
 
 const navItems = [
   { icon: <GoHomeFill size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
@@ -340,6 +341,7 @@ export default function InspectionLayout({ children, title }) {
           {children}
         </div>
       </div>
+      <ChatNotification />
     </div>
   );
 }

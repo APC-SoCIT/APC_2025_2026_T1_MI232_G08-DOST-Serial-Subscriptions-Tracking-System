@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 export default function UserList() {
   const [allUsers, setAllUsers] = useState([]);
@@ -53,7 +55,7 @@ export default function UserList() {
       }
     } catch (error) {
       console.error('Error toggling user status:', error);
-      alert('Failed to update user status');
+      Swal.fire({ title: 'Failed to update user status', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
   };
 
