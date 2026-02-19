@@ -127,8 +127,8 @@ const [filterMode, setFilterMode] = useState("year");
 const [year, setYear] = useState(2026);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2025, "January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2025, "December"));
+const [startDate, setStartDate] = useState(firstDayOfMonth(2026, "January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(2026, "December"));
 
 const [showFilterModal, setShowFilterModal] = useState(false);
 const [tempYear, setTempYear] = useState(year);
