@@ -4,6 +4,8 @@ import TPULayout from '@/Layouts/TPULayout';
 import { HiUserAdd } from "react-icons/hi";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 function AddAccount() {
   // Form state
@@ -116,16 +118,34 @@ function AddAccount() {
             password_confirmation: '',
           });
           
-          alert('Supplier account created successfully! Awaiting admin approval.');
+          Swal.fire({
+            title: "Supplier account created successfully! Awaiting admin approval.",
+            icon: "success",
+            confirmButtonColor: "#0062f4",
+            showClass: {
+              popup: `
+                animate__animated
+                animate__fadeInUp
+                animate__faster
+              `
+            },
+            hideClass: {
+              popup: `
+                animate__animated
+                animate__fadeOutDown
+                animate__faster
+              `
+            }
+          });
         }
       } catch (error) {
         console.error('Error creating account:', error.response?.data || error);
         
         if (error.response?.status === 419) {
           // CSRF token expired - global interceptor should have retried but might still fail
-          alert('Session expired. Please refresh the page and try again.');
+          Swal.fire({ title: 'Session expired. Please refresh the page and try again.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         } else if (error.response?.status === 403) {
-          alert('You do not have permission to create supplier accounts.');
+          Swal.fire({ title: 'You do not have permission to create supplier accounts.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         } else if (error.response?.data?.errors) {
           // Handle Laravel validation errors
           const serverErrors = {};
@@ -135,9 +155,9 @@ function AddAccount() {
           setErrors(serverErrors);
         } else if (error.response?.data?.message) {
           // Show the specific error message from the server
-          alert(error.response.data.message);
+          Swal.fire({ title: error.response.data.message, icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         } else {
-          alert('An error occurred while creating the account. Please try again.');
+          Swal.fire({ title: 'An error occurred while creating the account. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         }
       } finally {
         setSubmitting(false);
