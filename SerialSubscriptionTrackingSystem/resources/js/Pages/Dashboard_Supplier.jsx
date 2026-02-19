@@ -94,8 +94,8 @@ export default function SupplierDashboard() {
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2025,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
 
   const [showFilter, setShowFilter] = useState(false);
 
@@ -178,18 +178,6 @@ export default function SupplierDashboard() {
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= KPIs (FROM DATABASE) ================= */
-
-  // Use real data from database
-  const kpis = {
-    awarded: dashboardStats.awarded || 0,
-    preparing: dashboardStats.preparing || 0,
-    forDelivery: dashboardStats.for_delivery || 0,
-    delivered: dashboardStats.delivered || 0,
-    returned: dashboardStats.returned || 0,
-    success: dashboardStats.success_rate || 0,
-  };
-
   /* ================= CHART DATA (FROM DATABASE) ================= */
 
   const pipelineData = useMemo(() => {
@@ -215,29 +203,46 @@ export default function SupplierDashboard() {
     }));
   }, [chartData.monthly, months]);
 
+  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+
+  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  const kpis = useMemo(() => {
+    const totals = pipelineData.reduce((acc, month) => ({
+      awarded: acc.awarded + (month.awarded || 0),
+      preparing: acc.preparing + (month.preparing || 0),
+      forDelivery: acc.forDelivery + (month.forDelivery || 0),
+      delivered: acc.delivered + (month.delivered || 0),
+      returned: acc.returned + (month.returned || 0),
+    }), { awarded: 0, preparing: 0, forDelivery: 0, delivered: 0, returned: 0 });
+    
+    const successRate = totals.awarded > 0 
+      ? Math.round(((totals.delivered - totals.returned) / totals.awarded) * 100) 
+      : 0;
+    
+    return {
+      awarded: totals.awarded,
+      preparing: totals.preparing,
+      forDelivery: totals.forDelivery,
+      delivered: totals.delivered,
+      returned: totals.returned,
+      success: Math.max(0, successRate),
+    };
+  }, [pipelineData]);
+
+  // Derive deliveryTrend from pipelineData to ensure consistency
   const deliveryTrend = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          delivered: item.delivered || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, delivered: 0 }));
-  }, [chartData.monthly, months]);
+    return pipelineData.map(item => ({
+      month: item.month,
+      delivered: item.delivered || 0,
+    }));
+  }, [pipelineData]);
 
   const volumeData = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          volume: item.awarded || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, volume: 0 }));
-  }, [chartData.monthly, months]);
+    return pipelineData.map(item => ({
+      month: item.month,
+      volume: item.awarded || 0,
+    }));
+  }, [pipelineData]);
 
   const pieData = [
     { name: "Delivered (Passed)", value: kpis.delivered },
@@ -421,43 +426,58 @@ export default function SupplierDashboard() {
 />
 
                 <Area
+  type="monotone"
   dataKey="awarded"
   name="Awarded"
   stackId="1"
   fill={COLORS.awarded}
   stroke={COLORS.awarded}
+  dot={{ r: 4 }}
+  isAnimationActive={false}
 />
 
 <Area
+  type="monotone"
   dataKey="preparing"
   name="Preparing"
   stackId="1"
   fill={COLORS.preparing}
   stroke={COLORS.preparing}
+  dot={{ r: 4 }}
+  isAnimationActive={false}
 />
 
 <Area
+  type="monotone"
   dataKey="forDelivery"
   name="For Delivery"
   stackId="1"
   fill={COLORS.forDelivery}
   stroke={COLORS.forDelivery}
+  dot={{ r: 4 }}
+  isAnimationActive={false}
 />
 
 <Area
+  type="monotone"
   dataKey="delivered"
   name="Delivered"
   stackId="1"
   fill={COLORS.delivered}
   stroke={COLORS.delivered}
+  dot={{ r: 4 }}
+  isAnimationActive={false}
 />
 
 <Area
+  type="monotone"
   dataKey="returned"
   name="Returned"
   stackId="1"
   fill={COLORS.returned}
   stroke={COLORS.returned}
+  dot={{ r: 4 }}
+  isAnimationActive={false}
 />
 
               </AreaChart>
@@ -470,7 +490,7 @@ export default function SupplierDashboard() {
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3}/>
+                <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>

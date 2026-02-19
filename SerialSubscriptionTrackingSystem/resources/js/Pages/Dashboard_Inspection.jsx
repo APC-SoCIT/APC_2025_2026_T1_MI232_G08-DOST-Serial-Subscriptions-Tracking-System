@@ -94,8 +94,8 @@ const [filterMode, setFilterMode] = useState("year");
 const [year, setYear] = useState(2026);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2025,"December"));
+const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
 
 const [showFilter, setShowFilter] = useState(false);
 
@@ -182,31 +182,7 @@ const factor = useMemo(() => {
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= KPIs (FROM DATABASE) ================= */
-
-  // Use real data from database
-  const kpis = {
-    received: dashboardStats.received || 0,
-    inspected: dashboardStats.inspected || 0,
-    pending: dashboardStats.pending || 0,
-    returned: dashboardStats.returned || 0,
-    success: dashboardStats.success_rate || 0,
-  };
-
-
   /* ================= CHART DATA (FROM DATABASE) ================= */
-
-  const intakeTrend = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          received: item.received || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, received: 0 }));
-  }, [chartData.monthly, months]);
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
@@ -229,17 +205,45 @@ const factor = useMemo(() => {
     }));
   }, [chartData.monthly, months]);
 
+  // Derive intakeTrend from pipelineData for consistency
+  const intakeTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      received: item.received || 0,
+    }));
+  }, [pipelineData]);
+
+  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+
+  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  const kpis = useMemo(() => {
+    const totals = pipelineData.reduce((acc, month) => ({
+      received: acc.received + (month.received || 0),
+      inspected: acc.inspected + (month.inspected || 0),
+      pending: acc.pending + (month.pending || 0),
+      returned: acc.returned + (month.returned || 0),
+    }), { received: 0, inspected: 0, pending: 0, returned: 0 });
+    
+    const successRate = totals.received > 0 
+      ? Math.round((totals.inspected / totals.received) * 100) 
+      : 0;
+    
+    return {
+      received: totals.received,
+      inspected: totals.inspected,
+      pending: totals.pending,
+      returned: totals.returned,
+      success: successRate,
+    };
+  }, [pipelineData]);
+
+  // Derive inspectedVolume from pipelineData to ensure consistency
   const inspectedVolume = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          inspected: item.inspected || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, inspected: 0 }));
-  }, [chartData.monthly, months]);
+    return pipelineData.map(item => ({
+      month: item.month,
+      inspected: item.inspected || 0,
+    }));
+  }, [pipelineData]);
 
   const pieData = [
     { name: "Inspected (Passed)", value: kpis.inspected },
@@ -423,7 +427,7 @@ const factor = useMemo(() => {
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Line dataKey="received" stroke="#2563eb" strokeWidth={3}/>
+                <Line dataKey="received" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>
@@ -447,6 +451,8 @@ const factor = useMemo(() => {
         stroke={COLORS.received}
         fill={COLORS.received}
         name="Received"
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -456,6 +462,8 @@ const factor = useMemo(() => {
         stroke={COLORS.pending}
         fill={COLORS.pending}
         name="Pending"
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -465,6 +473,8 @@ const factor = useMemo(() => {
         stroke={COLORS.inspected}
         fill={COLORS.inspected}
         name="Inspected"
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -474,6 +484,8 @@ const factor = useMemo(() => {
         stroke={COLORS.returned}
         fill={COLORS.returned}
         name="Returned"
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
     </AreaChart>
