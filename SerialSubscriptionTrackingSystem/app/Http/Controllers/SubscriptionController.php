@@ -61,7 +61,8 @@ class SubscriptionController extends Controller
             
             // Only count serials that have been inspected and marked as "Good" (inspected status)
             if ($inspectionStatus === 'inspected') {
-                $quantity = floatval($serial['quantity'] ?? 1);
+                // Support both 'quantity' and 'amount' field names (frontend saves as 'amount')
+                $quantity = floatval($serial['quantity'] ?? $serial['amount'] ?? 1);
                 $unitPrice = floatval($serial['unitPrice'] ?? 0);
                 $deliveredCost += $quantity * $unitPrice;
             }
@@ -697,7 +698,8 @@ class SubscriptionController extends Controller
                 }
                 
                 // Calculate serial cost (quantity * unitPrice)
-                $quantity = floatval($serial['quantity'] ?? 1);
+                // Support both 'quantity' and 'amount' field names (frontend saves as 'amount')
+                $quantity = floatval($serial['quantity'] ?? $serial['amount'] ?? 1);
                 $unitPrice = floatval($serial['unitPrice'] ?? 0);
                 $serialCost = $quantity * $unitPrice;
                 

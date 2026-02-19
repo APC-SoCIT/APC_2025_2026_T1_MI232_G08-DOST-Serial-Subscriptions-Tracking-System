@@ -92,8 +92,8 @@ export default function DashboardGSPS() {
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2025,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
   const [showFilter, setShowFilter] = useState(false);
 
   /* ===== TEMP STATE ===== */
@@ -201,32 +201,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= KPIs (FROM DATABASE) ================= */
-
-  // Use real data from database
-  const kpis = {
-    received: dashboardStats.received || 0,
-    forwarded: dashboardStats.forwarded || 0,
-    pending: dashboardStats.pending || 0,
-    returned: dashboardStats.returned || 0,
-    success: dashboardStats.success_rate || 0,
-  };
-
-
-
   /* ================= CHART DATA (FROM DATABASE) ================= */
-
-  const intakeTrend = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          received: item.received || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, received: 0 }));
-  }, [chartData.monthly, months]);
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
@@ -248,6 +223,38 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
       returned: 0,
     }));
   }, [chartData.monthly, months]);
+
+  // Derive intakeTrend from pipelineData for consistency
+  const intakeTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      received: item.received || 0,
+    }));
+  }, [pipelineData]);
+
+  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+
+  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  const kpis = useMemo(() => {
+    const totals = pipelineData.reduce((acc, month) => ({
+      received: acc.received + (month.received || 0),
+      forwarded: acc.forwarded + (month.forwarded || 0),
+      pending: acc.pending + (month.pending || 0),
+      returned: acc.returned + (month.returned || 0),
+    }), { received: 0, forwarded: 0, pending: 0, returned: 0 });
+    
+    const successRate = totals.received > 0 
+      ? Math.round((totals.forwarded / totals.received) * 100) 
+      : 0;
+    
+    return {
+      received: totals.received,
+      forwarded: totals.forwarded,
+      pending: totals.pending,
+      returned: totals.returned,
+      success: successRate,
+    };
+  }, [pipelineData]);
 
   const forwardedMonthly = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
@@ -435,7 +442,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Line type="monotone" dataKey="received" stroke={COLORS.received} strokeWidth={3}/>
+                <Line type="monotone" dataKey="received" stroke={COLORS.received} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>
@@ -450,10 +457,10 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
   verticalAlign="bottom"
   height={36}
 />
-                <Area dataKey="received" stackId="1" fill={COLORS.received} stroke={COLORS.received}/>
-                <Area dataKey="pending" stackId="1" fill={COLORS.pending} stroke={COLORS.pending}/>
-                <Area dataKey="forwarded" stackId="1" fill={COLORS.forwarded} stroke={COLORS.forwarded}/>
-                <Area dataKey="returned" stackId="1" fill={COLORS.returned} stroke={COLORS.returned}/>
+                <Area type="monotone" dataKey="received" stackId="1" fill={COLORS.received} stroke={COLORS.received} dot={{ r: 4 }} isAnimationActive={false}/>
+                <Area type="monotone" dataKey="pending" stackId="1" fill={COLORS.pending} stroke={COLORS.pending} dot={{ r: 4 }} isAnimationActive={false}/>
+                <Area type="monotone" dataKey="forwarded" stackId="1" fill={COLORS.forwarded} stroke={COLORS.forwarded} dot={{ r: 4 }} isAnimationActive={false}/>
+                <Area type="monotone" dataKey="returned" stackId="1" fill={COLORS.returned} stroke={COLORS.returned} dot={{ r: 4 }} isAnimationActive={false}/>
               </AreaChart>
             </ResponsiveContainer>
           </Chart>

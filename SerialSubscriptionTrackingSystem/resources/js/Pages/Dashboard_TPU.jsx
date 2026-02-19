@@ -88,8 +88,8 @@ const [tempFilterMode, setTempFilterMode] = useState("year"); // popup
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2025,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2025,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
 
   const [showFilter, setShowFilter] = useState(false);
 
@@ -232,20 +232,6 @@ useEffect(() => {
     setShowFilter(false);
   };
 
-  /* ================= KPI (FROM DATABASE) ================= */
-
-  // Use real data from database
-  const kpis = {
-    total: dashboardStats.total_serials || dashboardStats.awarded || 0,
-    delivered: dashboardStats.delivered || 0,
-    awaiting: dashboardStats.for_delivery || 0,
-    returned: dashboardStats.returned || 0,
-    inspected: dashboardStats.inspected || 0,
-    pending: dashboardStats.pending || 0,
-    prepare: dashboardStats.prepare || 0,
-    success: dashboardStats.efficiency || 0,
-  };
-
   /* ================= CHART DATA (FROM DATABASE) ================= */
 
   // Use chart data from database or generate fallback
@@ -264,24 +250,49 @@ useEffect(() => {
     }));
   }, [chartData.monthly, months]);
 
-  const deliveryTrend = useMemo(() => {
-    if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          delivered: item.delivered || 0,
-        }));
-    }
-    return months.map((m) => ({ month: m, delivered: 0 }));
-  }, [chartData.monthly, months]);
+  /* ================= KPI (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
 
+  // Compute KPIs as sum of chart data to ensure alignment
+  const kpis = useMemo(() => {
+    const totals = pipelineData.reduce((acc, month) => ({
+      awarded: acc.awarded + (month.awarded || 0),
+      delivered: acc.delivered + (month.delivered || 0),
+      forDelivery: acc.forDelivery + (month.forDelivery || 0),
+      inspected: acc.inspected + (month.inspected || 0),
+      returned: acc.returned + (month.returned || 0),
+    }), { awarded: 0, delivered: 0, forDelivery: 0, inspected: 0, returned: 0 });
+    
+    const successRate = totals.awarded > 0 
+      ? Math.round((totals.inspected / totals.awarded) * 100) 
+      : 0;
+    
+    return {
+      total: totals.awarded,
+      delivered: totals.delivered,
+      awaiting: totals.forDelivery,
+      returned: totals.returned,
+      inspected: totals.inspected,
+      pending: dashboardStats.pending || 0,
+      prepare: dashboardStats.prepare || 0,
+      success: successRate,
+    };
+  }, [pipelineData, dashboardStats]);
+
+  // Derive deliveryTrend from pipelineData to ensure consistency
+  const deliveryTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      delivered: item.delivered || 0,
+    }));
+  }, [pipelineData]);
+
+  // Use computed KPIs for pie chart to ensure alignment
   const inspectionPie = useMemo(() => {
     return [
-      { name: "Inspected", value: dashboardStats.inspected || 0 },
-      { name: "Returned", value: dashboardStats.returned || 0 },
+      { name: "Inspected", value: kpis.inspected || 0 },
+      { name: "Returned", value: kpis.returned || 0 },
     ];
-  }, [dashboardStats]);
+  }, [kpis]);
 
   const supplierRanking = [
     { name:"ABC Books", value: 100 },
@@ -451,6 +462,8 @@ useEffect(() => {
         stackId="1"
         stroke={PIPELINE_COLORS.awarded}
         fill={PIPELINE_COLORS.awarded}
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -459,6 +472,8 @@ useEffect(() => {
         stackId="1"
         stroke={PIPELINE_COLORS.delivered}
         fill={PIPELINE_COLORS.delivered}
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -467,6 +482,8 @@ useEffect(() => {
         stackId="1"
         stroke={PIPELINE_COLORS.forDelivery}
         fill={PIPELINE_COLORS.forDelivery}
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -475,6 +492,8 @@ useEffect(() => {
         stackId="1"
         stroke={PIPELINE_COLORS.inspected}
         fill={PIPELINE_COLORS.inspected}
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
 
       <Area
@@ -483,6 +502,8 @@ useEffect(() => {
         stackId="1"
         stroke={PIPELINE_COLORS.returned}
         fill={PIPELINE_COLORS.returned}
+        dot={{ r: 4 }}
+        isAnimationActive={false}
       />
     </AreaChart>
   </ResponsiveContainer>
@@ -496,7 +517,7 @@ useEffect(() => {
                 <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
-                <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3}/>
+                <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>
