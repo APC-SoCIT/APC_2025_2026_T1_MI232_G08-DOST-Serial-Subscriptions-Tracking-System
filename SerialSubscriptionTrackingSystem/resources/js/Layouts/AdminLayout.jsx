@@ -3,10 +3,10 @@ import { router, usePage } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiUserAdd, HiMenu, HiX } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
-import { MdNotifications } from "react-icons/md";
 import { FaUserCircle } from "react-icons/fa";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
 
 /* ===================== NAV ITEMS ===================== */
 const navItems = [
@@ -239,34 +239,7 @@ export default function AdminLayout({ children, header, title }) {
             <div className="flex items-center gap-3 md:gap-4">
 
               {/* Notifications */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => {
-                    setOpenNotifications(!openNotifications);
-                    setOpenAccount(false);
-                  }}
-                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
-                >
-                  <MdNotifications size={20} />
-                </button>
-
-                {openNotifications && (
-                  <div style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: '35px',
-                    background: '#fff',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                    width: 200,
-                    padding: '16px 18px',
-                    zIndex: 10000,
-                    transition: 'all 0.2s ease',
-                  }}>
-                    <p style={{ margin: 0, fontSize: 14, color: '#555' }}>You're all caught up!</p>
-                  </div>
-                )}
-              </div>
+              <SerialsNotification isMobile={isMobile} />
 
               {/* Account */}
               <div className="relative">

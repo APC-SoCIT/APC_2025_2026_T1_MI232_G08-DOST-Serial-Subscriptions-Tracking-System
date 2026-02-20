@@ -7,6 +7,7 @@ use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardStatsController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -161,12 +162,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::get('/api/users/available', [ChatController::class, 'getAvailableUsers'])->name('users.available');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'getMessages'])->name('chats.messages');
+    Route::get('/api/chats/{chat}/files', [ChatController::class, 'getSharedFiles'])->name('chats.files');
     Route::post('/api/chats/get-or-create', [ChatController::class, 'getOrCreateChat'])->name('chats.getOrCreate');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'storeMessage'])->name('messages.store');
     Route::get('/api/chats/{message}/download', [ChatController::class, 'downloadAttachment'])->name('file.download');
     Route::post('/api/chats/{chat}/read', [ChatController::class, 'markAsRead'])->name('chats.markAsRead');
     Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
     Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
+
+    // Notification routes - available to all authenticated users
+    Route::get('/api/notifications/incoming-serials', [NotificationController::class, 'getIncomingSerials'])->name('notifications.incomingSerials');
+    Route::post('/api/notifications/mark-read', [NotificationController::class, 'markAsRead'])->name('notifications.markRead');
+    Route::post('/api/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllRead');
 });
 
 // ===================== ADMIN-ONLY API ROUTES =====================

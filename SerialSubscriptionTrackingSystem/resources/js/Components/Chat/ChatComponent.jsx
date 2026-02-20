@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { IoSend, IoAttach, IoHappyOutline, IoClose, IoImage, IoDocument, IoTrash, IoPencil, IoCheckmark } from "react-icons/io5";
+import { IoSend, IoAttach, IoHappyOutline, IoClose, IoImage, IoDocument, IoTrash, IoPencil, IoCheckmark, IoDownload } from "react-icons/io5";
 import { BsThreeDotsVertical, BsEmojiSmile } from "react-icons/bs";
 import { BiSearch } from "react-icons/bi";
-import { FaFileAlt, FaFilePdf, FaFileWord, FaFileExcel, FaFileImage } from "react-icons/fa";
+import { FaFileAlt, FaFilePdf, FaFileWord, FaFileExcel, FaFileImage, FaFolder } from "react-icons/fa";
+import { MdChat, MdInsertDriveFile } from "react-icons/md";
 import EmojiPicker from './EmojiPicker';
 import ChatSkeleton from './ChatSkeleton';
 import MessageStatus from './MessageStatus';
 import Swal from 'sweetalert2';
 import 'animate.css';
+
+// File validation constants
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+const ALLOWED_FILE_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+const MAX_FILE_SIZE_MB = 10;
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
@@ -71,6 +78,9 @@ export default function ChatComponent({
   const [editingContent, setEditingContent] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [newChatSearchTerm, setNewChatSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'files'
+  const [sharedFiles, setSharedFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
   
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
@@ -179,16 +189,35 @@ export default function ChatComponent({
     }
   };
 
+  // Fetch shared files for a chat
+  const fetchSharedFiles = async (chatId) => {
+    try {
+      setLoadingFiles(true);
+      const data = await apiGet(`/api/chats/${chatId}/files`);
+      setSharedFiles(data.files || []);
+    } catch (error) {
+      console.error('Error fetching shared files:', error);
+      setSharedFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
   const handleChatSelect = async (index) => {
     if (activeChat === index) return;
     
     setActiveChat(index);
+    setActiveTab('chat'); // Reset to chat tab when switching conversations
     const selectedContact = filteredContacts[index];
     if (selectedContact) {
       const newChatId = selectedContact.id;
       setMessages([]);
+      setSharedFiles([]);
       currentChatIdRef.current = newChatId;
       setCurrentChatId(newChatId);
+
+      // Fetch shared files for this chat
+      fetchSharedFiles(newChatId);
 
       // Mark messages as read
       if (selectedContact.unread > 0) {
@@ -258,9 +287,52 @@ export default function ChatComponent({
     }
   };
 
+  // Validate file type and size before accepting
+  const validateFile = (file) => {
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    const isValidType = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_FILE_EXTENSIONS.includes(fileExtension);
+    const isValidSize = file.size <= MAX_FILE_SIZE;
+
+    if (!isValidType) {
+      Swal.fire({
+        title: 'Invalid File Type',
+        html: `<p>Only <strong>PDF, PNG, JPG, JPEG</strong> files are allowed.</p><p>You selected: <code>${fileExtension.toUpperCase()}</code></p>`,
+        icon: 'error',
+        confirmButtonColor: '#0062f4',
+        showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+        hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+      });
+      return false;
+    }
+
+    if (!isValidSize) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      Swal.fire({
+        title: 'File Too Large',
+        html: `<p>Maximum file size is <strong>${MAX_FILE_SIZE_MB}MB</strong>.</p><p>Your file: <strong>${fileSizeMB}MB</strong></p>`,
+        icon: 'error',
+        confirmButtonColor: '#0062f4',
+        showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+        hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file before accepting
+      if (!validateFile(file)) {
+        // Reset the file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
       setSelectedFile(file);
       
       if (file.type.startsWith('image/')) {
@@ -988,26 +1060,217 @@ export default function ChatComponent({
                 </div>
               )}
 
-              {/* Messages */}
-              {messages.length === 0 ? (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  flex: 1,
-                  color: '#6c757d',
-                  padding: '24px'
-                }}>
-                  <p style={{ fontSize: '16px', marginBottom: '8px' }}>No messages yet</p>
-                  <p style={{ fontSize: '14px' }}>Start a conversation!</p>
-                </div>
-              ) : (
-                <div style={{ 
-                  padding: '24px 40px'
-                }}>
-                  {messages.map((msg, index) => renderMessage(msg, index))}
-                  <div ref={messagesEndRef} />
+              {/* Tab Navigation */}
+              <div style={{
+                display: 'flex',
+                borderBottom: '1px solid #e9ecef',
+                background: '#fff',
+                flexShrink: 0
+              }}>
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'chat' ? `3px solid ${primaryColor}` : '3px solid transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: activeTab === 'chat' ? 600 : 400,
+                    color: activeTab === 'chat' ? primaryColor : '#6c757d',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <MdChat size={18} />
+                  Chat
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('files');
+                    if (currentChatId) {
+                      fetchSharedFiles(currentChatId);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'files' ? `3px solid ${primaryColor}` : '3px solid transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: activeTab === 'files' ? 600 : 400,
+                    color: activeTab === 'files' ? primaryColor : '#6c757d',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <FaFolder size={16} />
+                  Files
+                  {sharedFiles.length > 0 && (
+                    <span style={{
+                      background: primaryColor,
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: 20,
+                      height: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 11,
+                      fontWeight: 600
+                    }}>
+                      {sharedFiles.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Chat Tab Content */}
+              {activeTab === 'chat' && (
+                <>
+                  {/* Messages */}
+                  {messages.length === 0 ? (
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      flex: 1,
+                      color: '#6c757d',
+                      padding: '24px'
+                    }}>
+                      <p style={{ fontSize: '16px', marginBottom: '8px' }}>No messages yet</p>
+                      <p style={{ fontSize: '14px' }}>Start a conversation!</p>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      padding: '24px 40px'
+                    }}>
+                      {messages.map((msg, index) => renderMessage(msg, index))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Files Tab Content */}
+              {activeTab === 'files' && (
+                <div style={{ padding: '24px', flex: 1 }}>
+                  {loadingFiles ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        border: '3px solid #e9ecef',
+                        borderTopColor: primaryColor,
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    </div>
+                  ) : sharedFiles.length === 0 ? (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '60px 20px',
+                      color: '#6c757d'
+                    }}>
+                      <MdInsertDriveFile size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+                      <p style={{ fontSize: 16, margin: 0, marginBottom: 8 }}>No files shared yet</p>
+                      <p style={{ fontSize: 14, margin: 0, opacity: 0.8 }}>Files shared in this conversation will appear here</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <p style={{ fontSize: 13, color: '#6c757d', marginBottom: 8 }}>
+                        {sharedFiles.length} file{sharedFiles.length !== 1 ? 's' : ''} shared
+                      </p>
+                      {sharedFiles.map((file, idx) => {
+                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.filename || file.url);
+                        const fileExtension = (file.filename || file.url).split('.').pop().toLowerCase();
+                        return (
+                          <a
+                            key={idx}
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12,
+                              padding: '14px 16px',
+                              background: '#f8f9fa',
+                              borderRadius: 8,
+                              textDecoration: 'none',
+                              color: '#333',
+                              border: '1px solid #e9ecef',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#e9ecef';
+                              e.currentTarget.style.borderColor = '#dee2e6';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#f8f9fa';
+                              e.currentTarget.style.borderColor = '#e9ecef';
+                            }}
+                          >
+                            {isImage ? (
+                              <img
+                                src={file.url}
+                                alt={file.filename}
+                                style={{
+                                  width: 48,
+                                  height: 48,
+                                  objectFit: 'cover',
+                                  borderRadius: 6
+                                }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 6,
+                                background: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid #dee2e6'
+                              }}>
+                                {getFileIcon(fileExtension)}
+                              </div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{
+                                margin: 0,
+                                fontSize: 14,
+                                fontWeight: 500,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {file.filename || file.url.split('/').pop()}
+                              </p>
+                              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6c757d' }}>
+                                Shared by {file.sender} • {formatContactTime(file.timestamp)}
+                              </p>
+                            </div>
+                            <IoDownload size={20} style={{ color: primaryColor }} />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -1107,7 +1370,7 @@ export default function ChatComponent({
               ref={fileInputRef}
               onChange={handleFileSelect}
               style={{ display: 'none' }}
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
             />
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -1235,7 +1498,7 @@ export default function ChatComponent({
             color: '#adb5bd',
             textAlign: 'left'
           }}>
-            Press Enter to send • Attach images & files • Use emojis
+            Press Enter to send • PDF, PNG, JPG (max 10MB) • Use emojis
           </div>
         </div>
       </div>

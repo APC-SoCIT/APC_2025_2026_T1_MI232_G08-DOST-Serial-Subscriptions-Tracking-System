@@ -4,10 +4,11 @@ import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaTruck, FaUserPlus, FaUserCircle } from "react-icons/fa";
-import { MdMarkEmailRead, MdNotifications } from "react-icons/md";
+import { MdMarkEmailRead } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -196,9 +197,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdNotifications />
-        </span>
+        <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
