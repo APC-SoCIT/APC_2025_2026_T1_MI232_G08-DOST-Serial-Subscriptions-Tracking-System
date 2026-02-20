@@ -206,13 +206,27 @@ class ChatController extends Controller
     }
 
     /**
+     * Allowed file types for upload
+     */
+    private const ALLOWED_MIME_TYPES = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'image/jpg',
+    ];
+
+    private const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
+    private const MAX_FILE_SIZE_MB = 10;
+    private const MAX_FILE_SIZE_KB = 10240; // 10MB in KB
+
+    /**
      * Store a message with optional file attachment
      */
     public function storeMessage(Request $request, $chatId)
     {
         $request->validate([
             'content' => 'nullable|string',
-            'attachment' => 'nullable|file|max:102400', // 100MB max
+            'attachment' => 'nullable|file|max:' . self::MAX_FILE_SIZE_KB, // 10MB max
         ]);
 
         $chat = Chat::findOrFail($chatId);
@@ -228,6 +242,33 @@ class ChatController extends Controller
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
+            
+            // Validate file type
+            $extension = strtolower($file->getClientOriginalExtension());
+            $mimeType = $file->getMimeType();
+            
+            if (!in_array($extension, self::ALLOWED_EXTENSIONS) && !in_array($mimeType, self::ALLOWED_MIME_TYPES)) {
+                return response()->json([
+                    'error' => 'Invalid file type. Only PDF, PNG, JPG, JPEG files are allowed.'
+                ], 422);
+            }
+
+            // Additional security: verify file content matches claimed type
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $actualMimeType = $finfo->file($file->getPathname());
+            if (!in_array($actualMimeType, self::ALLOWED_MIME_TYPES)) {
+                return response()->json([
+                    'error' => 'File content does not match the allowed file types.'
+                ], 422);
+            }
+
+            // Validate file size (double-check even though Laravel validates)
+            if ($file->getSize() > self::MAX_FILE_SIZE_KB * 1024) {
+                return response()->json([
+                    'error' => 'File size exceeds the maximum limit of ' . self::MAX_FILE_SIZE_MB . 'MB.'
+                ], 422);
+            }
+
             $attachmentPath = $file->store('chat-attachments', 'public');
         }
 
@@ -258,6 +299,41 @@ class ChatController extends Controller
             'timestamp' => $message->created_at->toISOString(),
             'isOwn' => true,
         ]);
+    }
+
+    /**
+     * Get all shared files in a chat
+     */
+    public function getSharedFiles($chatId)
+    {
+        $chat = Chat::findOrFail($chatId);
+        $userId = (string) Auth::id();
+        $chatUserId1 = (string) $chat->user_id_1;
+        $chatUserId2 = (string) $chat->user_id_2;
+
+        // Verify user is part of this chat
+        if ($chatUserId1 !== $userId && $chatUserId2 !== $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Get all messages with attachments
+        $files = Message::where('chat_id', $chatId)
+            ->whereNotNull('attachment')
+            ->with('sender')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($message) {
+                $attachmentPath = $message->attachment;
+                return [
+                    'id' => (string) $message->_id,
+                    'url' => Storage::url($attachmentPath),
+                    'filename' => basename($attachmentPath),
+                    'sender' => $message->sender->name ?? 'Unknown',
+                    'timestamp' => $message->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json(['files' => $files]);
     }
 
     /**
