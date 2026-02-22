@@ -7,6 +7,7 @@ import { HiMenu, HiX } from "react-icons/hi";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const navItems = [
   { icon: <GoHomeFill size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
@@ -314,6 +315,7 @@ export default function InspectionLayout({ children, title }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

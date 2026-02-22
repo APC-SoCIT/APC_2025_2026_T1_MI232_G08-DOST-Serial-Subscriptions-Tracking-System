@@ -4,11 +4,11 @@ import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { IoSearchOutline } from "react-icons/io5";
-import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
+import SerialsNotification from "@/Components/SerialsNotification";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -136,15 +136,7 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | Delivery</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdOutlineNotificationsActive />
-        </span>
-        {activeIcon === 'notifications' && (
-          <div style={popupStyle}>
-            <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>You're all caught up!</p>
-          </div>
-        )}
+        <SerialsNotification />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <VscAccount size={22} />

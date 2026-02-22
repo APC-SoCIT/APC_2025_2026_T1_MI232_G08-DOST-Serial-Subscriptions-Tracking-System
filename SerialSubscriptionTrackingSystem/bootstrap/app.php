@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Register custom middleware aliases
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckUserRole::class,
+            'session.check' => \App\Http\Middleware\CheckSessionExpiration::class,
         ]);
 
         // Exclude API routes from CSRF verification (they use auth middleware)
