@@ -3,7 +3,7 @@ import { MdNotifications, MdLocalShipping, MdDoneAll, MdPendingActions, MdInvent
 import { IoClose } from 'react-icons/io5';
 import { FaTruck, FaBoxOpen, FaClipboardCheck, FaUserCheck, FaBuilding } from 'react-icons/fa';
 
-const POLL_INTERVAL = 30000; // 30 seconds for notifications
+const POLL_INTERVAL = 10000; // 10 seconds for more responsive notifications
 const PRIMARY_COLOR = '#004A98';
 
 const formatTime = (timestamp) => {

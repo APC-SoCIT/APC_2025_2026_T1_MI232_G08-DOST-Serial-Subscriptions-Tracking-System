@@ -1,0 +1,446 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ProcessMovementLog;
+use App\Models\UserNotification;
+use Illuminate\Support\Facades\Auth;
+
+class ProcessMovementService
+{
+    /**
+     * Log a process movement
+     *
+     * @param string $recordType Type of record (subscription, serial, supplier_account)
+     * @param string $recordId ID of the record
+     * @param string $recordTitle Human-readable title
+     * @param array|null $fromUser From user info [id, name, role] or null for system
+     * @param array|null $toUser To user info [id, name, role] or null
+     * @param string|null $statusFrom Previous status
+     * @param string|null $statusTo New status
+     * @param string $action Action performed
+     * @param string|null $remarks Optional remarks
+     * @param array|null $metadata Additional data
+     * @return ProcessMovementLog
+     */
+    public static function logMovement(
+        string $recordType,
+        string $recordId,
+        string $recordTitle,
+        ?array $fromUser = null,
+        ?array $toUser = null,
+        ?string $statusFrom = null,
+        ?string $statusTo = null,
+        string $action = 'update',
+        ?string $remarks = null,
+        ?array $metadata = null
+    ): ProcessMovementLog {
+        $currentUser = Auth::user();
+
+        // If no fromUser provided, use current user
+        if ($fromUser === null && $currentUser) {
+            $fromUser = [
+                'id' => (string)($currentUser->_id ?? $currentUser->id),
+                'name' => $currentUser->name,
+                'role' => $currentUser->role,
+            ];
+        }
+
+        return ProcessMovementLog::create([
+            'record_type' => $recordType,
+            'record_id' => $recordId,
+            'record_title' => $recordTitle,
+            'from_user_id' => $fromUser['id'] ?? null,
+            'from_user_name' => $fromUser['name'] ?? 'System',
+            'from_role' => $fromUser['role'] ?? null,
+            'to_user_id' => $toUser['id'] ?? null,
+            'to_user_name' => $toUser['name'] ?? null,
+            'to_role' => $toUser['role'] ?? null,
+            'status_from' => $statusFrom,
+            'status_to' => $statusTo,
+            'action' => $action,
+            'remarks' => $remarks,
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * Log a serial status change
+     * This method handles the complete workflow logging including intermediate steps
+     */
+    public static function logSerialStatusChange(
+        $subscription,
+        int $serialIndex,
+        string $serialTitle,
+        string $oldStatus,
+        string $newStatus,
+        ?string $remarks = null
+    ): ProcessMovementLog {
+        $currentUser = Auth::user();
+        $targetRole = self::getTargetRoleForStatus($newStatus);
+        
+        // Map status to human-readable action
+        $actionMap = [
+            'prepare' => 'accept',
+            'for_delivery' => 'ready_for_delivery',
+            'received' => 'receive',
+            'pending_inspection' => 'pending_inspection',
+            'inspected' => 'inspect',
+            'for_return' => 'return',
+        ];
+        $action = $actionMap[$newStatus] ?? 'status_change';
+        
+        // Generate descriptive remarks if none provided
+        $defaultRemarksMap = [
+            'prepare' => 'Supplier accepted the serial subscription',
+            'for_delivery' => 'Supplier marked serial as ready for delivery',
+            'received' => 'GSPS confirmed receipt of serial',
+            'pending_inspection' => 'Serial queued for inspection',
+            'inspected' => 'Serial inspection completed - Acceptable',
+            'for_return' => 'Serial marked for return to supplier',
+        ];
+        $defaultRemarks = $defaultRemarksMap[$newStatus] ?? "Status changed from {$oldStatus} to {$newStatus}";
+        $finalRemarks = $remarks ?? $defaultRemarks;
+
+        // For the "prepare" status (Supplier accepts), also log a "preparing" entry
+        // This creates the workflow: Accept → Preparing → Ready for Delivery
+        if ($newStatus === 'prepare' && $oldStatus === 'pending') {
+            // First log: Supplier accepts
+            self::logMovement(
+                'subscription',
+                (string)($subscription->_id ?? $subscription->id),
+                $serialTitle,
+                null,
+                $targetRole ? ['id' => null, 'name' => null, 'role' => $targetRole] : null,
+                $oldStatus,
+                'accepted',
+                'accept',
+                'Supplier accepted the serial subscription',
+                [
+                    'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                    'serial_index' => $serialIndex,
+                    'supplier_name' => $subscription->supplier_name,
+                ]
+            );
+            
+            // Second log: Supplier is now preparing
+            return self::logMovement(
+                'subscription',
+                (string)($subscription->_id ?? $subscription->id),
+                $serialTitle,
+                null,
+                $targetRole ? ['id' => null, 'name' => null, 'role' => $targetRole] : null,
+                'accepted',
+                $newStatus,
+                'preparing',
+                'Supplier is now preparing the serial for delivery',
+                [
+                    'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                    'serial_index' => $serialIndex,
+                    'supplier_name' => $subscription->supplier_name,
+                ]
+            );
+        }
+
+        return self::logMovement(
+            'subscription',  // Use subscription as record type for consistent querying
+            (string)($subscription->_id ?? $subscription->id),
+            $serialTitle,
+            null, // fromUser will be set to current user
+            $targetRole ? ['id' => null, 'name' => null, 'role' => $targetRole] : null,
+            $oldStatus,
+            $newStatus,
+            $action,
+            $finalRemarks,
+            [
+                'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                'serial_index' => $serialIndex,
+                'supplier_name' => $subscription->supplier_name,
+            ]
+        );
+    }
+
+    /**
+     * Create notifications for status changes
+     * This notifies relevant users when serial status changes
+     * 
+     * Notification Logic:
+     * - TPU creates serial → Supplier receives notification
+     * - Supplier updates status (prepare, for_delivery) → TPU receives notification
+     * - GSPS updates status (received) → Supplier receives notification
+     * - Inspection updates status (inspected/delivered, for_return) → Supplier AND TPU receive notification
+     */
+    public static function createStatusNotifications(
+        string $newStatus,
+        string $serialTitle,
+        ?string $subscriptionId = null,
+        ?string $serialIssn = null,
+        ?string $supplierName = null
+    ): void {
+        $currentUser = Auth::user();
+        $currentRole = strtolower($currentUser?->role ?? 'system');
+        
+        // Define strict role-based notification rules
+        $notificationMap = [
+            // When supplier accepts/prepares a serial → notify TPU only
+            'prepare' => [
+                'target_roles' => ['tpu'],
+                'title' => 'Serial Being Prepared',
+                'message' => "'{$serialTitle}' is being prepared by {$supplierName}.",
+            ],
+            // When supplier marks for delivery → notify TPU only
+            'for_delivery' => [
+                'target_roles' => ['tpu'],
+                'title' => 'Serial Ready for Delivery',
+                'message' => "'{$serialTitle}' is now ready for delivery from {$supplierName}.",
+            ],
+            // When GSPS receives → notify Supplier only
+            'received' => [
+                'target_roles' => ['supplier'],
+                'title' => 'Serial Received by GSPS',
+                'message' => "'{$serialTitle}' has been received by GSPS and is pending inspection.",
+                'supplier_name' => $supplierName,
+            ],
+            // When inspection completes (delivered) → notify Supplier AND TPU
+            'inspected' => [
+                'target_roles' => ['supplier', 'tpu'],
+                'title' => 'Serial Delivered Successfully',
+                'message' => "'{$serialTitle}' has been inspected and marked as Delivered.",
+                'supplier_name' => $supplierName,
+            ],
+            // When inspection marks for return → notify Supplier AND TPU
+            'for_return' => [
+                'target_roles' => ['supplier', 'tpu'],
+                'title' => 'Serial Marked for Return',
+                'message' => "'{$serialTitle}' has been marked for return.",
+                'supplier_name' => $supplierName,
+            ],
+        ];
+        
+        $config = $notificationMap[$newStatus] ?? null;
+        
+        if ($config) {
+            foreach ($config['target_roles'] as $role) {
+                // Don't notify the user who triggered the action
+                if ($role === $currentRole) {
+                    continue;
+                }
+                
+                UserNotification::createStatusNotification(
+                    $role,
+                    $config['title'],
+                    $config['message'],
+                    [
+                        'serial_title' => $serialTitle,
+                        'new_status' => $newStatus,
+                        'supplier_name' => $supplierName,
+                        'subscription_id' => $subscriptionId,
+                        'serial_issn' => $serialIssn,
+                    ],
+                    $currentRole
+                );
+            }
+        }
+    }
+
+    /**
+     * Create notification when TPU creates a serial (notifies assigned supplier)
+     */
+    public static function notifySupplierOfNewSerial(
+        string $serialTitle,
+        string $supplierName,
+        ?string $subscriptionId = null,
+        ?string $serialIssn = null
+    ): void {
+        $currentUser = Auth::user();
+        $currentRole = strtolower($currentUser?->role ?? 'tpu');
+        
+        UserNotification::createStatusNotification(
+            'supplier',
+            'New Serial Assigned',
+            "A new serial '{$serialTitle}' has been assigned to you for delivery.",
+            [
+                'serial_title' => $serialTitle,
+                'new_status' => 'pending',
+                'supplier_name' => $supplierName,
+                'subscription_id' => $subscriptionId,
+                'serial_issn' => $serialIssn,
+            ],
+            $currentRole
+        );
+    }
+
+    /**
+     * Delete notifications related to a specific serial
+     */
+    public static function deleteSerialNotifications(
+        ?string $subscriptionId,
+        ?string $serialIssn = null,
+        ?string $serialTitle = null
+    ): int {
+        if (!$subscriptionId && !$serialIssn && !$serialTitle) {
+            return 0;
+        }
+        
+        $deleted = 0;
+        
+        // Delete by subscription_id
+        if ($subscriptionId) {
+            $deleted += UserNotification::where('data.subscription_id', $subscriptionId)->delete();
+        }
+        
+        // Delete by serial_issn
+        if ($serialIssn) {
+            $deleted += UserNotification::where('data.serial_issn', $serialIssn)->delete();
+        }
+        
+        // Delete by serial_title
+        if ($serialTitle) {
+            $deleted += UserNotification::where('data.serial_title', $serialTitle)->delete();
+        }
+        
+        return $deleted;
+    }
+
+    /**
+     * Log when a subscription is created
+     */
+    public static function logSubscriptionCreated($subscription, ?string $remarks = null): ProcessMovementLog
+    {
+        return self::logMovement(
+            'subscription',
+            (string)($subscription->_id ?? $subscription->id),
+            $subscription->serial_title,
+            null,
+            ['id' => null, 'name' => $subscription->supplier_name, 'role' => 'supplier'],
+            null,
+            'created',
+            'create',
+            $remarks ?? 'Subscription created and assigned to supplier',
+            [
+                'supplier_name' => $subscription->supplier_name,
+                'award_cost' => $subscription->award_cost,
+            ]
+        );
+    }
+
+    /**
+     * Log supplier account approval
+     */
+    public static function logSupplierAccountApproval($account, ?string $remarks = null): ProcessMovementLog
+    {
+        return self::logMovement(
+            'supplier_account',
+            (string)($account->_id ?? $account->id),
+            $account->company_name,
+            null,
+            ['id' => null, 'name' => $account->company_name, 'role' => 'supplier'],
+            'pending',
+            'approved',
+            'approve',
+            $remarks ?? 'Supplier account approved'
+        );
+    }
+
+    /**
+     * Log supplier account rejection
+     */
+    public static function logSupplierAccountRejection($account, ?string $remarks = null): ProcessMovementLog
+    {
+        return self::logMovement(
+            'supplier_account',
+            (string)($account->_id ?? $account->id),
+            $account->company_name,
+            null,
+            null,
+            'pending',
+            'rejected',
+            'reject',
+            $remarks ?? 'Supplier account rejected'
+        );
+    }
+
+    /**
+     * Log serial inspection
+     */
+    public static function logSerialInspection(
+        $subscription,
+        int $serialIndex,
+        string $serialTitle,
+        string $inspectionResult,
+        ?string $remarks = null
+    ): ProcessMovementLog {
+        return self::logMovement(
+            'serial',
+            (string)($subscription->_id ?? $subscription->id) . '_' . $serialIndex,
+            $serialTitle,
+            null,
+            ['id' => null, 'name' => null, 'role' => 'tpu'], // After inspection, goes back to TPU
+            'pending_inspection',
+            'inspected',
+            'inspect',
+            $remarks,
+            [
+                'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                'serial_index' => $serialIndex,
+                'inspection_result' => $inspectionResult,
+            ]
+        );
+    }
+
+    /**
+     * Get the target role for a given status
+     */
+    private static function getTargetRoleForStatus(string $status): ?string
+    {
+        $statusRoleMap = [
+            'pending' => 'supplier',
+            'prepare' => 'supplier',
+            'for_delivery' => 'gsps',
+            'received' => 'tpu',
+            'pending_inspection' => 'inspection',
+            'inspected' => 'tpu',
+            'completed' => null,
+        ];
+
+        return $statusRoleMap[$status] ?? null;
+    }
+
+    /**
+     * Get workflow history for a record
+     */
+    public static function getWorkflowHistory(string $recordType, string $recordId)
+    {
+        return ProcessMovementLog::forRecord($recordType, $recordId)
+                                 ->orderBy('created_at', 'asc')
+                                 ->get();
+    }
+
+    /**
+     * Get recent movements for a user
+     */
+    public static function getRecentMovementsForUser(string $userId, int $limit = 50)
+    {
+        return ProcessMovementLog::where(function ($query) use ($userId) {
+            $query->where('from_user_id', $userId)
+                  ->orWhere('to_user_id', $userId);
+        })
+        ->orderBy('created_at', 'desc')
+        ->limit($limit)
+        ->get();
+    }
+
+    /**
+     * Get recent movements by role
+     */
+    public static function getMovementsByRole(string $role, int $limit = 50)
+    {
+        return ProcessMovementLog::where(function ($query) use ($role) {
+            $query->where('from_role', $role)
+                  ->orWhere('to_role', $role);
+        })
+        ->orderBy('created_at', 'desc')
+        ->limit($limit)
+        ->get();
+    }
+}

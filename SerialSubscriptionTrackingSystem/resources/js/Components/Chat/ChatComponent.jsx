@@ -499,13 +499,81 @@ export default function ChatComponent({
   };
 
   const renderMessage = (msg, index) => {
-    const isImage = msg.attachment && /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment);
-    const fileExtension = msg.attachment ? msg.attachment.split('.').pop().toLowerCase() : null;
+    // Use attachment_data for original filename if available, fallback to legacy
+    const attachmentData = msg.attachment_data;
+    const displayFileName = attachmentData?.original_name || (msg.attachment ? msg.attachment.split('/').pop() : null);
+    const fileType = attachmentData?.file_type || '';
+    const isImage = msg.attachment && (fileType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment));
+    const fileExtension = displayFileName ? displayFileName.split('.').pop().toLowerCase() : null;
+    const canDeleteAttachment = attachmentData?.can_delete || msg.isOwn;
+    
     const isHovered = hoveredMessageId === msg.id;
     const isEditing = editingMessageId === msg.id;
     const prevMsg = index > 0 ? messages[index - 1] : null;
     const showDateSeparator = shouldShowDateSeparator(msg, prevMsg);
     const showSenderInfo = shouldShowSenderInfo(index);
+
+    // Handler for deleting attachment only (not the whole message)
+    const handleDeleteAttachmentClick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Check if message has content - if not, will delete entire message
+      const hasContent = msg.content && msg.content.trim().length > 0;
+      const deleteMessage = !hasContent;
+      
+      const result = await Swal.fire({
+        title: deleteMessage ? 'Delete Message?' : 'Delete Attachment?',
+        text: deleteMessage 
+          ? 'This message only contains an attachment. Deleting the attachment will remove the entire message.'
+          : `Are you sure you want to delete "${displayFileName}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Cancel',
+        showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+        hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+      });
+
+      if (result.isConfirmed) {
+        try {
+          if (deleteMessage) {
+            // Delete entire message if no content
+            await window.axios.delete(`/api/messages/${msg.id}`);
+            setMessages(prev => prev.filter(m => m.id !== msg.id));
+          } else {
+            // Only delete attachment
+            await window.axios.delete(`/api/attachments/${msg.id}`);
+            setMessages(prev => prev.map(m => 
+              m.id === msg.id 
+                ? { ...m, attachment: null, attachment_data: null }
+                : m
+            ));
+          }
+          Swal.fire({
+            title: 'Deleted!',
+            text: deleteMessage ? 'Message has been deleted.' : 'Attachment has been deleted.',
+            icon: 'success',
+            confirmButtonColor: primaryColor,
+            showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+            hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+          });
+          fetchContacts(); // Refresh contacts to update last message
+        } catch (error) {
+          console.error('Error deleting:', error);
+          Swal.fire({
+            title: 'Error',
+            text: 'Failed to delete: ' + (error.response?.data?.error || error.message),
+            icon: 'error',
+            confirmButtonColor: primaryColor,
+            showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+            hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+          });
+        }
+      }
+    };
 
     return (
       <div key={msg.id}>
@@ -529,10 +597,18 @@ export default function ChatComponent({
             gap: 12,
             marginBottom: 12,
             alignItems: 'flex-start',
-            justifyContent: msg.isOwn ? 'flex-end' : 'flex-start'
+            justifyContent: msg.isOwn ? 'flex-end' : 'flex-start',
+            padding: '4px 8px',
+            marginLeft: msg.isOwn ? '80px' : '0',
+            marginRight: msg.isOwn ? '0' : '80px'
           }}
           onMouseEnter={() => setHoveredMessageId(msg.id)}
-          onMouseLeave={() => setHoveredMessageId(null)}
+          onMouseLeave={() => {
+            // Don't hide if delete confirm is showing
+            if (showDeleteConfirm !== msg.id) {
+              setHoveredMessageId(null);
+            }
+          }}
         >
           {!msg.isOwn && showSenderInfo && (
             <div style={{
@@ -625,8 +701,6 @@ export default function ChatComponent({
                   position: 'relative',
                   display: 'inline-block'
                 }}
-                  onMouseEnter={() => setHoveredMessageId(msg.id)}
-                  onMouseLeave={() => setHoveredMessageId(null)}
                 >
                   <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                     {msg.content}
@@ -635,7 +709,7 @@ export default function ChatComponent({
                     <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>(edited)</span>
                   )}
 
-                  {isHovered && msg.isOwn && (
+                  {(isHovered || showDeleteConfirm === msg.id) && msg.isOwn && (
                     <div style={{
                       position: 'absolute',
                       right: '100%',
@@ -710,9 +784,11 @@ export default function ChatComponent({
                             padding: '6px 12px',
                             border: '1px solid #ddd',
                             borderRadius: 5,
-                            background: '#fff',
+                            background: '#f8f9fa',
+                            color: '#333',
                             cursor: 'pointer',
-                            fontSize: 12
+                            fontSize: 12,
+                            fontWeight: 500
                           }}
                         >
                           Cancel
@@ -739,42 +815,117 @@ export default function ChatComponent({
             )}
 
             {msg.attachment && (
-              <div style={{ marginTop: 8, marginBottom: msg.content ? 0 : 8 }}>
+              <div style={{ marginTop: 8, marginBottom: msg.content ? 0 : 8, position: 'relative' }}>
                 {isImage ? (
-                  <a href={msg.attachment} target="_blank" rel="noopener noreferrer">
-                    <img 
-                      src={msg.attachment} 
-                      alt="attachment" 
-                      style={{ 
-                        maxWidth: '100%', 
-                        maxHeight: '240px', 
-                        borderRadius: 8,
-                        cursor: 'pointer'
-                      }} 
-                    />
-                  </a>
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <a href={msg.attachment} target="_blank" rel="noopener noreferrer">
+                      <img 
+                        src={msg.attachment} 
+                        alt={displayFileName || 'attachment'} 
+                        style={{ 
+                          maxWidth: '100%', 
+                          maxHeight: '240px', 
+                          borderRadius: 8,
+                          cursor: 'pointer'
+                        }} 
+                      />
+                    </a>
+                    {canDeleteAttachment && isHovered && (
+                      <button
+                        onClick={handleDeleteAttachmentClick}
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          background: 'rgba(220, 53, 69, 0.9)',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: 32,
+                          height: 32,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                        }}
+                        title="Delete attachment"
+                      >
+                        <IoTrash size={16} />
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  <a 
-                    href={msg.attachment} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      background: '#f0f0f0',
-                      borderRadius: 6,
-                      textDecoration: 'none',
-                      color: '#333',
-                      width: 'fit-content'
-                    }}
-                  >
-                    {getFileIcon(fileExtension)}
-                    <span style={{ fontSize: 14 }}>
-                      {msg.attachment.split('/').pop()}
-                    </span>
-                  </a>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 8,
+                    background: '#f0f0f0',
+                    borderRadius: 6,
+                    padding: '10px 12px',
+                    width: 'fit-content'
+                  }}>
+                    <a 
+                      href={msg.attachment} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        textDecoration: 'none',
+                        color: '#333',
+                        flex: 1,
+                        cursor: 'pointer'
+                      }}
+                      title="Click to view file"
+                    >
+                      {getFileIcon(fileExtension)}
+                      <span style={{ fontSize: 14, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayFileName}
+                      </span>
+                    </a>
+                    <a
+                      href={attachmentData?.download_url || msg.attachment}
+                      download={displayFileName}
+                      style={{
+                        background: '#e0e0e0',
+                        border: 'none',
+                        borderRadius: '4px',
+                        width: 28,
+                        height: 28,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: primaryColor,
+                        textDecoration: 'none'
+                      }}
+                      title="Download file"
+                    >
+                      <IoDownload size={16} />
+                    </a>
+                    {canDeleteAttachment && (
+                      <button
+                        onClick={handleDeleteAttachmentClick}
+                        style={{
+                          background: '#fee2e2',
+                          border: 'none',
+                          borderRadius: '4px',
+                          width: 28,
+                          height: 28,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#dc3545',
+                          marginLeft: 4
+                        }}
+                        title="Delete attachment"
+                      >
+                        <IoTrash size={14} />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -1196,14 +1347,76 @@ export default function ChatComponent({
                         {sharedFiles.length} file{sharedFiles.length !== 1 ? 's' : ''} shared
                       </p>
                       {sharedFiles.map((file, idx) => {
-                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.filename || file.url);
+                        const fileType = file.file_type || '';
+                        const isImage = fileType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.filename || file.url);
                         const fileExtension = (file.filename || file.url).split('.').pop().toLowerCase();
+                        
+                        // Check if corresponding message has content
+                        const correspondingMessage = messages.find(m => m.id === file.id);
+                        const hasContent = correspondingMessage?.content && correspondingMessage.content.trim().length > 0;
+                        const willDeleteMessage = !hasContent;
+                        
+                        const handleDeleteSharedFile = async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          const result = await Swal.fire({
+                            title: willDeleteMessage ? 'Delete Message?' : 'Delete File?',
+                            text: willDeleteMessage
+                              ? 'This message only contains this file. Deleting it will remove the entire message.'
+                              : `Are you sure you want to delete "${file.filename}"?`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#dc3545',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: 'Delete',
+                            cancelButtonText: 'Cancel',
+                            showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+                            hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+                          });
+
+                          if (result.isConfirmed) {
+                            try {
+                              if (willDeleteMessage) {
+                                // Delete entire message
+                                await window.axios.delete(`/api/messages/${file.id}`);
+                                setMessages(prev => prev.filter(m => m.id !== file.id));
+                              } else {
+                                // Only delete attachment
+                                await window.axios.delete(`/api/attachments/${file.id}`);
+                                setMessages(prev => prev.map(m => 
+                                  m.id === file.id 
+                                    ? { ...m, attachment: null, attachment_data: null }
+                                    : m
+                                ));
+                              }
+                              setSharedFiles(prev => prev.filter(f => f.id !== file.id));
+                              fetchContacts(); // Refresh contacts
+                              Swal.fire({
+                                title: 'Deleted!',
+                                text: willDeleteMessage ? 'Message has been deleted.' : 'File has been deleted.',
+                                icon: 'success',
+                                confirmButtonColor: primaryColor,
+                                showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+                                hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+                              });
+                            } catch (error) {
+                              console.error('Error deleting file:', error);
+                              Swal.fire({
+                                title: 'Error',
+                                text: 'Failed to delete: ' + (error.response?.data?.error || error.message),
+                                icon: 'error',
+                                confirmButtonColor: primaryColor,
+                                showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },
+                                hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' }
+                              });
+                            }
+                          }
+                        };
+                        
                         return (
-                          <a
+                          <div
                             key={idx}
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -1211,62 +1424,121 @@ export default function ChatComponent({
                               padding: '14px 16px',
                               background: '#f8f9fa',
                               borderRadius: 8,
-                              textDecoration: 'none',
-                              color: '#333',
                               border: '1px solid #e9ecef',
                               transition: 'all 0.2s'
                             }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#e9ecef';
-                              e.currentTarget.style.borderColor = '#dee2e6';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = '#f8f9fa';
-                              e.currentTarget.style.borderColor = '#e9ecef';
-                            }}
                           >
-                            {isImage ? (
-                              <img
-                                src={file.url}
-                                alt={file.filename}
-                                style={{
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                textDecoration: 'none',
+                                color: '#333',
+                                flex: 1,
+                                minWidth: 0,
+                                cursor: 'pointer'
+                              }}
+                              title="Click to view file"
+                              onMouseEnter={(e) => {
+                                e.currentTarget.parentElement.style.background = '#e9ecef';
+                                e.currentTarget.parentElement.style.borderColor = '#dee2e6';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.parentElement.style.background = '#f8f9fa';
+                                e.currentTarget.parentElement.style.borderColor = '#e9ecef';
+                              }}
+                            >
+                              {isImage ? (
+                                <img
+                                  src={file.url}
+                                  alt={file.filename}
+                                  style={{
+                                    width: 48,
+                                    height: 48,
+                                    objectFit: 'cover',
+                                    borderRadius: 6
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
                                   width: 48,
                                   height: 48,
-                                  objectFit: 'cover',
-                                  borderRadius: 6
-                                }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: 48,
-                                height: 48,
-                                borderRadius: 6,
-                                background: '#fff',
+                                  borderRadius: 6,
+                                  background: '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  border: '1px solid #dee2e6'
+                                }}>
+                                  {getFileIcon(fileExtension)}
+                                </div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{
+                                  margin: 0,
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {file.filename}
+                                </p>
+                                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6c757d' }}>
+                                  Shared by {file.sender} • {formatContactTime(file.timestamp)}
+                                  {file.file_size && ` • ${formatFileSize(file.file_size)}`}
+                                </p>
+                              </div>
+                            </a>
+                            <a
+                              href={file.download_url || file.url}
+                              download={file.filename}
+                              style={{
+                                background: '#e9ecef',
+                                border: 'none',
+                                borderRadius: '6px',
+                                width: 36,
+                                height: 36,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                border: '1px solid #dee2e6'
-                              }}>
-                                {getFileIcon(fileExtension)}
-                              </div>
+                                color: primaryColor,
+                                textDecoration: 'none',
+                                flexShrink: 0
+                              }}
+                              title="Download file"
+                            >
+                              <IoDownload size={18} />
+                            </a>
+                            {file.can_delete && (
+                              <button
+                                onClick={handleDeleteSharedFile}
+                                style={{
+                                  background: '#fee2e2',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  width: 36,
+                                  height: 36,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: '#dc3545',
+                                  transition: 'all 0.2s',
+                                  flexShrink: 0
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
+                                title="Delete file"
+                              >
+                                <IoTrash size={16} />
+                              </button>
                             )}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{
-                                margin: 0,
-                                fontSize: 14,
-                                fontWeight: 500,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}>
-                                {file.filename || file.url.split('/').pop()}
-                              </p>
-                              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6c757d' }}>
-                                Shared by {file.sender} • {formatContactTime(file.timestamp)}
-                              </p>
-                            </div>
-                            <IoDownload size={20} style={{ color: primaryColor }} />
-                          </a>
+                          </div>
                         );
                       })}
                     </div>

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Inertia\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -29,6 +30,19 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         
+        // Calculate session expiration time
+        $sessionLifetime = Config::get('session.lifetime', 120); // in minutes
+        $sessionExpiresAt = null;
+        
+        if ($user && $request->session()->has('_token')) {
+            // Session expiration timestamp (current time + remaining session time)
+            $lastActivity = $request->session()->get('_last_activity', time());
+            $sessionExpiresAt = ($lastActivity + ($sessionLifetime * 60)) * 1000; // Convert to milliseconds for JS
+            
+            // Update last activity
+            $request->session()->put('_last_activity', time());
+        }
+        
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $user ? [
@@ -37,6 +51,10 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'role' => $user->role,
                 ] : null,
+            ],
+            'session' => [
+                'lifetime' => $sessionLifetime,
+                'expires_at' => $sessionExpiresAt,
             ],
             'flash' => [
                 'message' => fn () => $request->session()->get('message'),

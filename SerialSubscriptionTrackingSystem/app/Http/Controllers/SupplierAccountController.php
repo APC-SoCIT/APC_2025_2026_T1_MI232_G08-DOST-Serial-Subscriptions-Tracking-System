@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\SupplierAccount;
 use App\Models\User;
+use App\Services\AuditLogService;
+use App\Services\ProcessMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
@@ -164,6 +166,9 @@ class SupplierAccountController extends Controller
                 'created_by' => $request->user()?->id,
             ]);
 
+            // Log the creation
+            AuditLogService::logCreate($supplierAccount, "Supplier account '{$supplierAccount->company_name}' created");
+
             return response()->json([
                 'success' => true,
                 'message' => 'Supplier account created successfully. Awaiting admin approval.',
@@ -220,6 +225,10 @@ class SupplierAccountController extends Controller
             'user_id' => $user->_id ?? $user->id,
         ]);
 
+        // Log the approval
+        AuditLogService::logApprove($supplierAccount, "Supplier account '{$supplierAccount->company_name}' approved");
+        ProcessMovementService::logSupplierAccountApproval($supplierAccount);
+
         return response()->json([
             'success' => true,
             'message' => 'Supplier account approved successfully.',
@@ -250,6 +259,10 @@ class SupplierAccountController extends Controller
             'rejected_at' => now(),
             'rejection_reason' => $validated['reason'] ?? null,
         ]);
+
+        // Log the rejection
+        AuditLogService::logReject($supplierAccount, $validated['reason'] ?? 'No reason provided');
+        ProcessMovementService::logSupplierAccountRejection($supplierAccount, $validated['reason'] ?? null);
 
         return response()->json([
             'success' => true,

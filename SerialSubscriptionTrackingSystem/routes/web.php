@@ -8,6 +8,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardStatsController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\LogsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -153,6 +154,16 @@ Route::middleware(['auth', 'verified', 'role:inspection'])->group(function () {
 
 // ===================== AUTHENTICATED ROUTES (ALL ROLES) =====================
 Route::middleware(['auth'])->group(function () {
+    // Session check endpoint - used to verify session is still valid and extend it
+    Route::get('/api/session/check', function () {
+        return response()->json([
+            'success' => true,
+            'authenticated' => true,
+            'user' => auth()->user()?->only(['id', 'name', 'email', 'role']),
+            'session_extended' => true,
+        ]);
+    })->name('session.check');
+
     // Profile routes - available to all authenticated users
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -165,15 +176,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/chats/{chat}/files', [ChatController::class, 'getSharedFiles'])->name('chats.files');
     Route::post('/api/chats/get-or-create', [ChatController::class, 'getOrCreateChat'])->name('chats.getOrCreate');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'storeMessage'])->name('messages.store');
-    Route::get('/api/chats/{message}/download', [ChatController::class, 'downloadAttachment'])->name('file.download');
+    Route::get('/api/attachments/{messageId}/download', [ChatController::class, 'downloadAttachment'])->name('chat.attachment.download');
+    Route::delete('/api/attachments/{messageId}', [ChatController::class, 'deleteAttachment'])->name('chat.attachment.delete');
     Route::post('/api/chats/{chat}/read', [ChatController::class, 'markAsRead'])->name('chats.markAsRead');
     Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
     Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
 
     // Notification routes - available to all authenticated users
     Route::get('/api/notifications/incoming-serials', [NotificationController::class, 'getIncomingSerials'])->name('notifications.incomingSerials');
+    Route::get('/api/notifications/upcoming-deliveries', [NotificationController::class, 'getUpcomingDeliveries'])->name('notifications.upcomingDeliveries');
     Route::post('/api/notifications/mark-read', [NotificationController::class, 'markAsRead'])->name('notifications.markRead');
     Route::post('/api/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllRead');
+
+    // Workflow history - available to all authenticated users to view process movement
+    Route::get('/api/workflow-history', [LogsController::class, 'getWorkflowHistory'])->name('workflow.history');
 });
 
 // ===================== ADMIN-ONLY API ROUTES =====================
@@ -189,6 +205,16 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
         Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
         Route::put('/{id}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggleDisable');
+    });
+
+    // Audit Logs & Process Movement Logs - Admin only
+    Route::prefix('api/logs')->group(function () {
+        Route::get('/audit', [LogsController::class, 'getAuditLogs'])->name('logs.audit');
+        Route::get('/audit/stats', [LogsController::class, 'getAuditStats'])->name('logs.auditStats');
+        Route::get('/audit/{id}', [LogsController::class, 'getAuditLog'])->name('logs.auditDetail');
+        Route::get('/movements', [LogsController::class, 'getProcessMovementLogs'])->name('logs.movements');
+        Route::get('/movements/stats', [LogsController::class, 'getMovementStats'])->name('logs.movementStats');
+        Route::get('/workflow-history', [LogsController::class, 'getWorkflowHistory'])->name('logs.workflowHistory');
     });
 
     // Supplier Account Approval - Admin only
