@@ -63,6 +63,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('/admin-add-account', function () {
         return Inertia::render('Dashboard_Admin_Addaccount');
     })->name('admin.addaccount');
+    
+    Route::get('/admin-logs', function () {
+        return Inertia::render('Admin_Logs');
+    })->name('admin.logs');
 });
 
 // ===================== TPU ROUTES =====================
@@ -211,6 +215,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::prefix('api/logs')->group(function () {
         Route::get('/audit', [LogsController::class, 'getAuditLogs'])->name('logs.audit');
         Route::get('/audit/stats', [LogsController::class, 'getAuditStats'])->name('logs.auditStats');
+        Route::get('/audit/download', [LogsController::class, 'downloadAuditLogs'])->name('logs.auditDownload');
         Route::get('/audit/{id}', [LogsController::class, 'getAuditLog'])->name('logs.auditDetail');
         Route::get('/movements', [LogsController::class, 'getProcessMovementLogs'])->name('logs.movements');
         Route::get('/movements/stats', [LogsController::class, 'getMovementStats'])->name('logs.movementStats');

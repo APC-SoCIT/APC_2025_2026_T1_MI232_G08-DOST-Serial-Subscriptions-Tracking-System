@@ -167,7 +167,9 @@ class SupplierAccountController extends Controller
             ]);
 
             // Log the creation
-            AuditLogService::logCreate($supplierAccount, "Supplier account '{$supplierAccount->company_name}' created");
+            $creatorName = $request->user()?->name ?? 'System';
+            $creatorRole = $request->user()?->role ?? 'unknown';
+            AuditLogService::logCreate($supplierAccount, "Supplier account '{$supplierAccount->company_name}' created by {$creatorRole} user '{$creatorName}'");
 
             return response()->json([
                 'success' => true,

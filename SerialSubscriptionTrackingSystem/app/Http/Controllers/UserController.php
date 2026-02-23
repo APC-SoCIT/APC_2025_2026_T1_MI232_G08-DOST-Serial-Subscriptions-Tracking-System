@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\SupplierAccount;
 use App\Models\Subscription;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
@@ -126,6 +127,14 @@ class UserController extends Controller
 
             $user->delete();
 
+            // Log user deletion
+            AuditLogService::log(
+                'delete',
+                User::class,
+                $userId ?? null,
+                "User '{$userName}' deleted by admin"
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'User deleted successfully',
@@ -160,6 +169,16 @@ class UserController extends Controller
             $user->role = $request->role;
             $user->save();
 
+            // Log role update
+            AuditLogService::log(
+                'update',
+                User::class,
+                $user->_id ?? $user->id,
+                "User '{$user->name}' role changed to '{$request->role}'",
+                ['role' => $user->getOriginal('role')],
+                ['role' => $request->role]
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'User role updated successfully',
@@ -190,6 +209,17 @@ class UserController extends Controller
 
             $user->is_disabled = !($user->is_disabled ?? false);
             $user->save();
+
+            // Log enable/disable action
+            $action = $user->is_disabled ? 'disabled' : 'enabled';
+            AuditLogService::log(
+                'update',
+                User::class,
+                $user->_id ?? $user->id,
+                "User '{$user->name}' {$action} by admin",
+                ['is_disabled' => !$user->is_disabled],
+                ['is_disabled' => $user->is_disabled]
+            );
 
             return response()->json([
                 'success' => true,
@@ -228,6 +258,9 @@ class UserController extends Controller
                 'password' => Hash::make($request->password),
                 'email_verified_at' => now(), // Auto-verify admin-created accounts
             ]);
+
+            // Log user creation
+            AuditLogService::logCreate($user, "User '{$user->name}' created by admin with role '{$user->role}'");
 
             return response()->json([
                 'success' => true,

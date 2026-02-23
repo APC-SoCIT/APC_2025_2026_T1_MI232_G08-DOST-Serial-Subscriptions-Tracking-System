@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
-import { HiUsers, HiUserAdd, HiMenu, HiX } from "react-icons/hi";
+import { HiUsers, HiUserAdd, HiMenu, HiX, HiClipboardList } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaUserCircle } from "react-icons/fa";
 import { useRole } from "@/Components/RequireRole";
@@ -16,6 +16,7 @@ const navItems = [
   { icon: <ImStatsBars size={18} />, label: "List of Supplier", href: "/list-of-supplier" },
   { icon: <HiUsers size={18} />, label: "List of User", href: "/list-of-user" },
   { icon: <HiUserAdd size={18} />, label: "Add Account", href: "/admin-add-account" },
+  { icon: <HiClipboardList size={18} />, label: "Logs", href: "/admin-logs" },
 ];
 
 export default function AdminLayout({ children, header, title }) {
