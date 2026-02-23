@@ -215,4 +215,109 @@ class LogsController extends Controller
             'stats' => $stats,
         ]);
     }
+
+    /**
+     * Download audit logs as CSV or JSON
+     */
+    public function downloadAuditLogs(Request $request)
+    {
+        $query = AuditLog::query();
+
+        // Filter by action
+        if ($request->has('action') && $request->action !== 'all' && $request->action) {
+            $query->where('action', $request->action);
+        }
+
+        // Filter by role
+        if ($request->has('role') && $request->role !== 'all' && $request->role) {
+            $query->where('role', $request->role);
+        }
+
+        // Filter by module (model_type contains the module name)
+        if ($request->has('module') && $request->module !== 'all' && $request->module) {
+            $query->where('model_type', 'like', "%{$request->module}%");
+        }
+
+        // Filter by date range
+        if ($request->has('start_date') && $request->start_date) {
+            $query->where('created_at', '>=', $request->start_date);
+        }
+        if ($request->has('end_date') && $request->end_date) {
+            $query->where('created_at', '<=', $request->end_date . ' 23:59:59');
+        }
+
+        // Filter by search term
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhere('user_name', 'like', "%{$search}%")
+                  ->orWhere('user_email', 'like', "%{$search}%");
+            });
+        }
+
+        $logs = $query->orderBy('created_at', 'desc')->get();
+
+        $format = $request->get('format', 'csv');
+
+        if ($format === 'json') {
+            return response()->json($logs)
+                ->header('Content-Disposition', 'attachment; filename="activity_logs_' . date('Y-m-d') . '.json"');
+        }
+
+        // Default: CSV format
+        $csvData = [];
+        $csvData[] = [
+            'Log ID',
+            'User Name',
+            'User Email',
+            'User Role',
+            'Action',
+            'Module',
+            'Description',
+            'IP Address',
+            'URL',
+            'Method',
+            'Timestamp'
+        ];
+
+        foreach ($logs as $log) {
+            // Extract module name from model_type
+            $moduleName = 'System';
+            if ($log->model_type) {
+                $parts = explode('\\', $log->model_type);
+                $moduleName = end($parts);
+            }
+
+            $csvData[] = [
+                $log->_id ?? $log->id ?? '',
+                $log->user_name ?? 'System',
+                $log->user_email ?? '',
+                $log->role ?? 'N/A',
+                $log->action ?? '',
+                $moduleName,
+                $log->description ?? '',
+                $log->ip_address ?? '',
+                $log->url ?? '',
+                $log->method ?? '',
+                $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : '',
+            ];
+        }
+
+        // Generate CSV content
+        $callback = function () use ($csvData) {
+            $file = fopen('php://output', 'w');
+            // Add BOM for Excel UTF-8 compatibility
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            foreach ($csvData as $row) {
+                fputcsv($file, $row);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="activity_logs_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
 }

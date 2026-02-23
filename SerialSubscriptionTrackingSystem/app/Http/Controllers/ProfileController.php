@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\AuditLogService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,13 +30,19 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $oldValues = $user->only(['name', 'email']);
+        
+        $user->fill($request->validated());
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
+        
+        // Log profile update
+        AuditLogService::logUpdate($user, $oldValues, "User '{$user->name}' updated their profile");
 
         return Redirect::route('profile.edit');
     }
@@ -50,6 +57,9 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+        
+        // Log account deletion before destroying
+        AuditLogService::logDelete($user, "User '{$user->name}' deleted their account");
 
         Auth::logout();
 
