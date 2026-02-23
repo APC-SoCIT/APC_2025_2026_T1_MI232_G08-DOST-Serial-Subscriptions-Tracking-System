@@ -116,6 +116,8 @@ class ChatController extends Controller
             ->get()
             ->map(function ($message) use ($userId) {
                 $senderId = (string) $message->sender_id;
+                $attachmentInfo = $message->getAttachmentInfo();
+                
                 return [
                     'id' => (string) $message->_id,
                     'sender' => $message->sender->name ?? 'Unknown',
@@ -123,6 +125,13 @@ class ChatController extends Controller
                     'senderRole' => $message->sender->role ?? 'user',
                     'content' => $message->content,
                     'attachment' => $message->attachment ? Storage::url($message->attachment) : null,
+                    'attachment_data' => $attachmentInfo ? [
+                        'original_name' => $attachmentInfo['original_name'],
+                        'file_type' => $attachmentInfo['file_type'],
+                        'file_size' => $attachmentInfo['file_size'],
+                        'download_url' => route('chat.attachment.download', ['messageId' => (string) $message->_id]),
+                        'can_delete' => $senderId === $userId, // Only owner can delete
+                    ] : null,
                     'timestamp' => $message->created_at->toISOString(),
                     'isOwn' => $senderId === $userId,
                     'isEdited' => $message->is_edited ?? false,
@@ -187,6 +196,8 @@ class ChatController extends Controller
             ->get()
             ->map(function ($message) use ($userId) {
                 $senderId = (string) $message->sender_id;
+                $attachmentInfo = $message->getAttachmentInfo();
+                
                 return [
                     'id' => (string) $message->_id,
                     'sender' => $message->sender->name ?? 'Unknown',
@@ -194,6 +205,13 @@ class ChatController extends Controller
                     'senderRole' => $message->sender->role ?? 'user',
                     'content' => $message->content,
                     'attachment' => $message->attachment ? Storage::url($message->attachment) : null,
+                    'attachment_data' => $attachmentInfo ? [
+                        'original_name' => $attachmentInfo['original_name'],
+                        'file_type' => $attachmentInfo['file_type'],
+                        'file_size' => $attachmentInfo['file_size'],
+                        'download_url' => route('chat.attachment.download', ['messageId' => (string) $message->_id]),
+                        'can_delete' => $senderId === $userId,
+                    ] : null,
                     'timestamp' => $message->created_at->toISOString(),
                     'isOwn' => $senderId === $userId,
                 ];
@@ -206,13 +224,27 @@ class ChatController extends Controller
     }
 
     /**
+     * Allowed file types for upload
+     */
+    private const ALLOWED_MIME_TYPES = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'image/jpg',
+    ];
+
+    private const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
+    private const MAX_FILE_SIZE_MB = 10;
+    private const MAX_FILE_SIZE_KB = 10240; // 10MB in KB
+
+    /**
      * Store a message with optional file attachment
      */
     public function storeMessage(Request $request, $chatId)
     {
         $request->validate([
             'content' => 'nullable|string',
-            'attachment' => 'nullable|file|max:102400', // 100MB max
+            'attachment' => 'nullable|file|max:' . self::MAX_FILE_SIZE_KB, // 10MB max
         ]);
 
         $chat = Chat::findOrFail($chatId);
@@ -226,16 +258,60 @@ class ChatController extends Controller
         }
 
         $attachmentPath = null;
+        $attachmentData = null;
+        
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentPath = $file->store('chat-attachments', 'public');
+            
+            // Validate file type
+            $extension = strtolower($file->getClientOriginalExtension());
+            $mimeType = $file->getMimeType();
+            
+            if (!in_array($extension, self::ALLOWED_EXTENSIONS) && !in_array($mimeType, self::ALLOWED_MIME_TYPES)) {
+                return response()->json([
+                    'error' => 'Invalid file type. Only PDF, PNG, JPG, JPEG files are allowed.'
+                ], 422);
+            }
+
+            // Additional security: verify file content matches claimed type
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $actualMimeType = $finfo->file($file->getPathname());
+            if (!in_array($actualMimeType, self::ALLOWED_MIME_TYPES)) {
+                return response()->json([
+                    'error' => 'File content does not match the allowed file types.'
+                ], 422);
+            }
+
+            // Validate file size (double-check even though Laravel validates)
+            if ($file->getSize() > self::MAX_FILE_SIZE_KB * 1024) {
+                return response()->json([
+                    'error' => 'File size exceeds the maximum limit of ' . self::MAX_FILE_SIZE_MB . 'MB.'
+                ], 422);
+            }
+
+            // Store file with hashed name for security
+            $originalName = $file->getClientOriginalName();
+            $storedName = $file->hashName();
+            $attachmentPath = $file->storeAs('chat-attachments', $storedName, 'public');
+
+            // Store structured attachment data with original filename
+            $attachmentData = [
+                'original_name' => $originalName,
+                'stored_name' => $storedName,
+                'file_path' => $attachmentPath,
+                'file_type' => $actualMimeType,
+                'file_size' => $file->getSize(),
+                'uploaded_by' => $userId,
+                'uploaded_at' => now()->toISOString(),
+            ];
         }
 
         $message = Message::create([
             'chat_id' => (string) $chatId,
             'sender_id' => $userId,
             'content' => $request->content ?? '',
-            'attachment' => $attachmentPath,
+            'attachment' => $attachmentPath, // Keep for backwards compatibility
+            'attachment_data' => $attachmentData, // New structured data
         ]);
 
         // Update chat's last message timestamp
@@ -255,9 +331,56 @@ class ChatController extends Controller
             'senderId' => $userId,
             'content' => $message->content,
             'attachment' => $attachmentPath ? Storage::url($attachmentPath) : null,
+            'attachment_data' => $attachmentData ? [
+                'original_name' => $attachmentData['original_name'],
+                'file_type' => $attachmentData['file_type'],
+                'file_size' => $attachmentData['file_size'],
+                'download_url' => route('chat.attachment.download', ['messageId' => (string) $message->_id]),
+            ] : null,
             'timestamp' => $message->created_at->toISOString(),
             'isOwn' => true,
         ]);
+    }
+
+    /**
+     * Get all shared files in a chat
+     */
+    public function getSharedFiles($chatId)
+    {
+        $chat = Chat::findOrFail($chatId);
+        $userId = (string) Auth::id();
+        $chatUserId1 = (string) $chat->user_id_1;
+        $chatUserId2 = (string) $chat->user_id_2;
+
+        // Verify user is part of this chat
+        if ($chatUserId1 !== $userId && $chatUserId2 !== $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Get all messages with attachments
+        $files = Message::where('chat_id', $chatId)
+            ->whereNotNull('attachment')
+            ->with('sender')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($message) use ($userId) {
+                $attachmentInfo = $message->getAttachmentInfo();
+                $senderId = (string) $message->sender_id;
+                
+                return [
+                    'id' => (string) $message->_id,
+                    'url' => Storage::url($message->attachment),
+                    'filename' => $attachmentInfo['original_name'] ?? basename($message->attachment),
+                    'file_type' => $attachmentInfo['file_type'] ?? null,
+                    'file_size' => $attachmentInfo['file_size'] ?? null,
+                    'sender' => $message->sender->name ?? 'Unknown',
+                    'timestamp' => $message->created_at->toISOString(),
+                    'download_url' => route('chat.attachment.download', ['messageId' => (string) $message->_id]),
+                    'can_delete' => $senderId === $userId,
+                ];
+            });
+
+        return response()->json(['files' => $files]);
     }
 
     /**
@@ -281,7 +404,53 @@ class ChatController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        return Storage::disk('public')->download($message->attachment);
+        // Get the original filename from attachment_data if available
+        $attachmentInfo = $message->getAttachmentInfo();
+        $originalName = $attachmentInfo['original_name'] ?? basename($message->attachment);
+
+        // Download with original filename
+        return Storage::disk('public')->download($message->attachment, $originalName);
+    }
+
+    /**
+     * Delete an attachment from a message
+     */
+    public function deleteAttachment($messageId)
+    {
+        try {
+            $message = Message::where('_id', $messageId)->firstOrFail();
+            $userId = (string) Auth::id();
+
+            // Verify user owns this message
+            if ((string) $message->sender_id !== $userId) {
+                return response()->json(['error' => 'Unauthorized - not your message'], 403);
+            }
+
+            // Check if message has an attachment
+            if (!$message->hasAttachment()) {
+                return response()->json(['error' => 'No attachment to delete'], 404);
+            }
+
+            // Delete the physical file
+            if ($message->attachment && Storage::disk('public')->exists($message->attachment)) {
+                Storage::disk('public')->delete($message->attachment);
+            }
+
+            // Clear attachment data from message
+            $message->attachment = null;
+            $message->attachment_data = null;
+            $message->save();
+
+            \Log::info('Attachment deleted successfully', ['messageId' => $messageId, 'userId' => $userId]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Attachment deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting attachment', ['error' => $e->getMessage(), 'messageId' => $messageId]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**

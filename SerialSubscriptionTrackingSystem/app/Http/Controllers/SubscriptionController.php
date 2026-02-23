@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
+use App\Services\AuditLogService;
+use App\Services\ProcessMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -153,6 +155,23 @@ class SubscriptionController extends Controller
             'created_by' => Auth::id(),
         ]);
 
+        // Log the creation
+        AuditLogService::logCreate($subscription, "Subscription '{$subscription->serial_title}' created");
+        ProcessMovementService::logSubscriptionCreated($subscription);
+
+        // Notify supplier of new serials assigned to them
+        $serials = $validated['serials'] ?? [];
+        foreach ($serials as $serial) {
+            $serialTitle = $serial['title'] ?? $serial['serialTitle'] ?? $subscription->serial_title;
+            $serialIssn = $serial['issn'] ?? null;
+            ProcessMovementService::notifySupplierOfNewSerial(
+                $serialTitle,
+                $subscription->supplier_name,
+                (string)($subscription->_id ?? $subscription->id),
+                $serialIssn
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Subscription created successfully',
@@ -194,6 +213,9 @@ class SubscriptionController extends Controller
             ], 404);
         }
 
+        // Store old values for audit logging
+        $oldValues = $subscription->toArray();
+
         $validated = $request->validate([
             'serial_title' => 'sometimes|string|max:255',
             'supplier_id' => 'nullable|string',
@@ -227,6 +249,9 @@ class SubscriptionController extends Controller
 
         $subscription->save();
 
+        // Log the update
+        AuditLogService::logUpdate($subscription, $oldValues, "Subscription '{$subscription->serial_title}' updated");
+
         return response()->json([
             'success' => true,
             'message' => 'Subscription updated successfully',
@@ -246,6 +271,22 @@ class SubscriptionController extends Controller
                 'success' => false,
                 'message' => 'Subscription not found',
             ], 404);
+        }
+
+        // Log the deletion before deleting
+        AuditLogService::logDelete($subscription, "Subscription '{$subscription->serial_title}' deleted");
+
+        // Cascade delete all related notifications by subscription ID
+        ProcessMovementService::deleteSerialNotifications((string)($subscription->_id ?? $subscription->id), null, null);
+        
+        // Also delete notifications for each individual serial by title
+        $serials = $subscription->serials ?? [];
+        foreach ($serials as $serial) {
+            $serialTitle = $serial['title'] ?? $serial['serialTitle'] ?? null;
+            $serialIssn = $serial['issn'] ?? null;
+            if ($serialTitle || $serialIssn) {
+                ProcessMovementService::deleteSerialNotifications(null, $serialIssn, $serialTitle);
+            }
         }
 
         $subscription->delete();
@@ -394,6 +435,9 @@ class SubscriptionController extends Controller
         foreach ($subscriptions as $subscription) {
             $subscriptionSerials = $subscription->serials ?? [];
             
+            // Reverse the serials array so newest ones appear first
+            $subscriptionSerials = array_reverse($subscriptionSerials);
+            
             foreach ($subscriptionSerials as $serial) {
                 $serials[] = [
                     'id' => $serialId++,
@@ -412,6 +456,7 @@ class SubscriptionController extends Controller
                     'inspector_name' => $serial['inspector_name'] ?? null,
                     'inspection_date' => $serial['inspection_date'] ?? null,
                     'condition' => $serial['condition'] ?? null,
+                    'inspection_attachment' => $serial['inspection_attachment'] ?? null,
                 ];
             }
         }
@@ -443,9 +488,15 @@ class SubscriptionController extends Controller
         
         $serials = $subscription->serials ?? [];
         $updated = false;
+        $oldStatus = null;
+        $serialTitle = '';
+        $serialIndex = 0;
         
-        foreach ($serials as &$serial) {
+        foreach ($serials as $index => &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                $oldStatus = $serial['status'] ?? 'pending';
+                $serialTitle = $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial';
+                $serialIndex = $index;
                 $serial['status'] = $validated['status'];
                 // If marking as received, add received date
                 if ($validated['status'] === 'received') {
@@ -465,6 +516,35 @@ class SubscriptionController extends Controller
         
         $subscription->serials = $serials;
         $subscription->save();
+        
+        // Log the process movement
+        ProcessMovementService::logSerialStatusChange(
+            $subscription,
+            $serialIndex,
+            $serialTitle,
+            $oldStatus,
+            $validated['status'],
+            $request->get('remarks')
+        );
+        
+        // Create notifications for the status change
+        ProcessMovementService::createStatusNotifications(
+            $validated['status'],
+            $serialTitle,
+            (string)($subscription->_id ?? $subscription->id),
+            $validated['serial_issn'],
+            $subscription->supplier_name
+        );
+        
+        // Log the audit
+        AuditLogService::log(
+            'update',
+            Subscription::class,
+            (string)($subscription->_id ?? $subscription->id),
+            "Serial '{$serialTitle}' status changed from '{$oldStatus}' to '{$validated['status']}'",
+            ['status' => $oldStatus],
+            ['status' => $validated['status']]
+        );
         
         return response()->json([
             'success' => true,
@@ -487,6 +567,9 @@ class SubscriptionController extends Controller
         foreach ($subscriptions as $subscription) {
             $subscriptionSerials = $subscription->serials ?? [];
             
+            // Reverse the serials array so newest ones appear first
+            $subscriptionSerials = array_reverse($subscriptionSerials);
+            
             foreach ($subscriptionSerials as $serial) {
                 $status = $serial['status'] ?? 'pending';
                 
@@ -503,6 +586,14 @@ class SubscriptionController extends Controller
                         'receivedDate' => $serial['receivedDate'] ?? null,
                         'frequency' => $serial['frequency'] ?? '',
                         'quantity' => $serial['quantity'] ?? 1,
+                        // Include attachment URL for viewing
+                        'attachmentUrl' => $serial['attachmentUrl'] ?? null,
+                        // Additional serial details for view modal
+                        'language' => $serial['language'] ?? '',
+                        'authorPublisher' => $serial['authorPublisher'] ?? '',
+                        'category' => $serial['category'] ?? '',
+                        'volumeNumber' => $serial['volumeNumber'] ?? '',
+                        'issuesNo' => $serial['issuesNo'] ?? '',
                     ];
                 }
             }
@@ -537,17 +628,23 @@ class SubscriptionController extends Controller
         $updated = false;
         $receivedDate = now()->toISOString();
         $attachmentUrl = null;
+        $oldStatus = null;
+        $serialTitle = '';
+        $serialIndex = 0;
         
         // Handle file upload
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
             $filename = 'serial_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/serial-attachments', $filename);
+            $file->storeAs('serial-attachments', $filename, 'public');
             $attachmentUrl = '/storage/serial-attachments/' . $filename;
         }
         
-        foreach ($serials as &$serial) {
+        foreach ($serials as $index => &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                $oldStatus = $serial['status'] ?? 'for_delivery';
+                $serialTitle = $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial';
+                $serialIndex = $index;
                 $serial['status'] = 'received';
                 $serial['receivedDate'] = $receivedDate;
                 // Set inspection status to pending when received
@@ -571,6 +668,59 @@ class SubscriptionController extends Controller
         $subscription->serials = $serials;
         $subscription->save();
         
+        // Log the process movement - GSPS receiving the serial
+        ProcessMovementService::logMovement(
+            'subscription',
+            (string)($subscription->_id ?? $subscription->id),
+            $serialTitle,
+            null, // Current user (GSPS)
+            ['id' => null, 'name' => null, 'role' => 'inspection'],
+            $oldStatus,
+            'received',
+            'receive',
+            'Serial received by GSPS and forwarded to Inspection',
+            [
+                'serial_issn' => $validated['serial_issn'],
+                'serial_index' => $serialIndex,
+                'received_date' => $receivedDate,
+            ]
+        );
+        
+        // Log that inspection is now pending
+        ProcessMovementService::logMovement(
+            'subscription',
+            (string)($subscription->_id ?? $subscription->id),
+            $serialTitle,
+            ['id' => null, 'name' => 'GSPS', 'role' => 'gsps'],
+            ['id' => null, 'name' => null, 'role' => 'inspection'],
+            'received',
+            'pending_inspection',
+            'status_change',
+            'Serial queued for inspection',
+            [
+                'serial_issn' => $validated['serial_issn'],
+                'serial_index' => $serialIndex,
+            ]
+        );
+        
+        AuditLogService::log(
+            'update',
+            Subscription::class,
+            (string)($subscription->_id ?? $subscription->id),
+            "Serial '{$serialTitle}' marked as received by GSPS",
+            ['status' => $oldStatus],
+            ['status' => 'received', 'inspection_status' => 'pending']
+        );
+        
+        // Create notifications for status change
+        ProcessMovementService::createStatusNotifications(
+            'received',
+            $serialTitle,
+            (string)($subscription->_id ?? $subscription->id),
+            $validated['serial_issn'],
+            $subscription->supplier_name
+        );
+        
         return response()->json([
             'success' => true,
             'message' => 'Serial marked as received',
@@ -593,6 +743,9 @@ class SubscriptionController extends Controller
         
         foreach ($subscriptions as $subscription) {
             $subscriptionSerials = $subscription->serials ?? [];
+            
+            // Reverse the serials array so newest ones appear first
+            $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
                 $status = $serial['status'] ?? 'pending';
@@ -618,6 +771,16 @@ class SubscriptionController extends Controller
                         'inspection_date' => $serial['inspection_date'] ?? null,
                         'inspection_checklist' => $serial['inspection_checklist'] ?? null,
                         'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                        // Include attachment URLs for viewing
+                        'attachmentUrl' => $serial['attachmentUrl'] ?? null,
+                        'inspection_attachment' => $serial['inspection_attachment'] ?? null,
+                        // Additional serial details for view modal
+                        'language' => $serial['language'] ?? '',
+                        'authorPublisher' => $serial['authorPublisher'] ?? '',
+                        'category' => $serial['category'] ?? '',
+                        'volumeNumber' => $serial['volumeNumber'] ?? '',
+                        'issuesNo' => $serial['issuesNo'] ?? '',
+                        'other_description' => $serial['other_description'] ?? null,
                     ];
                 }
             }
@@ -668,7 +831,7 @@ class SubscriptionController extends Controller
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
             $filename = 'inspection_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/inspection-attachments', $filename);
+            $file->storeAs('inspection-attachments', $filename, 'public');
             $attachmentUrl = '/storage/inspection-attachments/' . $filename;
         }
         
@@ -734,6 +897,59 @@ class SubscriptionController extends Controller
         
         $subscription->save();
         
+        // Log the inspection
+        $serialTitle = '';
+        foreach ($subscription->serials ?? [] as $s) {
+            if (($s['issn'] ?? '') === $validated['serial_issn']) {
+                $serialTitle = $s['serialTitle'] ?? $s['title'] ?? 'Unknown Serial';
+                break;
+            }
+        }
+        
+        ProcessMovementService::logMovement(
+            'subscription',
+            (string)($subscription->_id ?? $subscription->id),
+            $serialTitle,
+            null,
+            $inspectionStatus === 'for_return' 
+                ? ['id' => null, 'name' => null, 'role' => 'supplier'] 
+                : ['id' => null, 'name' => null, 'role' => 'tpu'],
+            'pending_inspection',
+            $inspectionStatus === 'inspected' ? 'delivered' : 'for_return',
+            $inspectionStatus === 'inspected' ? 'inspect' : 'return',
+            $inspectionStatus === 'inspected' 
+                ? "Inspection completed - Serial is Acceptable and marked as Delivered"
+                : "Inspection completed - Serial marked For Return to supplier",
+            [
+                'serial_issn' => $validated['serial_issn'],
+                'inspector_name' => $validated['inspector_name'],
+                'condition' => $validated['condition'],
+                'remarks' => $validated['remarks'] ?? null,
+            ]
+        );
+        
+        AuditLogService::log(
+            'update',
+            Subscription::class,
+            (string)($subscription->_id ?? $subscription->id),
+            "Inspection submitted for serial '{$serialTitle}' - Condition: {$validated['condition']}",
+            null,
+            [
+                'inspector_name' => $validated['inspector_name'],
+                'condition' => $validated['condition'],
+                'inspection_status' => $inspectionStatus,
+            ]
+        );
+        
+        // Create notifications for inspection result
+        ProcessMovementService::createStatusNotifications(
+            $inspectionStatus, // 'inspected' or 'for_return'
+            $serialTitle,
+            (string)($subscription->_id ?? $subscription->id),
+            $validated['serial_issn'],
+            $subscription->supplier_name
+        );
+        
         return response()->json([
             'success' => true,
             'message' => 'Inspection submitted successfully',
@@ -745,32 +961,47 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Get serials for TPU Monitor Delivery (serials that have been inspected)
+     * Get serials for TPU Monitor Delivery (all serials from subscriptions)
      */
     public function getMonitoredDeliveries(Request $request)
     {
         $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
         
-        // Extract all serials that have been inspected (inspected or for_return)
+        // Extract all serials - show all serials from creation
         $monitoredSerials = [];
         $serialId = 1;
         
         // Statistics
+        $totalAccepted = 0;
+        $totalPreparing = 0;
+        $totalForDelivery = 0;
+        $totalReceived = 0;
         $totalDelivered = 0;
-        $totalForReturn = 0;
         $totalPending = 0;
+        $totalForReturn = 0;
         
         foreach ($subscriptions as $subscription) {
             $subscriptionSerials = $subscription->serials ?? [];
+            
+            // Reverse to show newest first
+            $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
                 $status = $serial['status'] ?? 'pending';
                 $inspectionStatus = $serial['inspection_status'] ?? null;
                 
-                // Include all serials that have gone through the delivery flow
-                if ($status === 'received' && $inspectionStatus !== null) {
-                    // Determine delivery status based on inspection
-                    $deliveryStatus = 'Pending';
+                // Determine display status based on flow
+                $deliveryStatus = 'Pending';
+                if ($status === 'pending') {
+                    $deliveryStatus = 'Accepted';
+                    $totalAccepted++;
+                } elseif ($status === 'prepare') {
+                    $deliveryStatus = 'Preparing';
+                    $totalPreparing++;
+                } elseif ($status === 'for_delivery') {
+                    $deliveryStatus = 'For Delivery';
+                    $totalForDelivery++;
+                } elseif ($status === 'received') {
                     if ($inspectionStatus === 'inspected') {
                         $deliveryStatus = 'Delivered';
                         $totalDelivered++;
@@ -778,27 +1009,32 @@ class SubscriptionController extends Controller
                         $deliveryStatus = 'For Return';
                         $totalForReturn++;
                     } else {
-                        $totalPending++;
+                        $deliveryStatus = 'Received';
+                        $totalReceived++;
                     }
-                    
-                    $monitoredSerials[] = [
-                        'id' => $serialId++,
-                        'subscription_id' => $subscription->_id ?? $subscription->id,
-                        'issn' => $serial['issn'] ?? '',
-                        'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
-                        'supplierName' => $subscription->supplier_name,
-                        'deliveryDate' => $serial['deliveryDate'] ?? null,
-                        'receivedDate' => $serial['receivedDate'] ?? null,
-                        'inspectionDate' => $serial['inspection_date'] ?? null,
-                        'deliveryStatus' => $deliveryStatus,
-                        'inspection_status' => $inspectionStatus,
-                        'frequency' => $serial['frequency'] ?? '',
-                        'quantity' => $serial['quantity'] ?? 1,
-                        'inspector_name' => $serial['inspector_name'] ?? null,
-                        'condition' => $serial['condition'] ?? null,
-                        'inspection_remarks' => $serial['inspection_remarks'] ?? null,
-                    ];
                 }
+                
+                $monitoredSerials[] = [
+                    'id' => $serialId++,
+                    'subscription_id' => $subscription->_id ?? $subscription->id,
+                    'issn' => $serial['issn'] ?? '',
+                    'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                    'supplierName' => $subscription->supplier_name,
+                    'deliveryDate' => $serial['deliveryDate'] ?? null,
+                    'receivedDate' => $serial['receivedDate'] ?? null,
+                    'inspectionDate' => $serial['inspection_date'] ?? null,
+                    'deliveryStatus' => $deliveryStatus,
+                    'status' => $status,
+                    'inspection_status' => $inspectionStatus,
+                    'frequency' => $serial['frequency'] ?? '',
+                    'quantity' => $serial['quantity'] ?? $serial['amount'] ?? 1,
+                    'unitPrice' => $serial['unitPrice'] ?? 0,
+                    'inspector_name' => $serial['inspector_name'] ?? null,
+                    'condition' => $serial['condition'] ?? null,
+                    'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                    'attachmentUrl' => $serial['attachmentUrl'] ?? null,
+                    'inspection_attachment' => $serial['inspection_attachment'] ?? null,
+                ];
             }
         }
         
@@ -807,6 +1043,10 @@ class SubscriptionController extends Controller
             'serials' => $monitoredSerials,
             'stats' => [
                 'total' => count($monitoredSerials),
+                'accepted' => $totalAccepted,
+                'preparing' => $totalPreparing,
+                'for_delivery' => $totalForDelivery,
+                'received' => $totalReceived,
                 'delivered' => $totalDelivered,
                 'for_return' => $totalForReturn,
                 'pending' => $totalPending,

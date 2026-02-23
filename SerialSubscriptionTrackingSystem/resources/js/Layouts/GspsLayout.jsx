@@ -3,10 +3,11 @@ import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { FaTruck, FaUserCircle } from "react-icons/fa";
-import { MdNotifications } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -183,28 +184,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer', position: 'relative' }}>
-          <MdNotifications />
-          
-          {activeIcon === 'notifications' && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '35px',
-                right: 0,
-                background: '#fff',
-                borderRadius: 10,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                width: isMobile ? 180 : 200,
-                padding: '16px 18px',
-                zIndex: 10000,
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 14, color: '#555' }}>You're all caught up!</p>
-            </div>
-          )}
-        </span>
+        <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
@@ -387,6 +367,7 @@ export default function GSPSLayout({ children, title, hideTitle = false }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

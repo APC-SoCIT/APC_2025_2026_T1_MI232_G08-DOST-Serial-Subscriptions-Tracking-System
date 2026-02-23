@@ -6,11 +6,13 @@ import 'animate.css';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { IoSearchOutline } from "react-icons/io5"; // Added for search icon
-import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi"; // Added for sort icon
 import { FaTruckFast } from "react-icons/fa6";
+import { FaHistory } from "react-icons/fa";
+import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
+import SerialsNotification from "@/Components/SerialsNotification";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -138,9 +140,7 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | List of Serials</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdOutlineNotificationsActive />
-        </span>
+        <SerialsNotification />
         {activeIcon === 'notifications' && (
           <div style={popupStyle}>
             <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
@@ -304,6 +304,8 @@ function Dashboard_Supplier_ListofSerial() {
   const [confirmModal, setConfirmModal] = useState({ show: false, serialId: null, serialData: null, type: null });
   // Reason modal state for "For Return" items
   const [reasonModal, setReasonModal] = useState({ show: false, serialData: null });
+  // Process movement history modal state
+  const [historyModal, setHistoryModal] = useState({ open: false, serial: null });
 
   // Fetch serials from API
   useEffect(() => {
@@ -592,21 +594,22 @@ function Dashboard_Supplier_ListofSerial() {
                 <thead>
                   <tr style={{ color: "#222", fontWeight: 700, borderBottom: "1px solid #eee" }}>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 120 }}>ISSN</th>
-                    <th style={{ padding: "12px 8px", textAlign: "left", width: 380 }}>Title</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left", width: 320 }}>Title</th>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 150 }}>Delivery Date</th>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 180 }}>Status</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center", width: 100 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                      <td colSpan="5" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
                         Loading serials...
                       </td>
                     </tr>
                   ) : error ? (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#dc3545" }}>
+                      <td colSpan="5" style={{ textAlign: "center", padding: "40px", color: "#dc3545" }}>
                         {error}
                         <button 
                           onClick={fetchSerials}
@@ -699,11 +702,37 @@ function Dashboard_Supplier_ListofSerial() {
                             </button>
                           )}
                         </td>
+                        <td style={{ padding: "16px 8px", textAlign: "center", width: 100 }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <button
+                              onClick={() => setHistoryModal({ open: true, serial: row })}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #004A98',
+                                background: '#f8f9fa',
+                                color: '#004A98',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontWeight: 500,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseOver={(e) => { e.currentTarget.style.background = '#004A98'; e.currentTarget.style.color = '#fff'; }}
+                              onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#004A98'; }}
+                              title="View Process Movement History"
+                            >
+                              <FaHistory size={12} /> History
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                      <td colSpan="5" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
                         {searchQuery ? `No serials found matching "${searchQuery}"` : 'No serials assigned to you yet.'}
                       </td>
                     </tr>
@@ -934,6 +963,36 @@ function Dashboard_Supplier_ListofSerial() {
               </div>
             )}
 
+            {/* Inspection Attachment Image */}
+            {reasonModal.serialData.inspection_attachment && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Inspection Photo</h4>
+                <div style={{ textAlign: 'center' }}>
+                  <img
+                    src={reasonModal.serialData.inspection_attachment}
+                    alt="Inspection Photo"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: 250,
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(reasonModal.serialData.inspection_attachment, '_blank');
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#666' }}>
+                    Click image to view full size
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Close Button */}
             <button
               onClick={() => setReasonModal({ show: false, serialData: null })}
@@ -957,6 +1016,15 @@ function Dashboard_Supplier_ListofSerial() {
           </div>
         </div>
       )}
+
+      {/* Process Movement History Modal */}
+      <ProcessMovementHistory
+        isOpen={historyModal.open}
+        onClose={() => setHistoryModal({ open: false, serial: null })}
+        recordType="subscription"
+        recordId={historyModal.serial?.subscription_id}
+        title={historyModal.serial?.title}
+      />
     </div>
   );
 }

@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
-import { MdNotifications } from "react-icons/md";
 import { FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { FaTruckFast } from "react-icons/fa6";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -163,25 +164,7 @@ function TopBar({ title, isMobile, sidebarOpen, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdNotifications />
-        </span>
-        {activeIcon === 'notifications' && (
-          <div style={{
-            position: 'absolute',
-            top: 60,
-            right: 20,
-            background: '#fff',
-            borderRadius: 12,
-            boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
-            padding: 16,
-            width: 260,
-            zIndex: 10,
-          }}>
-            <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>You're all caught up!</p>
-          </div>
-        )}
+        <SerialsNotification isMobile={isMobile} />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
@@ -343,6 +326,7 @@ export default function SupplierLayout({ children, title }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

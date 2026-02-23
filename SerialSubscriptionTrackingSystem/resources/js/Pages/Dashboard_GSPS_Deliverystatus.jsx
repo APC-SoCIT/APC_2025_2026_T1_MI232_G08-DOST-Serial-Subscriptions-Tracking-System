@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import GSPSLayout from '@/Layouts/GSPSLayout';
-import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage } from "react-icons/md";
+import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage, MdVisibility } from "react-icons/md";
+import { FaHistory } from "react-icons/fa";
 import Swal from 'sweetalert2';
 import 'animate.css';
+import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 
 // Delivery Status Component - MATCHING YOUR IMAGE EXACTLY
 function DeliveryStatus() {
@@ -22,6 +24,10 @@ function DeliveryStatus() {
   const [deliveryData, setDeliveryData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Process movement history modal
+  const [historyModal, setHistoryModal] = useState({ open: false, serial: null });
+  // View modal state
+  const [viewModal, setViewModal] = useState({ show: false, item: null });
 
   // Fetch delivery serials from API
   useEffect(() => {
@@ -285,18 +291,19 @@ function DeliveryStatus() {
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Delivery Date</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Confirmation</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Received Date</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
                     Loading delivery data...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
                     {error}
                     <button 
                       onClick={fetchDeliverySerials}
@@ -368,11 +375,59 @@ function DeliveryStatus() {
                         : '-'
                       }
                     </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                        <button
+                          onClick={() => setViewModal({ show: true, item: item })}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 6,
+                            border: '1px solid #17a2b8',
+                            background: '#f8f9fa',
+                            color: '#17a2b8',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = '#17a2b8'; e.currentTarget.style.color = '#fff'; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#17a2b8'; }}
+                          title="View Serial Details"
+                        >
+                          <MdVisibility size={14} /> View
+                        </button>
+                        <button
+                          onClick={() => setHistoryModal({ open: true, serial: item })}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 6,
+                            border: '1px solid #004A98',
+                            background: '#f8f9fa',
+                            color: '#004A98',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = '#004A98'; e.currentTarget.style.color = '#fff'; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#004A98'; }}
+                          title="View Process Movement History"
+                        >
+                          <FaHistory size={12} /> History
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
                     {searchTerm ? `No deliveries found matching "${searchTerm}"` : 'No deliveries awaiting confirmation yet.'}
                   </td>
                 </tr>
@@ -577,6 +632,186 @@ function DeliveryStatus() {
           </div>
         </div>
       )}
+
+      {/* View Serial Details Modal */}
+      {viewModal.show && viewModal.item && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setViewModal({ show: false, item: null })}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: '32px 40px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              maxWidth: 600,
+              width: '90%',
+              maxHeight: '85vh',
+              overflow: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 20, color: '#004A98' }}>Serial Details</h3>
+              <button
+                onClick={() => setViewModal({ show: false, item: null })}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                }}
+              >
+                <MdClose size={24} color="#666" />
+              </button>
+            </div>
+
+            {/* Serial Information */}
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
+                {viewModal.item.serialTitle}
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>ISSN</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.issn || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Supplier</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.supplierName || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Frequency</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.frequency || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Quantity</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.quantity || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Delivery Date</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+                    {viewModal.item.deliveryDate 
+                      ? new Date(viewModal.item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Received Date</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+                    {viewModal.item.receivedDate 
+                      ? new Date(viewModal.item.receivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Category</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.category || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Status</p>
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: 12,
+                    background: viewModal.item.status === 'received' ? '#28a745' : '#17a2b8',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}>
+                    {viewModal.item.status === 'received' ? 'Received' : 'For Delivery'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Attachment Section */}
+            <div>
+              <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
+                Attachment
+              </h4>
+              {viewModal.item.attachmentUrl ? (
+                <div style={{ textAlign: 'center' }}>
+                  <img
+                    src={viewModal.item.attachmentUrl}
+                    alt="Serial Attachment"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: 300,
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(viewModal.item.attachmentUrl, '_blank');
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'block';
+                    }}
+                  />
+                  <div style={{ display: 'none', padding: 20, background: '#f8f9fa', borderRadius: 8 }}>
+                    <p style={{ margin: 0, color: '#dc3545', fontSize: 14 }}>Failed to load image</p>
+                  </div>
+                  <p style={{ margin: '12px 0 0', fontSize: 12, color: '#666' }}>
+                    Click image to view full size in new tab
+                  </p>
+                </div>
+              ) : (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: 40, 
+                  background: '#f8f9fa', 
+                  borderRadius: 8,
+                  color: '#666',
+                }}>
+                  <MdImage size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
+                  <p style={{ margin: 0, fontSize: 14 }}>No attachment uploaded yet</p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 24, textAlign: 'right' }}>
+              <button
+                onClick={() => setViewModal({ show: false, item: null })}
+                style={{
+                  padding: '10px 32px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#004A98',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Process Movement History Modal */}
+      <ProcessMovementHistory
+        isOpen={historyModal.open}
+        onClose={() => setHistoryModal({ open: false, serial: null })}
+        recordType="subscription"
+        recordId={historyModal.serial?.subscription_id}
+        title={historyModal.serial?.serialTitle}
+      />
     </div>
   );
 }
