@@ -7,6 +7,7 @@ import { FaUserCircle } from "react-icons/fa";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 /* ===================== NAV ITEMS ===================== */
 const navItems = [
@@ -287,6 +288,7 @@ export default function AdminLayout({ children, header, title }) {
         </main>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

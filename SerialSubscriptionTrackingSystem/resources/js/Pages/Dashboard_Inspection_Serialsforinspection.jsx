@@ -1,11 +1,12 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
-import { FaClipboardCheck } from "react-icons/fa";
-import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage } from "react-icons/md";
+import { FaClipboardCheck, FaHistory } from "react-icons/fa";
+import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage, MdVisibility } from "react-icons/md";
 import { useState, useEffect, useRef } from "react";
 import { usePage } from "@inertiajs/react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 import 'animate.css';
+import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 
 export default function InspectionSerialsForInspection() {
   // Get authenticated user
@@ -42,6 +43,10 @@ export default function InspectionSerialsForInspection() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('All');
   const [showFilter, setShowFilter] = useState(false);
+  
+  // View modal and history modal state
+  const [viewModal, setViewModal] = useState({ show: false, item: null });
+  const [historyModal, setHistoryModal] = useState({ open: false, serial: null });
 
   const checklistLabels = {
     missingPages: "Missing Pages",
@@ -426,30 +431,72 @@ export default function InspectionSerialsForInspection() {
                         </span>
                       </td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
-                        {s.inspection_status === 'pending' ? (
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                          {s.inspection_status === 'pending' && (
+                            <button
+                              onClick={() => openModal(s)}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: 6,
+                                border: 'none',
+                                background: '#004A98',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseOver={(e) => e.target.style.background = '#003875'}
+                              onMouseOut={(e) => e.target.style.background = '#004A98'}
+                            >
+                              Inspect
+                            </button>
+                          )}
                           <button
-                            onClick={() => openModal(s)}
+                            onClick={() => setViewModal({ show: true, item: s })}
                             style={{
-                              padding: '8px 20px',
+                              padding: '6px 12px',
                               borderRadius: 6,
-                              border: 'none',
-                              background: '#004A98',
-                              color: '#fff',
+                              border: '1px solid #17a2b8',
+                              background: '#f8f9fa',
+                              color: '#17a2b8',
                               cursor: 'pointer',
-                              fontSize: 13,
-                              fontWeight: 600,
+                              fontSize: 12,
+                              fontWeight: 500,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
                               transition: 'all 0.2s',
                             }}
-                            onMouseOver={(e) => e.target.style.background = '#003875'}
-                            onMouseOut={(e) => e.target.style.background = '#004A98'}
+                            onMouseOver={(e) => { e.currentTarget.style.background = '#17a2b8'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#17a2b8'; }}
+                            title="View Serial Details"
                           >
-                            Inspect
+                            <MdVisibility size={14} /> View
                           </button>
-                        ) : (
-                          <span style={{ color: '#666', fontSize: 13 }}>
-                            {s.inspector_name ? `By: ${s.inspector_name}` : 'Completed'}
-                          </span>
-                        )}
+                          <button
+                            onClick={() => setHistoryModal({ open: true, serial: s })}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 6,
+                              border: '1px solid #004A98',
+                              background: '#f8f9fa',
+                              color: '#004A98',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.background = '#004A98'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#004A98'; }}
+                            title="View Process Movement History"
+                          >
+                            <FaHistory size={10} /> History
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -604,6 +651,242 @@ export default function InspectionSerialsForInspection() {
             </div>
           </div>
         )}
+
+        {/* View Serial Details Modal */}
+        {viewModal.show && viewModal.item && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+            }}
+            onClick={() => setViewModal({ show: false, item: null })}
+          >
+            <div
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                padding: '32px 40px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                maxWidth: 700,
+                width: '90%',
+                maxHeight: '90vh',
+                overflow: 'auto',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ margin: 0, fontSize: 20, color: '#004A98' }}>Serial Details</h3>
+                <button
+                  onClick={() => setViewModal({ show: false, item: null })}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 4,
+                  }}
+                >
+                  <MdClose size={24} color="#666" />
+                </button>
+              </div>
+
+              {/* Serial Information */}
+              <div style={{ marginBottom: 24 }}>
+                <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
+                  {viewModal.item.serialTitle}
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>ISSN</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.issn || '-'}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Supplier</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.supplierName || '-'}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Received Date</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+                      {viewModal.item.receivedDate 
+                        ? new Date(viewModal.item.receivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                        : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Inspection Status</p>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: 12,
+                      ...getStatusBadge(viewModal.item.inspection_status),
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}>
+                      {formatStatus(viewModal.item.inspection_status)}
+                    </span>
+                  </div>
+                  {viewModal.item.inspector_name && (
+                    <>
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Inspector</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.inspector_name}</p>
+                      </div>
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Inspection Date</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+                          {viewModal.item.inspection_date 
+                            ? new Date(viewModal.item.inspection_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                            : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Condition</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.condition || '-'}</p>
+                      </div>
+                    </>
+                  )}
+                  {viewModal.item.inspection_remarks && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Remarks</p>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.inspection_remarks}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Attachments Section */}
+              <div>
+                <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
+                  Attachments
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  {/* Receipt Attachment */}
+                  <div>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 500, color: '#333' }}>Receipt Image (from GSPS)</p>
+                    {viewModal.item.attachmentUrl ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <img
+                          src={viewModal.item.attachmentUrl}
+                          alt="Receipt Attachment"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: 200,
+                            borderRadius: 8,
+                            border: '1px solid #ddd',
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(viewModal.item.attachmentUrl, '_blank');
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none', padding: 15, background: '#f8f9fa', borderRadius: 8 }}>
+                          <p style={{ margin: 0, color: '#dc3545', fontSize: 12 }}>Failed to load image</p>
+                        </div>
+                        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#666' }}>
+                          Click to view full size
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: 30, 
+                        background: '#f8f9fa', 
+                        borderRadius: 8,
+                        color: '#666',
+                      }}>
+                        <MdImage size={32} style={{ opacity: 0.3, marginBottom: 4 }} />
+                        <p style={{ margin: 0, fontSize: 12 }}>No receipt image</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Inspection Attachment */}
+                  <div>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 500, color: '#333' }}>Inspection Image</p>
+                    {viewModal.item.inspection_attachment ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <img
+                          src={viewModal.item.inspection_attachment}
+                          alt="Inspection Attachment"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: 200,
+                            borderRadius: 8,
+                            border: '1px solid #ddd',
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(viewModal.item.inspection_attachment, '_blank');
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none', padding: 15, background: '#f8f9fa', borderRadius: 8 }}>
+                          <p style={{ margin: 0, color: '#dc3545', fontSize: 12 }}>Failed to load image</p>
+                        </div>
+                        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#666' }}>
+                          Click to view full size
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: 30, 
+                        background: '#f8f9fa', 
+                        borderRadius: 8,
+                        color: '#666',
+                      }}>
+                        <MdImage size={32} style={{ opacity: 0.3, marginBottom: 4 }} />
+                        <p style={{ margin: 0, fontSize: 12 }}>No inspection image</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 24, textAlign: 'right' }}>
+                <button
+                  onClick={() => setViewModal({ show: false, item: null })}
+                  style={{
+                    padding: '10px 32px',
+                    borderRadius: 6,
+                    border: 'none',
+                    background: '#004A98',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Process Movement History Modal */}
+        <ProcessMovementHistory
+          isOpen={historyModal.open}
+          onClose={() => setHistoryModal({ open: false, serial: null })}
+          recordType="subscription"
+          recordId={historyModal.serial?.subscription_id}
+          title={historyModal.serial?.serialTitle}
+        />
       </div>
     </InspectionLayout>
   );

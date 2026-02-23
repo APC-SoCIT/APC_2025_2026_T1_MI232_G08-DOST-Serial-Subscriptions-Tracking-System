@@ -1,6 +1,8 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { FaHistory } from "react-icons/fa";
+import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 
 export default function ListOfSerials() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -10,6 +12,7 @@ export default function ListOfSerials() {
   const [serials, setSerials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [historyModal, setHistoryModal] = useState({ open: false, serial: null });
   const perPage = 4; // number of rows per page
 
   // Fetch serials from API
@@ -227,6 +230,7 @@ export default function ListOfSerials() {
                   <th className="text-left px-6 py-4">SUPPLIER</th>
                   <th className="text-left px-6 py-4">RECEIVED DATE</th>
                   <th className="text-left px-6 py-4">STATUS</th>
+                  <th className="text-left px-6 py-4">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,11 +248,21 @@ export default function ListOfSerials() {
                           {formatInspectionStatus(item.inspection_status)}
                         </span>
                       </td>
+                      <td className="px-6 py-6">
+                        <button
+                          onClick={() => setHistoryModal({ open: true, serial: item })}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                          title="View Process Movement History"
+                        >
+                          <FaHistory size={14} />
+                          View History
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="text-center py-12 text-gray-500">
+                    <td colSpan={6} className="text-center py-12 text-gray-500">
                       No serials found for the selected filters
                     </td>
                   </tr>
@@ -277,6 +291,15 @@ export default function ListOfSerials() {
           </>
         )}
       </div>
+
+      {/* Process Movement History Modal */}
+      <ProcessMovementHistory
+        isOpen={historyModal.open}
+        onClose={() => setHistoryModal({ open: false, serial: null })}
+        recordType="subscription"
+        recordId={historyModal.serial?.subscription_id}
+        title={historyModal.serial?.serialTitle}
+      />
     </InspectionLayout>
   );
 }

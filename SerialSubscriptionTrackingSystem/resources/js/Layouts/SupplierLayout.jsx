@@ -8,6 +8,7 @@ import { FaTruckFast } from "react-icons/fa6";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -325,6 +326,7 @@ export default function SupplierLayout({ children, title }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

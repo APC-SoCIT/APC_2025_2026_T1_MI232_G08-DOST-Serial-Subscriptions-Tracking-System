@@ -456,13 +456,27 @@ function SubscriptionTracking() {
   const handleSerialInputChange = (e) => {
     const { name, value } = e.target;
     
-    // If frequency is changed, automatically set the delivery date
+    // Helper function to calculate quantity based on frequency
+    const getQuantityByFrequency = (frequency) => {
+      const quantityMap = {
+        'Weekly': 52,
+        'Biweekly': 26,
+        'Monthly': 12,
+        'Quarterly': 4,
+        'Annually': 1
+      };
+      return quantityMap[frequency] || 0;
+    };
+    
+    // If frequency is changed, automatically set the delivery date and quantity
     if (name === 'frequency') {
       const newDeliveryDate = calculateDeliveryDate(value);
+      const newQuantity = getQuantityByFrequency(value);
       setSerialFormData({ 
         ...serialFormData, 
         [name]: value,
-        deliveryDate: newDeliveryDate
+        deliveryDate: newDeliveryDate,
+        amount: newQuantity // Auto-set quantity based on frequency
       });
     } else if (name === 'category' && value !== 'Others') {
       // If category is changed and it's not "Others", clear customCategory
@@ -1265,7 +1279,7 @@ function SubscriptionTracking() {
                   )}
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Amount</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Quantity</label>
                   <input
                     type="number"
                     name="amount"
@@ -1427,7 +1441,7 @@ function SubscriptionTracking() {
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>ISSN</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Supplier</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Delivery Date</th>
-                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Amount</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Quantity</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Unit Price</th>
                         <th style={{ padding: '12px', textAlign: 'center', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Action</th>
                       </tr>
