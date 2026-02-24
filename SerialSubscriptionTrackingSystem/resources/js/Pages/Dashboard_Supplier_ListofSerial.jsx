@@ -765,9 +765,14 @@ function Dashboard_Supplier_ListofSerial() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={handleConfirmNo}
         >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
           <div
             style={{
               background: '#fff',
@@ -776,6 +781,7 @@ function Dashboard_Supplier_ListofSerial() {
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
               textAlign: 'center',
               maxWidth: 400,
+              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -843,6 +849,7 @@ function Dashboard_Supplier_ListofSerial() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={() => setReasonModal({ show: false, serialData: null })}
         >
@@ -854,6 +861,7 @@ function Dashboard_Supplier_ListofSerial() {
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
               maxWidth: 500,
               width: '90%',
+              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >

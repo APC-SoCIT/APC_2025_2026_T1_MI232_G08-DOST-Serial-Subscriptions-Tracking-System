@@ -632,12 +632,16 @@ class SubscriptionController extends Controller
         $serialTitle = '';
         $serialIndex = 0;
         
-        // Handle file upload
+        // Handle file upload - store directly in public folder
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
             $filename = 'serial_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('serial-attachments', $filename, 'public');
-            $attachmentUrl = '/storage/serial-attachments/' . $filename;
+            $uploadPath = public_path('uploads/serial-attachments');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            $file->move($uploadPath, $filename);
+            $attachmentUrl = '/uploads/serial-attachments/' . $filename;
         }
         
         foreach ($serials as $index => &$serial) {
@@ -727,6 +731,128 @@ class SubscriptionController extends Controller
             'receivedDate' => $receivedDate,
             'attachmentUrl' => $attachmentUrl,
             'subscription' => $subscription,
+        ]);
+    }
+
+    /**
+     * Update attachment for a received serial (re-upload image)
+     */
+    public function updateSerialAttachment(Request $request, $subscriptionId)
+    {
+        $validated = $request->validate([
+            'serial_issn' => 'required|string',
+            'attachment' => 'required|file|image|max:5120', // 5MB max
+        ]);
+
+        $subscription = Subscription::find($subscriptionId);
+        
+        if (!$subscription) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subscription not found',
+            ], 404);
+        }
+
+        $serials = $subscription->serials ?? [];
+        $updated = false;
+        $attachmentUrl = null;
+
+        // Handle file upload - store directly in public folder
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = 'serial_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $uploadPath = public_path('uploads/serial-attachments');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            $file->move($uploadPath, $filename);
+            $attachmentUrl = '/uploads/serial-attachments/' . $filename;
+        }
+
+        foreach ($serials as &$serial) {
+            if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                // Update the attachment URL
+                $serial['attachmentUrl'] = $attachmentUrl;
+                $updated = true;
+                break;
+            }
+        }
+
+        if (!$updated) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial not found in subscription',
+            ], 404);
+        }
+
+        $subscription->serials = $serials;
+        $subscription->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attachment updated successfully',
+            'attachmentUrl' => $attachmentUrl,
+        ]);
+    }
+
+    /**
+     * Update inspection attachment for an inspected serial (re-upload image)
+     */
+    public function updateInspectionAttachment(Request $request, $subscriptionId)
+    {
+        $validated = $request->validate([
+            'serial_issn' => 'required|string',
+            'attachment' => 'required|file|image|max:5120', // 5MB max
+        ]);
+
+        $subscription = Subscription::find($subscriptionId);
+        
+        if (!$subscription) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subscription not found',
+            ], 404);
+        }
+
+        $serials = $subscription->serials ?? [];
+        $updated = false;
+        $attachmentUrl = null;
+
+        // Handle file upload - store directly in public folder
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = 'inspection_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $uploadPath = public_path('uploads/inspection-attachments');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            $file->move($uploadPath, $filename);
+            $attachmentUrl = '/uploads/inspection-attachments/' . $filename;
+        }
+
+        foreach ($serials as &$serial) {
+            if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                // Update the inspection attachment URL
+                $serial['inspection_attachment'] = $attachmentUrl;
+                $updated = true;
+                break;
+            }
+        }
+
+        if (!$updated) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial not found in subscription',
+            ], 404);
+        }
+
+        $subscription->serials = $serials;
+        $subscription->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Inspection attachment updated successfully',
+            'inspection_attachment' => $attachmentUrl,
         ]);
     }
 
@@ -827,12 +953,16 @@ class SubscriptionController extends Controller
         $inspectionDate = now()->toISOString();
         $attachmentUrl = null;
         
-        // Handle file upload
+        // Handle file upload - store directly in public folder
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
             $filename = 'inspection_' . $subscriptionId . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('inspection-attachments', $filename, 'public');
-            $attachmentUrl = '/storage/inspection-attachments/' . $filename;
+            $uploadPath = public_path('uploads/inspection-attachments');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            $file->move($uploadPath, $filename);
+            $attachmentUrl = '/uploads/inspection-attachments/' . $filename;
         }
         
         // Determine inspection status based on condition

@@ -112,7 +112,15 @@ export default function SerialsNotification({ isMobile = false }) {
   const handleMarkAllRead = async () => {
     try {
       await window.axios.post('/api/notifications/mark-all-read');
+      // Update local state immediately for instant UI feedback
       setUnreadCount(0);
+      // Update all notifications to be marked as read in the UI
+      setNotifications(prevNotifications => 
+        prevNotifications.map(notification => ({
+          ...notification,
+          is_read: true
+        }))
+      );
     } catch (error) {
       console.error('Error marking notifications as read:', error);
     }

@@ -14,14 +14,14 @@ const Icon = ({ children }) => (
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
-  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat' },
-  { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo' },
-  { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard', path: '/dashboard-gsps' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat', path: '/dashboard-gsps-chat' },
+  { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo', path: '/dashboard-gsps-supplierinfo' },
+  { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus', path: '/dashboard-gsps-deliverystatus' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
-  const currentRouteName = usePage().url.split('/').pop() || 'gsps.dashboard';
+  const currentUrl = usePage().url;
   const sidebarWidth = isMobile ? 200 : 160;
   const [hoveredItem, setHoveredItem] = useState(null);
   
@@ -95,9 +95,8 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const routePart = item.route.split('.').pop();
-            const isActive = currentRouteName.includes(routePart) || 
-                           (item.route === 'gsps.dashboard' && (currentRouteName === 'dashboard-gsps' || currentRouteName === ''));
+            // Use exact path matching for accurate active state
+            const isActive = currentUrl === item.path || currentUrl.startsWith(item.path + '/');
             
             return (
               <li key={item.label}>
