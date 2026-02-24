@@ -7,6 +7,7 @@ use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardStatsController;
+use App\Http\Controllers\DashboardExportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\LogsController;
 use Illuminate\Foundation\Application;
@@ -201,6 +202,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Admin Dashboard Statistics API
     Route::get('/api/admin/dashboard-stats', [AdminDashboardController::class, 'stats'])->name('admin.dashboard-stats');
     
+    // Admin Dashboard Export
+    Route::get('/api/admin/export-report', [DashboardExportController::class, 'adminExport'])->name('admin.export-report');
+    
     // User Management API Routes - Admin only
     Route::prefix('api/users')->group(function () {
         Route::get('/', [UserController::class, 'index'])->name('users.index');
@@ -275,24 +279,36 @@ Route::middleware(['auth', 'role:tpu'])->group(function () {
     
     // TPU Dashboard Statistics API
     Route::get('/api/tpu/dashboard-stats', [DashboardStatsController::class, 'tpuStats'])->name('tpu.dashboard-stats');
+    
+    // TPU Dashboard Export
+    Route::get('/api/tpu/export-report', [DashboardExportController::class, 'tpuExport'])->name('tpu.export-report');
 });
 
 // ===================== GSPS-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:gsps'])->group(function () {
     // GSPS Dashboard Statistics API
     Route::get('/api/gsps/dashboard-stats', [DashboardStatsController::class, 'gspsStats'])->name('gsps.dashboard-stats');
+    
+    // GSPS Dashboard Export
+    Route::get('/api/gsps/export-report', [DashboardExportController::class, 'gspsExport'])->name('gsps.export-report');
 });
 
 // ===================== SUPPLIER-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:supplier'])->group(function () {
     // Supplier Dashboard Statistics API
     Route::get('/api/supplier/dashboard-stats', [DashboardStatsController::class, 'supplierStats'])->name('supplier.dashboard-stats');
+    
+    // Supplier Dashboard Export
+    Route::get('/api/supplier/export-report', [DashboardExportController::class, 'supplierExport'])->name('supplier.export-report');
 });
 
 // ===================== INSPECTION-ONLY DASHBOARD ROUTES =====================
 Route::middleware(['auth', 'role:inspection'])->group(function () {
     // Inspection Dashboard Statistics API
     Route::get('/api/inspection/dashboard-stats', [DashboardStatsController::class, 'inspectionStats'])->name('inspection.dashboard-stats');
+    
+    // Inspection Dashboard Export
+    Route::get('/api/inspection/export-report', [DashboardExportController::class, 'inspectionExport'])->name('inspection.export-report');
 });
 
 // ===================== TPU + GSPS + SUPPLIER UPDATE ROUTES =====================
