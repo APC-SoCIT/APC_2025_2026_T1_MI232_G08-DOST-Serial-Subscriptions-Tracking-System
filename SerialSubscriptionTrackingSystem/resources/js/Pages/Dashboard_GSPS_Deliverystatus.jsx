@@ -20,6 +20,12 @@ function DeliveryStatus() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   
+  // Re-upload state for view modal
+  const [reuploadFile, setReuploadFile] = useState(null);
+  const [reuploadPreview, setReuploadPreview] = useState(null);
+  const [reuploadUploading, setReuploadUploading] = useState(false);
+  const reuploadFileInputRef = useRef(null);
+  
   // API data state
   const [deliveryData, setDeliveryData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +148,82 @@ function DeliveryStatus() {
     } finally {
       setUploading(false);
     }
+  };
+
+  // Handle re-upload file selection in view modal
+  const handleReuploadFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        return;
+      }
+      setReuploadFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReuploadPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle re-upload submission
+  const handleReuploadSubmit = async () => {
+    if (!reuploadFile || !viewModal.item) return;
+
+    setReuploadUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('serial_issn', viewModal.item.issn);
+      formData.append('attachment', reuploadFile);
+      
+      const response = await axios.post(
+        `/api/subscriptions/${viewModal.item.subscription_id}/update-attachment`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+      
+      if (response.data.success) {
+        // Update local state with new attachment URL
+        setDeliveryData(prev => prev.map(item => 
+          item.id === viewModal.item.id 
+            ? { ...item, attachmentUrl: response.data.attachmentUrl }
+            : item
+        ));
+        // Update view modal with new attachment
+        setViewModal(prev => ({
+          ...prev,
+          item: { ...prev.item, attachmentUrl: response.data.attachmentUrl }
+        }));
+        // Reset re-upload state
+        setReuploadFile(null);
+        setReuploadPreview(null);
+        Swal.fire({ title: 'Image updated successfully!', icon: 'success', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      } else {
+        Swal.fire({ title: 'Failed to update image. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      }
+    } catch (err) {
+      console.error('Error updating attachment:', err);
+      Swal.fire({ title: 'Failed to update image. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+    } finally {
+      setReuploadUploading(false);
+    }
+  };
+
+  // Close view modal and reset re-upload state
+  const handleCloseViewModal = () => {
+    setViewModal({ show: false, item: null });
+    setReuploadFile(null);
+    setReuploadPreview(null);
   };
 
   // Filter data
@@ -468,9 +550,14 @@ function DeliveryStatus() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={handleCloseConfirmModal}
         >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
           <div
             style={{
               background: '#fff',
@@ -480,6 +567,7 @@ function DeliveryStatus() {
               textAlign: 'center',
               maxWidth: 500,
               width: '90%',
+              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -647,9 +735,14 @@ function DeliveryStatus() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={() => setViewModal({ show: false, item: null })}
         >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
           <div
             style={{
               background: '#fff',
@@ -660,6 +753,7 @@ function DeliveryStatus() {
               width: '90%',
               maxHeight: '85vh',
               overflow: 'auto',
+              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -741,7 +835,7 @@ function DeliveryStatus() {
               <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
                 Attachment
               </h4>
-              {viewModal.item.attachmentUrl ? (
+              {viewModal.item.attachmentUrl && !reuploadPreview ? (
                 <div style={{ textAlign: 'center' }}>
                   <img
                     src={viewModal.item.attachmentUrl}
@@ -760,6 +854,7 @@ function DeliveryStatus() {
                     onError={(e) => {
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'block';
+                      if (e.target.nextSibling.nextSibling) e.target.nextSibling.nextSibling.style.display = 'none';
                     }}
                   />
                   <div style={{ display: 'none', padding: 20, background: '#f8f9fa', borderRadius: 8 }}>
@@ -769,7 +864,7 @@ function DeliveryStatus() {
                     Click image to view full size in new tab
                   </p>
                 </div>
-              ) : (
+              ) : !reuploadPreview ? (
                 <div style={{ 
                   textAlign: 'center', 
                   padding: 40, 
@@ -780,12 +875,91 @@ function DeliveryStatus() {
                   <MdImage size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
                   <p style={{ margin: 0, fontSize: 14 }}>No attachment uploaded yet</p>
                 </div>
+              ) : null}
+
+              {/* Re-upload Preview */}
+              {reuploadPreview && (
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <p style={{ fontSize: 13, color: '#28a745', marginBottom: 8, fontWeight: 500 }}>New image preview:</p>
+                  <img
+                    src={reuploadPreview}
+                    alt="New attachment preview"
+                    style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '2px solid #28a745' }}
+                  />
+                  <button
+                    onClick={() => { setReuploadFile(null); setReuploadPreview(null); }}
+                    style={{
+                      display: 'block',
+                      margin: '8px auto 0',
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      background: '#dc3545',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <MdClose style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    Remove
+                  </button>
+                </div>
+              )}
+
+              {/* Re-upload Button */}
+              {viewModal.item.status === 'received' && (
+                <div style={{ marginTop: 16, textAlign: 'center' }}>
+                  <input
+                    type="file"
+                    ref={reuploadFileInputRef}
+                    onChange={handleReuploadFileSelect}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                  />
+                  {!reuploadPreview ? (
+                    <button
+                      onClick={() => reuploadFileInputRef.current?.click()}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 6,
+                        border: '1px dashed #004A98',
+                        background: 'transparent',
+                        color: '#004A98',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <MdCloudUpload size={18} />
+                      {viewModal.item.attachmentUrl ? 'Re-upload Image' : 'Upload Image'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleReuploadSubmit}
+                      disabled={reuploadUploading}
+                      style={{
+                        padding: '8px 20px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: reuploadUploading ? '#6c757d' : '#28a745',
+                        color: '#fff',
+                        cursor: reuploadUploading ? 'not-allowed' : 'pointer',
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {reuploadUploading ? 'Uploading...' : 'Save New Image'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
             <div style={{ marginTop: 24, textAlign: 'right' }}>
               <button
-                onClick={() => setViewModal({ show: false, item: null })}
+                onClick={handleCloseViewModal}
                 style={{
                   padding: '10px 32px',
                   borderRadius: 6,

@@ -264,6 +264,8 @@ Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(fu
 Route::middleware(['auth', 'role:inspection'])->group(function () {
     // Inspection submit - only inspection role can submit inspections
     Route::post('/api/subscriptions/{id}/submit-inspection', [SubscriptionController::class, 'submitInspection'])->name('subscriptions.submitInspection');
+    // Update inspection attachment - only inspection role can update
+    Route::post('/api/subscriptions/{id}/update-inspection-attachment', [SubscriptionController::class, 'updateInspectionAttachment'])->name('subscriptions.updateInspectionAttachment');
 });
 
 // ===================== TPU-ONLY API ROUTES =====================
@@ -316,6 +318,7 @@ Route::middleware(['auth', 'role:tpu,gsps,supplier'])->group(function () {
     // Serial status updates - TPU, GSPS, and Supplier can update
     Route::put('/api/subscriptions/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
     Route::post('/api/subscriptions/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
+    Route::post('/api/subscriptions/{id}/update-attachment', [SubscriptionController::class, 'updateSerialAttachment'])->name('subscriptions.updateSerialAttachment');
 });
 
 require __DIR__.'/auth.php';

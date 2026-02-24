@@ -154,26 +154,38 @@ export default function ProcessMovementHistory({ isOpen, onClose, recordType, re
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999,
-      padding: 20,
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        width: '100%',
-        maxWidth: 700,
-        maxHeight: '85vh',
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
         display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-      }}>
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: 20,
+        animation: 'fadeIn 0.2s ease-out',
+      }}
+    >
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+      `}</style>
+      <div 
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#fff',
+          borderRadius: 12,
+          width: '100%',
+          maxWidth: 700,
+          maxHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+          animation: 'slideIn 0.25s ease-out',
+        }}
+      >
         {/* Header */}
         <div style={{
           display: 'flex',

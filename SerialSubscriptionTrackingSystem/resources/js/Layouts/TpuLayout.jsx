@@ -29,14 +29,14 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
   const sidebarWidth = isMobile ? 200 : 160;
   const [hoveredItem, setHoveredItem] = useState(null);
   
-  // Map routes to their URL paths for exact matching
+  // Map routes to their URL paths for exact matching (based on routes/web.php)
   const routeToPath = {
     'tpu.dashboard': '/dashboard-tpu',
-    'tpu.chat': '/chat',
-    'tpu.supplierinfo': '/supplierinfo',
-    'tpu.subscriptiontracking': '/subscriptiontracking',
-    'tpu.monitordelivery': '/monitordelivery',
-    'tpu.addaccount': '/addaccount',
+    'tpu.chat': '/dashboard-tpu-chat',
+    'tpu.supplierinfo': '/dashboard-tpu-supplierinfo',
+    'tpu.subscriptiontracking': '/dashboard-tpu-subscriptiontracking',
+    'tpu.monitordelivery': '/dashboard-tpu-monitordelivery',
+    'tpu.addaccount': '/dashboard-tpu-addaccount',
   };
   
   return (
