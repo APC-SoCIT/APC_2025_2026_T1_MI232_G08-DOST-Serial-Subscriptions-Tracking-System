@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\SupplierAccount;
 use App\Models\Subscription;
+use App\Mail\AccountCredentialsNotification;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -17,14 +21,10 @@ class UserController extends Controller
     public function stats()
     {
         try {
-            // Exclude admin users from statistics
-            $totalUsers = User::where('role', '!=', 'admin')->count();
-            $approvedUsers = User::where('role', '!=', 'admin')
-                ->whereNotNull('email_verified_at')
-                ->count();
-            $pendingUsers = User::where('role', '!=', 'admin')
-                ->whereNull('email_verified_at')
-                ->count();
+            // Include all users in statistics (including admin)
+            $totalUsers = User::count();
+            $approvedUsers = User::whereNotNull('email_verified_at')->count();
+            $pendingUsers = User::whereNull('email_verified_at')->count();
 
             return response()->json([
                 'success' => true,
@@ -43,13 +43,13 @@ class UserController extends Controller
     }
 
     /**
-     * Get all users (API endpoint) - excludes admin users
+     * Get all users (API endpoint) - includes all users
      */
     public function index()
     {
         try {
-            // Exclude admin users from the list
-            $users = User::where('role', '!=', 'admin')->get();
+            // Include all users (including admin)
+            $users = User::all();
             
             // Fix existing supplier users that don't have email_verified_at set
             // This is a data migration fix for suppliers approved before the bug fix
@@ -69,7 +69,7 @@ class UserController extends Controller
             }
             
             // Refresh the users collection after updates
-            $users = User::where('role', '!=', 'admin')->get();
+            $users = User::all();
             
             return response()->json([
                 'success' => true,
@@ -215,11 +215,14 @@ class UserController extends Controller
             $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users',
-                'role' => 'required|string|in:tpu,gsps,inspection',
+                'role' => 'required|string|in:tpu,gsps,inspection,admin',
                 'password' => 'required|confirmed|min:8|regex:/^(?=.*[a-zA-Z])(?=.*[0-9])/',
             ], [
                 'password.regex' => 'Password must contain both letters and numbers',
             ]);
+
+            // Store the plain password before hashing for email
+            $plainPassword = $request->password;
 
             $user = User::create([
                 'name' => $request->name,
@@ -228,6 +231,25 @@ class UserController extends Controller
                 'password' => Hash::make($request->password),
                 'email_verified_at' => now(), // Auto-verify admin-created accounts
             ]);
+
+            // Send account credentials email
+            try {
+                $loginUrl = url('/login');
+                $roleDisplay = strtoupper($request->role);
+                
+                Mail::to($request->email)->send(new AccountCredentialsNotification(
+                    $request->name,
+                    $request->email,
+                    $plainPassword,
+                    $roleDisplay,
+                    $loginUrl
+                ));
+                
+                Log::info("Account credentials email sent to {$request->email} for new {$roleDisplay} user");
+            } catch (\Exception $emailError) {
+                Log::error("Failed to send account credentials email to {$request->email}: " . $emailError->getMessage());
+                // Don't fail the user creation if email fails
+            }
 
             return response()->json([
                 'success' => true,
@@ -244,6 +266,56 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create user: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Resend credentials email to an existing user with a new temporary password
+     * This is useful for existing users who were created before the email feature
+     */
+    public function resendCredentials($id)
+    {
+        try {
+            $user = User::find($id);
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                ], 404);
+            }
+
+            // Generate a new temporary password (8 chars with letters and numbers)
+            $tempPassword = Str::random(4) . rand(1000, 9999);
+
+            // Update user's password
+            $user->password = Hash::make($tempPassword);
+            $user->save();
+
+            // Send credentials email
+            $loginUrl = url('/login');
+            $roleDisplay = strtoupper($user->role ?? 'User');
+            
+            Mail::to($user->email)->send(new AccountCredentialsNotification(
+                $user->name,
+                $user->email,
+                $tempPassword,
+                $roleDisplay,
+                $loginUrl
+            ));
+            
+            Log::info("Credentials resent to {$user->email} with new temporary password");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'New credentials email sent successfully. User will need to use the new password.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to resend credentials to user {$id}: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send credentials: ' . $e->getMessage(),
             ], 500);
         }
     }

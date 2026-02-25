@@ -90,14 +90,14 @@ class UserNotification extends Model
     ): self {
         return self::create([
             'user_id' => null, // null means all users of this role
-            'user_role' => $targetRole,
+            'user_role' => strtolower($targetRole), // Ensure lowercase for consistency
             'type' => 'serial_status_change',
             'title' => $title,
             'message' => $message,
             'data' => $data,
             'is_read' => false,
             'created_by' => null,
-            'created_by_role' => $createdByRole,
+            'created_by_role' => $createdByRole ? strtolower($createdByRole) : null,
         ]);
     }
 

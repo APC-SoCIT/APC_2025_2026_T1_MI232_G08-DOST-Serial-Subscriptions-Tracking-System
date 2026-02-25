@@ -205,6 +205,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
         Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
         Route::put('/{id}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggleDisable');
+        Route::post('/{id}/resend-credentials', [UserController::class, 'resendCredentials'])->name('users.resendCredentials');
     });
 
     // Audit Logs & Process Movement Logs - Admin only
@@ -220,6 +221,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Supplier Account Approval - Admin only
     Route::post('/api/supplier-accounts/{id}/approve', [SupplierAccountController::class, 'approve'])->name('supplier-accounts.approve');
     Route::post('/api/supplier-accounts/{id}/reject', [SupplierAccountController::class, 'reject'])->name('supplier-accounts.reject');
+    Route::post('/api/supplier-accounts/{id}/resend-credentials', [SupplierAccountController::class, 'resendCredentials'])->name('supplier-accounts.resendCredentials');
+    Route::post('/api/supplier-accounts/notify-pending', [SupplierAccountController::class, 'notifyPendingSuppliers'])->name('supplier-accounts.notifyPending');
 });
 
 // ===================== ADMIN + TPU + GSPS API ROUTES =====================

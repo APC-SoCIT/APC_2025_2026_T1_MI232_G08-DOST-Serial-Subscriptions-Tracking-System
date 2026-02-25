@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\SupplierAccount;
 use App\Services\AuditLogService;
 use App\Services\ProcessMovementService;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -276,6 +277,11 @@ class SubscriptionController extends Controller
         // Log the deletion before deleting
         AuditLogService::logDelete($subscription, "Subscription '{$subscription->serial_title}' deleted");
 
+        // Send email notification for deletion
+        $serialTitle = $subscription->serial_title ?? 'Unknown Serial';
+        $supplierName = $subscription->supplier_name ?? 'Unknown Supplier';
+        EmailNotificationService::notifySerialDeleted($serialTitle, $supplierName);
+
         // Cascade delete all related notifications by subscription ID
         ProcessMovementService::deleteSerialNotifications((string)($subscription->_id ?? $subscription->id), null, null);
         
@@ -315,7 +321,7 @@ class SubscriptionController extends Controller
             'title' => 'required|string|max:255',
             'issn' => 'required|string',
             'frequency' => 'required|string',
-            'status' => 'required|string|in:Pending,Delivered,Cancelled',
+            'status' => 'nullable|string|in:created,Pending,Delivered,Cancelled',
             'delivery_date' => 'nullable|date',
         ]);
 
@@ -325,7 +331,7 @@ class SubscriptionController extends Controller
             'title' => $validated['title'],
             'issn' => $validated['issn'],
             'frequency' => $validated['frequency'],
-            'status' => $validated['status'],
+            'status' => 'created', // Always start as created when TPU adds a serial
             'deliveryDate' => $validated['delivery_date'],
         ];
 
@@ -483,7 +489,7 @@ class SubscriptionController extends Controller
         
         $validated = $request->validate([
             'serial_issn' => 'required|string',
-            'status' => 'required|string|in:pending,prepare,for_delivery,received',
+            'status' => 'required|string|in:created,pending,accepted,prepare,for_delivery,received',
         ]);
         
         $serials = $subscription->serials ?? [];
@@ -972,6 +978,7 @@ class SubscriptionController extends Controller
         $serialId = 1;
         
         // Statistics
+        $totalCreated = 0;
         $totalAccepted = 0;
         $totalPreparing = 0;
         $totalForDelivery = 0;
@@ -987,12 +994,17 @@ class SubscriptionController extends Controller
             $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
-                $status = $serial['status'] ?? 'pending';
+                $status = $serial['status'] ?? 'created';
                 $inspectionStatus = $serial['inspection_status'] ?? null;
                 
                 // Determine display status based on flow
-                $deliveryStatus = 'Pending';
-                if ($status === 'pending') {
+                // Flow: Created → Accepted → Preparing → For Delivery → Received → Delivered/For Return
+                $deliveryStatus = 'Created';
+                if ($status === 'created' || $status === 'pending') {
+                    // 'pending' is legacy, treat same as 'created'
+                    $deliveryStatus = 'Created';
+                    $totalCreated++;
+                } elseif ($status === 'accepted') {
                     $deliveryStatus = 'Accepted';
                     $totalAccepted++;
                 } elseif ($status === 'prepare') {
@@ -1043,6 +1055,7 @@ class SubscriptionController extends Controller
             'serials' => $monitoredSerials,
             'stats' => [
                 'total' => count($monitoredSerials),
+                'created' => $totalCreated,
                 'accepted' => $totalAccepted,
                 'preparing' => $totalPreparing,
                 'for_delivery' => $totalForDelivery,

@@ -205,11 +205,12 @@ function AddAccount() {
               Email Address <span style={{ color: '#dc3545' }}>*</span>
             </label>
             <input
-              type="email"
+              type="text"
               name="email"
               value={formData.email}
               onChange={handleInputChange}
               placeholder="Enter email address"
+              autoComplete="email"
               style={{
                 ...inputStyle,
                 borderColor: errors.email ? '#dc3545' : '#ddd',

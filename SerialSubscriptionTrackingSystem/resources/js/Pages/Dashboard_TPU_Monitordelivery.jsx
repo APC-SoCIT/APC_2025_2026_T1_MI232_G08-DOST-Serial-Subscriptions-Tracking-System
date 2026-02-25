@@ -88,7 +88,7 @@ function MonitorDelivery() {
     },
     { 
       title: 'In Progress', 
-      value: (stats.preparing || 0) + (stats.for_delivery || 0) + (stats.received || 0),
+      value: (stats.created || 0) + (stats.accepted || 0) + (stats.preparing || 0) + (stats.for_delivery || 0) + (stats.received || 0),
       icon: <FiClock />,
       color: '#D97706',
       bgColor: '#FEF3C7'
@@ -98,6 +98,7 @@ function MonitorDelivery() {
   const getDeliveryStatusColor = (status) => {
     switch(status) {
       case 'Delivered': return '#d4edda';
+      case 'Created': return '#cce5ff';
       case 'Accepted': return '#e8f4fd';
       case 'Preparing': return '#fff3cd';
       case 'For Delivery': return '#cce5ff';
@@ -111,6 +112,7 @@ function MonitorDelivery() {
   const getDeliveryStatusTextColor = (status) => {
     switch(status) {
       case 'Delivered': return '#155724';
+      case 'Created': return '#004085';
       case 'Accepted': return '#004A98';
       case 'Preparing': return '#856404';
       case 'For Delivery': return '#004085';
@@ -227,6 +229,7 @@ function MonitorDelivery() {
               }}
             >
               <option value="All">All Status</option>
+              <option value="Created">Created</option>
               <option value="Accepted">Accepted</option>
               <option value="Preparing">Preparing</option>
               <option value="For Delivery">For Delivery</option>
