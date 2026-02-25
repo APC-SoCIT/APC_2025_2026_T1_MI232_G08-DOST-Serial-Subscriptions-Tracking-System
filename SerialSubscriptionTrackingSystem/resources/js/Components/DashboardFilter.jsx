@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 /* ================= CONSTANTS ================= */
 const YEARS = [2022, 2023, 2024, 2025, 2026];
@@ -226,7 +227,7 @@ export default function DashboardFilter({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error generating report:', error);
-      alert('Failed to generate report. Please try again.');
+      Swal.fire({ title: 'Failed to Generate Report', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4' });
     } finally {
       setIsExporting(false);
     }

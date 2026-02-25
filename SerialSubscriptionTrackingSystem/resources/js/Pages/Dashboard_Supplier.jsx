@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import SupplierLayout from "@/Layouts/SupplierLayout";
 import { Head } from "@inertiajs/react";
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
 import {
   LineChart, Line,
@@ -313,7 +314,7 @@ export default function SupplierDashboard() {
                     window.URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error('Error generating report:', error);
-                    alert('Failed to generate report. Please try again.');
+                    Swal.fire({ title: 'Failed to Generate Report', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4' });
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"

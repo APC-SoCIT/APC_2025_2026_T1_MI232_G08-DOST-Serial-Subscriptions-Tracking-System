@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* SweetAlert z-index fix for modals */
+.swal-high-zindex {
+    z-index: 100000 !important;
+}
