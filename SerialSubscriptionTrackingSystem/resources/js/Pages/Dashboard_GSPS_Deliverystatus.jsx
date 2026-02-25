@@ -62,14 +62,15 @@ function DeliveryStatus() {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check if it's an image
-      if (!file.type.startsWith('image/')) {
-        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      // Check if it's an image or PDF
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       setAttachmentFile(file);
@@ -154,12 +155,13 @@ function DeliveryStatus() {
   const handleReuploadFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       setReuploadFile(file);
@@ -589,7 +591,7 @@ function DeliveryStatus() {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                accept="image/*"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
                 style={{ display: 'none' }}
               />
               
@@ -615,10 +617,10 @@ function DeliveryStatus() {
                 >
                   <MdCloudUpload size={40} color="#004A98" />
                   <p style={{ margin: '10px 0 5px', fontSize: 14, color: '#333', fontWeight: 500 }}>
-                    Click to upload image
+                    Click to upload image or PDF
                   </p>
                   <p style={{ margin: 0, fontSize: 12, color: '#888' }}>
-                    JPG, PNG (max 5MB)
+                    JPG, PNG, PDF (max 10MB)
                   </p>
                 </div>
               ) : (
@@ -913,7 +915,7 @@ function DeliveryStatus() {
                     type="file"
                     ref={reuploadFileInputRef}
                     onChange={handleReuploadFileSelect}
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
                     style={{ display: 'none' }}
                   />
                   {!reuploadPreview ? (
