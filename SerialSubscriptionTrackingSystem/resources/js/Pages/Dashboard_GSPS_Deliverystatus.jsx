@@ -23,6 +23,7 @@ function DeliveryStatus() {
   // Re-upload state for view modal
   const [reuploadFile, setReuploadFile] = useState(null);
   const [reuploadPreview, setReuploadPreview] = useState(null);
+  const [reuploadIsPdf, setReuploadIsPdf] = useState(false);
   const [reuploadUploading, setReuploadUploading] = useState(false);
   const reuploadFileInputRef = useRef(null);
   
@@ -156,26 +157,49 @@ function DeliveryStatus() {
     const file = e.target.files[0];
     if (file) {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      const isPdf = file.type === 'application/pdf';
+      
+      // Set preview first so user can see what they selected
+      setReuploadIsPdf(isPdf);
+      setReuploadFile(file);
+      
+      if (!isPdf) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setReuploadPreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setReuploadPreview(file.name); // Store filename for PDF
+      }
+      
+      // Validate after setting preview
       if (!allowedTypes.includes(file.type)) {
-        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        Swal.fire({ title: 'Invalid File Type', text: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        setReuploadFile(null);
+        setReuploadPreview(null);
+        setReuploadIsPdf(false);
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'warning', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        // Clear file to prevent upload attempt, keep preview to show what was rejected
+        setReuploadFile(null);
         return;
       }
-      setReuploadFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setReuploadPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
   // Handle re-upload submission
   const handleReuploadSubmit = async () => {
     if (!reuploadFile || !viewModal.item) return;
+    
+    // Double-check file size before upload
+    if (reuploadFile.size > 10 * 1024 * 1024) {
+      Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      setReuploadFile(null);
+      return;
+    }
 
     setReuploadUploading(true);
     
@@ -209,13 +233,32 @@ function DeliveryStatus() {
         // Reset re-upload state
         setReuploadFile(null);
         setReuploadPreview(null);
-        Swal.fire({ title: 'Image updated successfully!', icon: 'success', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        setReuploadIsPdf(false);
+        Swal.fire({ title: 'Updated Successfully!', text: 'The attachment has been updated.', icon: 'success', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       } else {
-        Swal.fire({ title: 'Failed to update image. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        // Check for file size error message from server
+        const errorMsg = response.data.message || '';
+        if (errorMsg.toLowerCase().includes('size') || errorMsg.toLowerCase().includes('large')) {
+          Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        } else {
+          Swal.fire({ title: 'Failed to update', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        }
       }
     } catch (err) {
       console.error('Error updating attachment:', err);
-      Swal.fire({ title: 'Failed to update image. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      // Check if error response contains file size related message or 413 status (Payload Too Large)
+      const errorMessage = err.response?.data?.message || err.message || '';
+      const isFileSizeError = errorMessage.toLowerCase().includes('size') || 
+                              errorMessage.toLowerCase().includes('large') || 
+                              errorMessage.toLowerCase().includes('too big') ||
+                              errorMessage.toLowerCase().includes('exceeded') ||
+                              err.response?.status === 413;
+      
+      if (isFileSizeError) {
+        Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      } else {
+        Swal.fire({ title: 'Failed to Update', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      }
     } finally {
       setReuploadUploading(false);
     }
@@ -226,6 +269,7 @@ function DeliveryStatus() {
     setViewModal({ show: false, item: null });
     setReuploadFile(null);
     setReuploadPreview(null);
+    setReuploadIsPdf(false);
   };
 
   // Filter data
@@ -789,6 +833,14 @@ function DeliveryStatus() {
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.supplierName || '-'}</p>
                 </div>
                 <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Issue No.</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.issuesNo || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Vol No.</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.volumeNumber || '-'}</p>
+                </div>
+                <div>
                   <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Frequency</p>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.frequency || '-'}</p>
                 </div>
@@ -882,14 +934,30 @@ function DeliveryStatus() {
               {/* Re-upload Preview */}
               {reuploadPreview && (
                 <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <p style={{ fontSize: 13, color: '#28a745', marginBottom: 8, fontWeight: 500 }}>New image preview:</p>
-                  <img
-                    src={reuploadPreview}
-                    alt="New attachment preview"
-                    style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '2px solid #28a745' }}
-                  />
+                  <p style={{ fontSize: 13, color: '#28a745', marginBottom: 8, fontWeight: 500 }}>
+                    {reuploadIsPdf ? 'New PDF selected:' : 'New image preview:'}
+                  </p>
+                  {reuploadIsPdf ? (
+                    <div style={{ 
+                      padding: 20, 
+                      background: '#f8f9fa', 
+                      borderRadius: 8, 
+                      border: '2px solid #28a745',
+                      display: 'inline-block'
+                    }}>
+                      <MdImage size={40} style={{ color: '#dc3545', marginBottom: 8 }} />
+                      <p style={{ margin: 0, fontSize: 13, color: '#333', fontWeight: 500 }}>{reuploadPreview}</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 11, color: '#666' }}>PDF Document</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={reuploadPreview}
+                      alt="New attachment preview"
+                      style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '2px solid #28a745' }}
+                    />
+                  )}
                   <button
-                    onClick={() => { setReuploadFile(null); setReuploadPreview(null); }}
+                    onClick={() => { setReuploadFile(null); setReuploadPreview(null); setReuploadIsPdf(false); }}
                     style={{
                       display: 'block',
                       margin: '8px auto 0',
@@ -935,7 +1003,7 @@ function DeliveryStatus() {
                       }}
                     >
                       <MdCloudUpload size={18} />
-                      {viewModal.item.attachmentUrl ? 'Re-upload Image' : 'Upload Image'}
+                      {viewModal.item.attachmentUrl ? 'Re-upload' : 'Upload'}
                     </button>
                   ) : (
                     <button
