@@ -1,1 +1,0 @@
-{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"email":{"$numberInt":"1"}},"name":"email_1","unique":true},{"v":{"$numberInt":"2"},"key":{"username":{"$numberInt":"1"}},"name":"username_1","unique":true}],"uuid":"e716d40809ee43ef9a6896331a1bb17e","collectionName":"supplier_accounts","type":"collection"}
