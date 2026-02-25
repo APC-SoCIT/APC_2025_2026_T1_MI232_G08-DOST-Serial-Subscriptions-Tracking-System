@@ -197,6 +197,17 @@ class UserController extends Controller
     public function toggleDisable($id)
     {
         try {
+            // Prevent admin from disabling their own account
+            $currentUser = auth()->user();
+            $currentUserId = $currentUser->_id ?? $currentUser->id;
+            
+            if ($currentUserId == $id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot disable your own account',
+                ], 403);
+            }
+            
             $user = User::find($id);
             
             if (!$user) {

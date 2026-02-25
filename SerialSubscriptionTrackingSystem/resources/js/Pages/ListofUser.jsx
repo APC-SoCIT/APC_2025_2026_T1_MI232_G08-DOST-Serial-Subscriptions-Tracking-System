@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
+import { usePage } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
 
 export default function UserList() {
+  // Get current logged-in user
+  const { auth } = usePage().props;
+  const currentUser = auth?.user;
+  const currentUserId = currentUser?._id || currentUser?.id;
+
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -144,14 +150,21 @@ export default function UserList() {
                 <span className={`${item.is_disabled ? 'text-gray-400' : 'text-gray-700'}`}>{item.date}</span>
 
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setDisableModal({ open: true, user: item })}
-                    className={`px-3 py-1 text-xs rounded-lg ${item.is_disabled 
-                      ? 'bg-green-50 text-green-600 hover:bg-green-100' 
-                      : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
-                  >
-                    {item.is_disabled ? 'Enable' : 'Disable'}
-                  </button>
+                  {/* Hide disable button for current logged-in user */}
+                  {currentUserId !== item.id ? (
+                    <button
+                      onClick={() => setDisableModal({ open: true, user: item })}
+                      className={`px-3 py-1 text-xs rounded-lg ${item.is_disabled 
+                        ? 'bg-green-50 text-green-600 hover:bg-green-100' 
+                        : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
+                    >
+                      {item.is_disabled ? 'Enable' : 'Disable'}
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1 text-xs rounded-lg bg-gray-100 text-gray-400">
+                      Current User
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
