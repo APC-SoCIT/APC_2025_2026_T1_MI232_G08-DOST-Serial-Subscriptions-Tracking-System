@@ -1,0 +1,130 @@
+﻿Found 22 processed serial(s) for admin summary:
+  - Nature (Status: inspected) - Supplier: Mohasien
+  - Human Anatomy (Status: inspected) - Supplier: Delgado
+  - Wall Street (Status: inspected) - Supplier: Delgado
+  - Business Minds (Status: for_return) - Supplier: Delgado
+  - Building 101 (Status: for_return) - Supplier: Delgado
+  - National Geographic (Status: inspected) - Supplier: Francisco
+  - School (Status: inspected) - Supplier: Fracie
+  - Wall Street (Status: for_return) - Supplier: Delgado
+  - Diary ng pulubi (Status: received) - Supplier: Delgado
+  - ABCD (Status: inspected) - Supplier: Jerwin
+  - Alamat (Status: for_delivery) - Supplier: Adarna House
+  - Aklat Adarna (Status: inspected) - Supplier: Adarna House
+  - Alamat (Status: prepare) - Supplier: Delgado
+  - Alamat (Status: inspected) - Supplier: Delgado
+  - Wall Street (Status: inspected) - Supplier: Von
+  - Business Minds (Status: inspected) - Supplier: Delgado
+  - Like Mike (Status: inspected) - Supplier: Delgado
+  - NBA ALL STARS (Status: inspected) - Supplier: Temp
+  - Human Anatomy (Status: inspected) - Supplier: Ren
+  - The Amazing Journey (Status: prepare) - Supplier: Stark Studios
+  - NBA ALL STAR (Status: prepare) - Supplier: Stark Studios
+  - ABCD (Status: inspected) - Supplier: Stark Studios
+Found 2 Admin user(s):
+  - Admin User (admin@dost.gov.ph)
+  - Henry Walker (roved17449@pazuric.com)
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Nature
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Nature
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Human Anatomy
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Human Anatomy
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Wall Street
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Wall Street
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Business Minds
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Business Minds
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Building 101
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Building 101
+  Γ£ô Admin summary sent to admin@dost.gov.ph for National Geographic
+  Γ£ô Admin summary sent to roved17449@pazuric.com for National Geographic
+  Γ£ô Admin summary sent to admin@dost.gov.ph for School
+  Γ£ô Admin summary sent to roved17449@pazuric.com for School
+  Γ£ô Admin summary sent to admin@dost.gov.ph for Wall Street
+  Γ£ô Admin summary sent to roved17449@pazuric.com for Wall Street
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: admin@dost.gov.ph: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+  Γ£ù Failed: roved17449@pazuric.com: Expected response code "354" but got code "550", with message "550-5.4.5 Daily user sending limit exceeded. For more information on Gmail
+550-5.4.5 sending limits go to
+550 5.4.5  https://support.google.com/a/answer/166852 98e67ed59e1d1-359034bc82esm530808a91.12 - gsmtp".
+
+Summary:
+  - In-app notifications created: 22
+  - Emails sent: 16

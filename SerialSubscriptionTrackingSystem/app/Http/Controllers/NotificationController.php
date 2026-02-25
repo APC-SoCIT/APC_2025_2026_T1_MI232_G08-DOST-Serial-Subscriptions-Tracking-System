@@ -197,8 +197,9 @@ class NotificationController extends Controller
         });
         
         // Add UserNotifications for the current user's role
-        $userNotificationsQuery = UserNotification::where(function ($q) use ($userRole, $user) {
-            $q->where('user_role', $userRole)
+        $normalizedRole = strtolower($userRole);
+        $userNotificationsQuery = UserNotification::where(function ($q) use ($normalizedRole, $user) {
+            $q->where('user_role', $normalizedRole)
               ->orWhere('user_id', $user->id);
         });
         

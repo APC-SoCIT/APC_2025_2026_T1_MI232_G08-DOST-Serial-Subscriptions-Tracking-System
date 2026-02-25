@@ -224,9 +224,10 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
                 <div style={{ position: 'relative' }}>
                   <MdEmail style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
                   <input
-                    type="email"
+                    type="text"
                     value={profileForm.data.email}
                     onChange={(e) => profileForm.setData('email', e.target.value)}
+                    autoComplete="email"
                     style={{
                       ...inputStyle,
                       paddingLeft: 40,

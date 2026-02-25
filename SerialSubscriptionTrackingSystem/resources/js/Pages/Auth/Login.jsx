@@ -1,4 +1,5 @@
 import { useForm, Link, Head } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 export default function Login({ status, canResetPassword }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -6,6 +7,19 @@ export default function Login({ status, canResetPassword }) {
         password: '',
         remember: false,
     });
+
+    // Check for inactivity logout message
+    const [inactivityMessage, setInactivityMessage] = useState('');
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('reason') === 'inactivity') {
+            setInactivityMessage('You were logged out due to inactivity.');
+            // Clean up the URL without reloading
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
+    }, []);
 
     const submit = (e) => {
         e.preventDefault();
@@ -64,11 +78,12 @@ export default function Login({ status, canResetPassword }) {
                         {/* Email */}
                         <div className="mb-4">
                             <input
-                                type="email"
+                                type="text"
                                 name="email"
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="Email"
+                                autoComplete="email"
                                 className="w-full border border-gray-400 px-3 py-2 rounded-md focus:ring focus:ring-blue-500 focus:outline-none"
                                 required
                             />

@@ -4,10 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\SupplierAccount;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Services\AuditLogService;
 use App\Services\ProcessMovementService;
+use App\Mail\AccountCredentialsNotification;
+use App\Mail\PendingSupplierApproval;
+use App\Mail\SupplierApprovedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 
@@ -171,6 +178,47 @@ class SupplierAccountController extends Controller
             $creatorRole = $request->user()?->role ?? 'unknown';
             AuditLogService::logCreate($supplierAccount, "Supplier account '{$supplierAccount->company_name}' created by {$creatorRole} user '{$creatorName}'");
 
+            // Notify admin of pending supplier approval (in-app notification)
+            try {
+                UserNotification::createStatusNotification(
+                    'admin',
+                    'Supplier Account Pending Approval',
+                    "A new supplier account '{$supplierAccount->company_name}' requires your approval.",
+                    [
+                        'supplier_account_id' => (string)($supplierAccount->_id ?? $supplierAccount->id),
+                        'company_name' => $supplierAccount->company_name,
+                        'contact_person' => $supplierAccount->contact_person,
+                        'email' => $supplierAccount->email,
+                        'status' => 'pending',
+                    ],
+                    'tpu'
+                );
+            } catch (\Exception $notifyError) {
+                Log::error("Failed to send admin notification for pending supplier: " . $notifyError->getMessage());
+            }
+
+            // Send email notification to all admin users
+            try {
+                $adminUsers = User::where('role', 'regex', '/^admin$/i')->get();
+                $createdAt = now()->format('F j, Y \a\t g:i A');
+                
+                foreach ($adminUsers as $admin) {
+                    if ($admin->email) {
+                        Mail::to($admin->email)->send(new PendingSupplierApproval(
+                            $supplierAccount->company_name,
+                            $supplierAccount->contact_person,
+                            $supplierAccount->email,
+                            $supplierAccount->phone,
+                            $supplierAccount->address,
+                            $createdAt
+                        ));
+                        Log::info("Pending supplier approval email sent to admin: {$admin->email}");
+                    }
+                }
+            } catch (\Exception $emailError) {
+                Log::error("Failed to send pending supplier email to admins: " . $emailError->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Supplier account created successfully. Awaiting admin approval.',
@@ -208,12 +256,15 @@ class SupplierAccountController extends Controller
             ], 400);
         }
 
+        // Get the raw password before creating user (for email)
+        $rawPassword = $supplierAccount->getRawPassword();
+
         // Create actual user account for the supplier
         // Password will be hashed by User model's cast
         $user = User::create([
             'name' => $supplierAccount->company_name, // Use company name as display name
             'email' => $supplierAccount->email,
-            'password' => $supplierAccount->getRawPassword(), // Raw password, will be hashed by User model
+            'password' => $rawPassword, // Raw password, will be hashed by User model
             'role' => 'supplier',
             'email_verified_at' => now(), // Auto-verify since admin approved
         ]);
@@ -226,6 +277,60 @@ class SupplierAccountController extends Controller
             'approved_at' => now(),
             'user_id' => $user->_id ?? $user->id,
         ]);
+
+        // Send account credentials email to supplier
+        try {
+            $loginUrl = url('/login');
+            
+            Mail::to($supplierAccount->email)->send(new AccountCredentialsNotification(
+                $supplierAccount->company_name,
+                $supplierAccount->email,
+                $rawPassword,
+                'Supplier',
+                $loginUrl
+            ));
+            
+            Log::info("Account credentials email sent to supplier {$supplierAccount->email}");
+        } catch (\Exception $emailError) {
+            Log::error("Failed to send account credentials email to supplier {$supplierAccount->email}: " . $emailError->getMessage());
+            // Don't fail the approval if email fails
+        }
+
+        // Send notification to TPU users about the approval
+        try {
+            $adminName = $request->user()?->name ?? 'Admin';
+            $approvedAt = now()->format('F j, Y \a\t g:i A');
+            
+            // Get all TPU users
+            $tpuUsers = User::where('role', 'regex', '/^tpu$/i')->get();
+            
+            foreach ($tpuUsers as $tpuUser) {
+                Mail::to($tpuUser->email)->send(new SupplierApprovedNotification(
+                    $supplierAccount->company_name,
+                    $supplierAccount->contact_person,
+                    $supplierAccount->email,
+                    $adminName,
+                    $approvedAt
+                ));
+            }
+            
+            // Also create in-app notification for TPU
+            UserNotification::create([
+                'type' => 'supplier_approved',
+                'title' => 'Supplier Approved',
+                'message' => "The supplier '{$supplierAccount->company_name}' has been approved by {$adminName}.",
+                'user_role' => 'tpu',
+                'reference_id' => $supplierAccount->_id ?? $supplierAccount->id,
+                'reference_type' => 'supplier_account',
+                'action_url' => '/dashboard-tpu',
+                'is_read' => false,
+            ]);
+            
+            Log::info("Sent supplier approval notification to " . $tpuUsers->count() . " TPU users");
+        } catch (\Exception $notifyError) {
+            Log::error("Failed to send supplier approval notification to TPU: " . $notifyError->getMessage());
+            // Don't fail the approval if notification fails
+        }
 
         // Log the approval
         AuditLogService::logApprove($supplierAccount, "Supplier account '{$supplierAccount->company_name}' approved");
@@ -300,5 +405,151 @@ class SupplierAccountController extends Controller
                 'rejected' => SupplierAccount::rejected()->count(),
             ],
         ]);
+    }
+
+    /**
+     * Resend credentials email to an existing supplier with a new temporary password
+     * This is useful for suppliers who were approved before the email feature
+     */
+    public function resendCredentials($id)
+    {
+        try {
+            $supplierAccount = SupplierAccount::find($id);
+            
+            if (!$supplierAccount) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Supplier account not found',
+                ], 404);
+            }
+
+            if ($supplierAccount->status !== 'approved') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Can only resend credentials for approved supplier accounts',
+                ], 400);
+            }
+
+            // Find the associated user account
+            $user = User::where('email', $supplierAccount->email)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No user account found for this supplier',
+                ], 404);
+            }
+
+            // Generate a new temporary password (8 chars with letters and numbers)
+            $tempPassword = Str::random(4) . rand(1000, 9999);
+
+            // Update user's password
+            $user->password = Hash::make($tempPassword);
+            $user->save();
+
+            // Send credentials email
+            $loginUrl = url('/login');
+            
+            Mail::to($supplierAccount->email)->send(new AccountCredentialsNotification(
+                $supplierAccount->company_name,
+                $supplierAccount->email,
+                $tempPassword,
+                'Supplier',
+                $loginUrl
+            ));
+            
+            Log::info("Credentials resent to supplier {$supplierAccount->email} with new temporary password");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'New credentials email sent to supplier. They will need to use the new password.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to resend credentials to supplier {$id}: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send credentials: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Send notifications for all existing pending supplier accounts
+     * This is useful for testing or to catch up on notifications for existing data
+     */
+    public function notifyPendingSuppliers()
+    {
+        try {
+            $pendingSuppliers = SupplierAccount::where('status', 'pending')->get();
+            
+            if ($pendingSuppliers->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No pending supplier accounts found.',
+                    'count' => 0,
+                ]);
+            }
+
+            $adminUsers = User::where('role', 'regex', '/^admin$/i')->get();
+            $notificationCount = 0;
+            $emailCount = 0;
+
+            foreach ($pendingSuppliers as $supplier) {
+                // Create in-app notification
+                try {
+                    UserNotification::createStatusNotification(
+                        'admin',
+                        'Supplier Account Pending Approval',
+                        "A new supplier account '{$supplier->company_name}' requires your approval.",
+                        [
+                            'supplier_account_id' => (string)($supplier->_id ?? $supplier->id),
+                            'company_name' => $supplier->company_name,
+                            'contact_person' => $supplier->contact_person,
+                            'email' => $supplier->email,
+                            'status' => 'pending',
+                        ],
+                        'tpu'
+                    );
+                    $notificationCount++;
+                } catch (\Exception $e) {
+                    Log::error("Failed to create notification for supplier {$supplier->company_name}: " . $e->getMessage());
+                }
+
+                // Send email to all admins
+                $createdAt = $supplier->created_at ? $supplier->created_at->format('F j, Y \a\t g:i A') : now()->format('F j, Y \a\t g:i A');
+                
+                foreach ($adminUsers as $admin) {
+                    if ($admin->email) {
+                        try {
+                            Mail::to($admin->email)->send(new PendingSupplierApproval(
+                                $supplier->company_name,
+                                $supplier->contact_person ?? 'N/A',
+                                $supplier->email ?? 'N/A',
+                                $supplier->phone ?? 'N/A',
+                                $supplier->address ?? 'N/A',
+                                $createdAt
+                            ));
+                            $emailCount++;
+                            Log::info("Pending supplier email sent to admin {$admin->email} for {$supplier->company_name}");
+                        } catch (\Exception $e) {
+                            Log::error("Failed to send email to {$admin->email}: " . $e->getMessage());
+                        }
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Notifications sent for {$pendingSuppliers->count()} pending suppliers",
+                'notifications_created' => $notificationCount,
+                'emails_sent' => $emailCount,
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to notify pending suppliers: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send notifications: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

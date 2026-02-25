@@ -16,6 +16,10 @@ function SubscriptionTracking() {
   const [sortBy, setSortBy] = useState('deliveryDate');
   const [loading, setLoading] = useState(true);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
+  
   // Add Serial Modal state
   const [showAddSerialModal, setShowAddSerialModal] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
@@ -136,7 +140,8 @@ function SubscriptionTracking() {
           serials: sub.serials || [],
           transactions: sub.transactions || [],
         }));
-        setSubscriptions(apiSubscriptions);
+        // Reverse to show newest subscriptions first
+        setSubscriptions(apiSubscriptions.reverse());
       }
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
@@ -165,7 +170,7 @@ function SubscriptionTracking() {
     return matchesSearch && matchesPeriod;
   });
 
-  // Sort subscriptions
+  // Sort subscriptions - newest first (by index, newest subscriptions appear at the top)
   const sortedSubscriptions = [...filteredSubscriptions].sort((a, b) => {
     if (sortBy === 'serialTitle') return a.serialTitle.localeCompare(b.serialTitle);
     if (sortBy === 'supplierName') return a.supplierName.localeCompare(b.supplierName);
@@ -174,11 +179,73 @@ function SubscriptionTracking() {
       const bCost = parseFloat(b.remainingCost.replace(/[^0-9.]/g, '') || 0);
       return bCost - aCost;
     }
-    // Default sort by delivery date (period) - earliest first
-    const aDate = a.period ? new Date(a.period) : new Date('9999-12-31');
-    const bDate = b.period ? new Date(b.period) : new Date('9999-12-31');
-    return aDate - bDate;
+    // Default: maintain current order (newest first from reversed API response)
+    return 0;
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(sortedSubscriptions.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedSubscriptions = sortedSubscriptions.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, periodFilter, sortBy]);
+
+  // Pagination handlers
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePageClick = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
 
   // Calculate total stats
   const totalAwardCost = allSubscriptions.reduce((sum, item) => {
@@ -593,6 +660,9 @@ function SubscriptionTracking() {
       // Refresh subscriptions from API
       await fetchSubscriptions();
       
+      // Reset to page 1 so the new subscription appears at the top
+      setCurrentPage(1);
+      
       setSuccessMessage(`Successfully added ${serialItems.length} serial(s) as ${createdSubscriptions.length} subscription(s)`);
       handleCloseAddSerialModal();
       
@@ -847,7 +917,7 @@ function SubscriptionTracking() {
                   </td>
                 </tr>
               )}
-              {!loading && sortedSubscriptions.map((subscription) => (
+              {!loading && paginatedSubscriptions.map((subscription) => (
                 <tr key={subscription.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '16px', fontWeight: 500 }}>{subscription.serialTitle}</td>
                   <td style={{ padding: '16px' }}>{subscription.supplierName}</td>
@@ -959,72 +1029,88 @@ function SubscriptionTracking() {
           paddingTop: 20, 
           borderTop: '1px solid #eee',
           display: 'flex', 
-          justifyContent: 'flex-end', 
+          justifyContent: 'space-between', 
           alignItems: 'center' 
         }}>
           <div style={{ color: '#666', fontSize: 14 }}>
-            Showing {sortedSubscriptions.length} of {allSubscriptions.length} results
-            {subscriptions.length > 0 && ` (${subscriptions.length} added)`}
+            {sortedSubscriptions.length > 0 
+              ? `Showing ${startIndex + 1}-${Math.min(endIndex, sortedSubscriptions.length)} of ${sortedSubscriptions.length} results`
+              : 'No results found'}
+          </div>
+          <div style={{ color: '#666', fontSize: 14 }}>
+            Page {currentPage} of {totalPages || 1}
           </div>
         </div>
 
         {/* Pagination */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Previous
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #004A98', 
-              background: '#004A98', 
-              color: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              1
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              2
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              3
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Next
-            </button>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button 
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+                style={{ 
+                  padding: '8px 16px', 
+                  border: '1px solid #ddd', 
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff', 
+                  borderRadius: 6, 
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: currentPage === 1 ? 0.5 : 1,
+                  color: currentPage === 1 ? '#999' : '#333',
+                }}
+              >
+                Previous
+              </button>
+              {getPageNumbers().map((page, index) => (
+                page === '...' ? (
+                  <span key={`ellipsis-${index}`} style={{ 
+                    padding: '8px 12px', 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    color: '#666'
+                  }}>...</span>
+                ) : (
+                  <button 
+                    key={page}
+                    onClick={() => handlePageClick(page)}
+                    style={{ 
+                      padding: '8px 16px', 
+                      border: page === currentPage ? '1px solid #004A98' : '1px solid #ddd', 
+                      background: page === currentPage ? '#004A98' : '#fff', 
+                      color: page === currentPage ? '#fff' : '#333', 
+                      borderRadius: 6, 
+                      cursor: 'pointer',
+                      fontWeight: page === currentPage ? 600 : 400,
+                    }}
+                  >
+                    {page}
+                  </button>
+                )
+              ))}
+              <button 
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                style={{ 
+                  padding: '8px 16px', 
+                  border: '1px solid #ddd', 
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff', 
+                  borderRadius: 6, 
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: currentPage === totalPages ? 0.5 : 1,
+                  color: currentPage === totalPages ? '#999' : '#333',
+                }}
+              >
+                Next
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Add Serial Modal */}

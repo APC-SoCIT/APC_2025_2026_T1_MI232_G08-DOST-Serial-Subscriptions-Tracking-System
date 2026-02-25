@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ProcessMovementLog;
 use App\Models\UserNotification;
+use App\Services\EmailNotificationService;
 use Illuminate\Support\Facades\Auth;
 
 class ProcessMovementService
@@ -81,7 +82,8 @@ class ProcessMovementService
         
         // Map status to human-readable action
         $actionMap = [
-            'prepare' => 'accept',
+            'accepted' => 'accept',
+            'prepare' => 'preparing',
             'for_delivery' => 'ready_for_delivery',
             'received' => 'receive',
             'pending_inspection' => 'pending_inspection',
@@ -92,7 +94,8 @@ class ProcessMovementService
         
         // Generate descriptive remarks if none provided
         $defaultRemarksMap = [
-            'prepare' => 'Supplier accepted the serial subscription',
+            'accepted' => 'Supplier accepted the serial subscription',
+            'prepare' => 'Supplier is preparing the serial for delivery',
             'for_delivery' => 'Supplier marked serial as ready for delivery',
             'received' => 'GSPS confirmed receipt of serial',
             'pending_inspection' => 'Serial queued for inspection',
@@ -102,11 +105,10 @@ class ProcessMovementService
         $defaultRemarks = $defaultRemarksMap[$newStatus] ?? "Status changed from {$oldStatus} to {$newStatus}";
         $finalRemarks = $remarks ?? $defaultRemarks;
 
-        // For the "prepare" status (Supplier accepts), also log a "preparing" entry
-        // This creates the workflow: Accept → Preparing → Ready for Delivery
-        if ($newStatus === 'prepare' && $oldStatus === 'pending') {
-            // First log: Supplier accepts
-            self::logMovement(
+        // For the "accepted" status (Supplier confirms), log acceptance
+        // Flow: Created → Accepted → Preparing → For Delivery
+        if ($newStatus === 'accepted' && ($oldStatus === 'created' || $oldStatus === 'pending')) {
+            return self::logMovement(
                 'subscription',
                 (string)($subscription->_id ?? $subscription->id),
                 $serialTitle,
@@ -122,8 +124,10 @@ class ProcessMovementService
                     'supplier_name' => $subscription->supplier_name,
                 ]
             );
-            
-            // Second log: Supplier is now preparing
+        }
+
+        // For the "prepare" status (Supplier starts preparing)
+        if ($newStatus === 'prepare' && $oldStatus === 'accepted') {
             return self::logMovement(
                 'subscription',
                 (string)($subscription->_id ?? $subscription->id),
@@ -169,6 +173,7 @@ class ProcessMovementService
      * - Supplier updates status (prepare, for_delivery) → TPU receives notification
      * - GSPS updates status (received) → Supplier receives notification
      * - Inspection updates status (inspected/delivered, for_return) → Supplier AND TPU receive notification
+     * - GSPS/Inspection also get a confirmation copy of their own action
      */
     public static function createStatusNotifications(
         string $newStatus,
@@ -179,49 +184,67 @@ class ProcessMovementService
     ): void {
         $currentUser = Auth::user();
         $currentRole = strtolower($currentUser?->role ?? 'system');
+        $actorName = $currentUser?->name ?? 'System';
         
         // Define strict role-based notification rules
+        // Each status change notifies relevant roles based on workflow
         $notificationMap = [
-            // When supplier accepts/prepares a serial → notify TPU only
+            // When supplier accepts a serial → notify TPU, GSPS, Admin
+            'accepted' => [
+                'target_roles' => ['tpu', 'gsps', 'admin'],
+                'title' => 'Serial Accepted by Supplier',
+                'message' => "'{$serialTitle}' has been accepted by {$supplierName}.",
+            ],
+            // When supplier starts preparing a serial → notify TPU, GSPS, Admin
             'prepare' => [
-                'target_roles' => ['tpu'],
+                'target_roles' => ['tpu', 'gsps', 'admin'],
                 'title' => 'Serial Being Prepared',
                 'message' => "'{$serialTitle}' is being prepared by {$supplierName}.",
             ],
-            // When supplier marks for delivery → notify TPU only
+            // When supplier marks for delivery → notify TPU, GSPS, Inspection, Admin
             'for_delivery' => [
-                'target_roles' => ['tpu'],
+                'target_roles' => ['tpu', 'gsps', 'inspection', 'admin'],
                 'title' => 'Serial Ready for Delivery',
                 'message' => "'{$serialTitle}' is now ready for delivery from {$supplierName}.",
             ],
-            // When GSPS receives → notify Supplier only
+            // When GSPS receives → notify Supplier, TPU, Inspection, Admin (GSPS gets confirmation)
             'received' => [
-                'target_roles' => ['supplier'],
+                'target_roles' => ['supplier', 'tpu', 'inspection', 'admin'],
                 'title' => 'Serial Received by GSPS',
-                'message' => "'{$serialTitle}' has been received by GSPS and is pending inspection.",
+                'message' => "'{$serialTitle}' has been received by {$actorName} and is pending inspection.",
                 'supplier_name' => $supplierName,
+                'send_actor_copy' => true, // GSPS gets confirmation
+                'actor_title' => 'Confirmation: Serial Received',
+                'actor_message' => "You have successfully received '{$serialTitle}' from {$supplierName}. The serial is now pending inspection.",
             ],
-            // When inspection completes (delivered) → notify Supplier AND TPU
+            // When inspection completes (delivered) → notify Supplier, TPU, GSPS, Admin (Inspection gets confirmation)
             'inspected' => [
-                'target_roles' => ['supplier', 'tpu'],
+                'target_roles' => ['supplier', 'tpu', 'gsps', 'admin'],
                 'title' => 'Serial Delivered Successfully',
-                'message' => "'{$serialTitle}' has been inspected and marked as Delivered.",
+                'message' => "'{$serialTitle}' has been inspected by {$actorName} and marked as Delivered.",
                 'supplier_name' => $supplierName,
+                'send_actor_copy' => true, // Inspection gets confirmation
+                'actor_title' => 'Confirmation: Serial Inspected',
+                'actor_message' => "You have successfully inspected '{$serialTitle}' from {$supplierName} and marked it as Delivered.",
             ],
-            // When inspection marks for return → notify Supplier AND TPU
+            // When inspection marks for return → notify Supplier, TPU, GSPS, Admin (Inspection gets confirmation)
             'for_return' => [
-                'target_roles' => ['supplier', 'tpu'],
+                'target_roles' => ['supplier', 'tpu', 'gsps', 'admin'],
                 'title' => 'Serial Marked for Return',
-                'message' => "'{$serialTitle}' has been marked for return.",
+                'message' => "'{$serialTitle}' has been marked for return by {$actorName}.",
                 'supplier_name' => $supplierName,
+                'send_actor_copy' => true, // Inspection gets confirmation
+                'actor_title' => 'Confirmation: Serial Marked for Return',
+                'actor_message' => "You have marked '{$serialTitle}' from {$supplierName} for return.",
             ],
         ];
         
         $config = $notificationMap[$newStatus] ?? null;
         
         if ($config) {
+            // Send notifications to target roles
             foreach ($config['target_roles'] as $role) {
-                // Don't notify the user who triggered the action
+                // Don't notify the user who triggered the action (they get a separate confirmation)
                 if ($role === $currentRole) {
                     continue;
                 }
@@ -236,8 +259,49 @@ class ProcessMovementService
                         'supplier_name' => $supplierName,
                         'subscription_id' => $subscriptionId,
                         'serial_issn' => $serialIssn,
+                        'actor_name' => $actorName,
                     ],
                     $currentRole
+                );
+
+                // Send email notification
+                EmailNotificationService::sendStatusNotification(
+                    $serialTitle,
+                    $newStatus,
+                    $role,
+                    $supplierName,
+                    $subscriptionId,
+                    $serialIssn,
+                    $actorName
+                );
+            }
+            
+            // Send confirmation copy to the actor (GSPS/Inspection)
+            if (isset($config['send_actor_copy']) && $config['send_actor_copy'] && $currentRole !== 'system') {
+                // Create in-app notification for the actor
+                UserNotification::createStatusNotification(
+                    $currentRole,
+                    $config['actor_title'],
+                    $config['actor_message'],
+                    [
+                        'serial_title' => $serialTitle,
+                        'new_status' => $newStatus,
+                        'supplier_name' => $supplierName,
+                        'subscription_id' => $subscriptionId,
+                        'serial_issn' => $serialIssn,
+                        'actor_name' => $actorName,
+                        'is_confirmation' => true,
+                    ],
+                    $currentRole
+                );
+                
+                // Send confirmation email to the actor
+                EmailNotificationService::sendConfirmationEmail(
+                    $serialTitle,
+                    $newStatus,
+                    $currentRole,
+                    $supplierName,
+                    $actorName
                 );
             }
         }
@@ -258,15 +322,22 @@ class ProcessMovementService
         UserNotification::createStatusNotification(
             'supplier',
             'New Serial Assigned',
-            "A new serial '{$serialTitle}' has been assigned to you for delivery.",
+            "A new serial '{$serialTitle}' has been created and assigned to you. Please accept and prepare for delivery.",
             [
                 'serial_title' => $serialTitle,
-                'new_status' => 'pending',
+                'new_status' => 'created',
                 'supplier_name' => $supplierName,
                 'subscription_id' => $subscriptionId,
                 'serial_issn' => $serialIssn,
             ],
             $currentRole
+        );
+
+        // Send email notification to supplier
+        EmailNotificationService::notifyNewSerialAssigned(
+            $serialTitle,
+            $supplierName,
+            $subscriptionId
         );
     }
 

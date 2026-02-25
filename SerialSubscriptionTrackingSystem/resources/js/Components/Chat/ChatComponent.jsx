@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { IoSend, IoAttach, IoHappyOutline, IoClose, IoImage, IoDocument, IoTrash, IoPencil, IoCheckmark, IoDownload } from "react-icons/io5";
-import { BsThreeDotsVertical, BsEmojiSmile } from "react-icons/bs";
+import { IoSend, IoAttach, IoClose, IoImage, IoDocument, IoTrash, IoPencil, IoCheckmark, IoDownload } from "react-icons/io5";
+import { BsThreeDotsVertical } from "react-icons/bs";
 import { BiSearch } from "react-icons/bi";
 import { FaFileAlt, FaFilePdf, FaFileWord, FaFileExcel, FaFileImage, FaFolder } from "react-icons/fa";
 import { MdChat, MdInsertDriveFile } from "react-icons/md";
-import EmojiPicker from './EmojiPicker';
 import ChatSkeleton from './ChatSkeleton';
 import MessageStatus from './MessageStatus';
 import Swal from 'sweetalert2';
@@ -69,7 +68,6 @@ export default function ChatComponent({
   const [sending, setSending] = useState(false);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -86,7 +84,6 @@ export default function ChatComponent({
   const pollIntervalRef = useRef(null);
   const contactsPollRef = useRef(null);
   const fileInputRef = useRef(null);
-  const emojiPickerRef = useRef(null);
   const currentChatIdRef = useRef(null);
 
   useEffect(() => {
@@ -141,16 +138,7 @@ export default function ChatComponent({
     };
   }, [currentChatId]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
-        setShowEmojiPicker(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -371,11 +359,6 @@ export default function ChatComponent({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const handleEmojiSelect = (emoji) => {
-    setMessage(prev => prev + emoji);
-    setShowEmojiPicker(false);
   };
 
   const getFileIcon = (extension) => {
@@ -1677,7 +1660,7 @@ export default function ChatComponent({
                 placeholder="Type your message here..."
                 style={{
                   width: '100%',
-                  padding: '10px 50px 10px 16px',
+                  padding: '10px 16px',
                   borderRadius: '6px',
                   border: '1px solid #dee2e6',
                   fontSize: '14px',
@@ -1692,37 +1675,6 @@ export default function ChatComponent({
                 onBlur={(e) => e.currentTarget.style.borderColor = '#dee2e6'}
                 rows={1}
               />
-              
-              <div ref={emojiPickerRef} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
-                <button
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#6c757d',
-                    cursor: 'pointer',
-                    fontSize: '18px',
-                    padding: '6px',
-                    transition: 'color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = '#ffc107'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = '#6c757d'}
-                  title="Add emoji"
-                >
-                  <IoHappyOutline />
-                </button>
-                
-                {showEmojiPicker && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '40px',
-                    right: 0,
-                    zIndex: 100
-                  }}>
-                    <EmojiPicker onSelect={handleEmojiSelect} />
-                  </div>
-                )}
-              </div>
             </div>
             
             <button
@@ -1770,7 +1722,7 @@ export default function ChatComponent({
             color: '#adb5bd',
             textAlign: 'left'
           }}>
-            Press Enter to send • PDF, PNG, JPG (max 10MB) • Use emojis
+            Press Enter to send • Supported files: PDF, PNG, JPG (max 10MB)
           </div>
         </div>
       </div>

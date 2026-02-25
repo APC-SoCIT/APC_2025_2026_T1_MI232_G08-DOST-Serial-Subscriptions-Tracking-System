@@ -584,12 +584,13 @@ function SupplierInfo() {
                     Email <span style={{ color: 'red' }}>*</span>
                   </label>
                   <input
-                    type="email"
+                    type="text"
                     name="email"
                     value={newSupplier.email}
                     onChange={handleInputChange}
                     required
                     placeholder="Enter email address"
+                    autoComplete="email"
                     style={{
                       width: '100%',
                       padding: '10px 12px',

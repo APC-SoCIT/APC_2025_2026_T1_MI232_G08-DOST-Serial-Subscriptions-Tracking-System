@@ -350,7 +350,8 @@ function Dashboard_Supplier_ListofSerial() {
 
   // Status options in sequential order
   const statusFlow = [
-    { value: 'prepare', label: 'Prepare', color: '#ffc107', textColor: '#333' },
+    { value: 'accepted', label: 'Accepted', color: '#28a745', textColor: '#fff' },
+    { value: 'prepare', label: 'Preparing', color: '#ffc107', textColor: '#333' },
     { value: 'for_delivery', label: 'For Delivery', color: '#17a2b8', textColor: '#fff' },
     { value: 'received', label: 'Received', color: '#28a745', textColor: '#fff' },
     { value: 'delivered', label: 'Delivered', color: '#d4edda', textColor: '#155724' },
@@ -380,15 +381,24 @@ function Dashboard_Supplier_ListofSerial() {
     setConfirmModal({ show: true, serialId: serial.id, serialData: serial, type: 'accept' });
   };
 
-  // Handle Prepare button click - show confirmation for delivery
+  // Handle Prepare button click - show confirmation for preparing
   const handlePrepareClick = (serial) => {
-    setConfirmModal({ show: true, serialId: serial.id, serialData: serial, type: 'delivery' });
+    const currentStatus = getFinalStatus(serial);
+    // If currently accepted, next step is prepare; if prepare, next is for_delivery
+    const nextType = currentStatus === 'accepted' ? 'prepare' : 'delivery';
+    setConfirmModal({ show: true, serialId: serial.id, serialData: serial, type: nextType });
   };
 
   // Handle confirmation Yes
   const handleConfirmYes = async () => {
     const { serialId, serialData, type } = confirmModal;
-    const newStatus = type === 'accept' ? 'prepare' : 'for_delivery';
+    // Accept → accepted, Prepare → prepare, Delivery → for_delivery
+    const statusMap = {
+      'accept': 'accepted',
+      'prepare': 'prepare',
+      'delivery': 'for_delivery'
+    };
+    const newStatus = statusMap[type] || 'for_delivery';
     
     try {
       // Update status via API
@@ -424,9 +434,10 @@ function Dashboard_Supplier_ListofSerial() {
 
   // Handle status button click
   const handleStatusClick = (serial) => {
-    const currentStatus = serialStatuses[serial.id] || serial.status;
+    const currentStatus = getFinalStatus(serial);
     
-    if (currentStatus === 'prepare') {
+    // Allow advancing from accepted → prepare, or prepare → for_delivery
+    if (currentStatus === 'accepted' || currentStatus === 'prepare') {
       handlePrepareClick(serial);
     }
   };
@@ -786,11 +797,14 @@ function Dashboard_Supplier_ListofSerial() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: '0 0 16px', fontSize: 20, color: '#222' }}>
-              {confirmModal.type === 'accept' ? 'Confirm Acceptance' : 'Confirm For Delivery'}
+              {confirmModal.type === 'accept' ? 'Confirm Acceptance' : 
+               confirmModal.type === 'prepare' ? 'Confirm Preparation' : 'Confirm For Delivery'}
             </h3>
             <p style={{ margin: '0 0 24px', fontSize: 15, color: '#666' }}>
               {confirmModal.type === 'accept' 
                 ? 'Are you sure you want to accept this serial subscription?' 
+                : confirmModal.type === 'prepare'
+                ? 'Are you sure you want to start preparing this serial?'
                 : 'Are you sure this serial is ready for delivery?'}
             </p>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
