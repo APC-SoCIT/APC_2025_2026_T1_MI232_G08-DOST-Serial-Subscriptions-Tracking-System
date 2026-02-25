@@ -426,9 +426,14 @@ function MonitorDelivery() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={() => setViewModal({ show: false, item: null })}
         >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
           <div
             style={{
               background: '#fff',
@@ -439,6 +444,7 @@ function MonitorDelivery() {
               width: '90%',
               maxHeight: '90vh',
               overflow: 'auto',
+              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -555,7 +561,7 @@ function MonitorDelivery() {
                           window.open(viewModal.item.attachmentUrl, '_blank');
                         }}
                         onError={(e) => {
-                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = '<div style="text-align: center; padding: 30px; background: #f8f9fa; border-radius: 8px; color: #666;"><p style="margin: 0; font-size: 12px;">Image failed to load</p></div>';
                         }}
                       />
                       <p style={{ margin: '8px 0 0', fontSize: 11, color: '#666' }}>
@@ -596,7 +602,7 @@ function MonitorDelivery() {
                           window.open(viewModal.item.inspection_attachment, '_blank');
                         }}
                         onError={(e) => {
-                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = '<div style="text-align: center; padding: 30px; background: #f8f9fa; border-radius: 8px; color: #666;"><p style="margin: 0; font-size: 12px;">Image failed to load</p></div>';
                         }}
                       />
                       <p style={{ margin: '8px 0 0', fontSize: 11, color: '#666' }}>

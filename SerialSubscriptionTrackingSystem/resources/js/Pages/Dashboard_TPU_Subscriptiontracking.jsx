@@ -1115,28 +1115,40 @@ function SubscriptionTracking() {
 
       {/* Add Serial Modal */}
       {showAddSerialModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseAddSerialModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -1613,28 +1625,36 @@ function SubscriptionTracking() {
 
       {/* View Details Modal */}
       {showViewDetailsModal && viewDetailsSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseViewDetailsModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -1822,28 +1842,36 @@ function SubscriptionTracking() {
 
       {/* Edit Subscription Modal */}
       {showEditModal && editSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseEditModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -2152,27 +2180,35 @@ function SubscriptionTracking() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && deleteSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '100%',
-            textAlign: 'center'
-          }}>
+        <div 
+          onClick={handleCloseDeleteModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '500px',
+              width: '100%',
+              textAlign: 'center',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Warning Icon */}
             <div style={{
               width: 60,

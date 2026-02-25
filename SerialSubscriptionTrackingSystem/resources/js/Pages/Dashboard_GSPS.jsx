@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import GSPSLayout from "@/Layouts/GSPSLayout";
 import { Head } from "@inertiajs/react";
 import axios from 'axios';
+import { FaFilter, FaFileExcel } from 'react-icons/fa';
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -281,146 +282,194 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
       <div className="space-y-6">
 
-        {/* ===== FILTER HEADER ===== */}
-        <div className="relative bg-white p-5 rounded-xl shadow flex justify-between items-center">
-          <h2 className="text-xl font-bold">Filter by</h2>
+        {/* FILTERS - Dropdown Style (matching Admin Logs design) */}
+        <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200">
+          
+          {/* Filter Toolbar */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between px-6 py-4 border-b border-gray-100 gap-4">
+            
+            {/* Title */}
+            <h2 className="text-xl font-bold text-gray-800">Dashboard Overview</h2>
 
-          <div className="flex gap-2">
-            {["year","month","week","custom"].map(mode=>(
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 flex-wrap">
               <button
-                key={mode}
-                onClick={()=>{
-                  setFilterMode(mode);
-                  setShowFilter(true);
-
-                  setTempYear(year);
-                  setTempStartMonth(startMonth);
-                  setTempStartDate(startDate);
-                  setTempEndDate(endDate);
-
-                  setCalendarYear(year);
-                  setCalendarMonth(monthIndex(startMonth));
+                onClick={() => {
+                  setShowFilter(!showFilter);
+                  if (!showFilter) {
+                    setTempYear(year);
+                    setTempStartMonth(startMonth);
+                    setTempStartDate(startDate);
+                    setTempEndDate(endDate);
+                  }
                 }}
-                className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 font-semibold"
+                className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
-                {mode.charAt(0).toUpperCase()+mode.slice(1)}
+                <FaFilter size={14} />
+                Filters
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                  <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
+                )}
               </button>
-            ))}
-          </div>
-
-          {/* ===== POPUP ===== */}
-          {showFilter && (
-            <>
-              {/* Backdrop overlay - click to close */}
-              <div 
-                className="fixed inset-0 z-40" 
-                onClick={() => setShowFilter(false)}
-              />
-              <div className="absolute right-0 top-16 w-[380px] bg-white border rounded-xl shadow-2xl p-5 space-y-4 z-50" onClick={(e) => e.stopPropagation()}>
-
-              <div className="flex justify-between">
-                <h3 className="font-bold">Filter by</h3>
-                <button onClick={()=>setShowFilter(false)}>×</button>
-              </div>
-
-              {/* MODE TABS */}
-              <div className="flex gap-2">
-                {["year","month","week","custom"].map(mode=>(
-                  <button
-                    key={mode}
-                    onClick={()=>setFilterMode(mode)}
-                    className={`px-3 py-1 rounded-full text-sm font-semibold
-                      ${filterMode===mode?"bg-blue-700 text-white":"bg-gray-100"}`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-
-              {/* YEAR */}
-              {filterMode==="year" && (
-                <div className="grid grid-cols-3 gap-2">
-                  {YEARS.map(y=>(
-                    <button
-                      key={y}
-                      onClick={()=>setTempYear(y)}
-                      className={`p-2 rounded border
-                        ${tempYear===y?"bg-blue-700 text-white":"bg-gray-100"}`}
-                    >
-                      {y}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* MONTH */}
-              {filterMode==="month" && (
-                <div className="grid grid-cols-3 gap-2 max-h-64 overflow-auto">
-                  {MONTHS.map(m=>(
-                    <button
-                      key={m}
-                      onClick={()=>{
-                        setTempStartMonth(m);
-                        setTempStartDate(firstDayOfMonth(tempYear,m));
-                        setTempEndDate(lastDayOfMonth(tempYear,m));
-                      }}
-                      className={`p-2 text-sm rounded border
-                        ${tempStartMonth===m?"bg-blue-700 text-white":"bg-gray-100"}`}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* WEEK */}
-              {filterMode==="week" && (
-                <div className="space-y-3">
-                  <div className="flex justify-between font-semibold">
-                    <button onClick={()=>setCalendarMonth(p=>p===0?11:p-1)}>←</button>
-                    <span>{MONTHS[calendarMonth]} {calendarYear}</span>
-                    <button onClick={()=>setCalendarMonth(p=>p===11?0:p+1)}>→</button>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-2 text-center">
-                    {getDaysInMonth(calendarYear,calendarMonth).map((day,i)=>(
-                      <button
-                        key={i}
-                        disabled={!day}
-                        onClick={()=>day && selectWeek(day)}
-                        className={`p-2 rounded text-sm ${day?"hover:bg-green-100":""}`}
-                      >
-                        {day || ""}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="text-sm text-gray-600">
-                    {tempStartDate} → {tempEndDate}
-                  </div>
-                </div>
-              )}
-
-              {/* CUSTOM */}
-              {filterMode==="custom" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <input type="date" value={tempStartDate}
-                    onChange={e=>setTempStartDate(e.target.value)}
-                    className="border p-2 rounded"/>
-                  <input type="date" value={tempEndDate}
-                    onChange={e=>setTempEndDate(e.target.value)}
-                    className="border p-2 rounded"/>
-                </div>
-              )}
 
               <button
-                onClick={applyFilter}
-                className="w-full bg-blue-800 text-white py-3 rounded-lg font-bold"
+                onClick={async () => {
+                  try {
+                    const response = await axios.get('/api/gsps/export-report', {
+                      params: {
+                        start_date: startDate,
+                        end_date: endDate,
+                        dashboard_name: 'GSPS Dashboard',
+                      },
+                      responseType: 'blob',
+                    });
+                    const blob = new Blob([response.data], {
+                      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `GSPS_Dashboard_Report_${startDate}_to_${endDate}.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error('Error generating report:', error);
+                    alert('Failed to generate report. Please try again.');
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
               >
-                Apply
+                <FaFileExcel size={14} />
+                Generate Report
               </button>
             </div>
-            </>
+          </div>
+
+          {/* Filter Panel - Expandable */}
+          {showFilter && (
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                
+                {/* Year Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+                  <select
+                    value={tempYear}
+                    onChange={(e) => {
+                      const selectedYear = parseInt(e.target.value);
+                      setTempYear(selectedYear);
+                      setTempStartDate(firstDayOfMonth(selectedYear, tempStartMonth || "January"));
+                      setTempEndDate(lastDayOfMonth(selectedYear, tempStartMonth || "December"));
+                      setCalendarYear(selectedYear);
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Month Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                  <select
+                    value={tempStartMonth}
+                    onChange={(e) => {
+                      const m = e.target.value;
+                      setTempStartMonth(m);
+                      if (m) {
+                        setTempStartDate(firstDayOfMonth(tempYear, m));
+                        setTempEndDate(lastDayOfMonth(tempYear, m));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Months</option>
+                    {MONTHS.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Week Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Week</label>
+                  <select
+                    onChange={(e) => {
+                      const weekNum = parseInt(e.target.value);
+                      if (weekNum) {
+                        const janFirst = new Date(tempYear, 0, 1);
+                        const daysOffset = (weekNum - 1) * 7;
+                        const weekStart = new Date(janFirst);
+                        weekStart.setDate(janFirst.getDate() + daysOffset - janFirst.getDay() + 1);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        setTempStartDate(weekStart.toISOString().split("T")[0]);
+                        setTempEndDate(weekEnd.toISOString().split("T")[0]);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Week</option>
+                    {Array.from({ length: 52 }, (_, i) => i + 1).map(w => (
+                      <option key={w} value={w}>Week {w}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Start Date */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={tempStartDate}
+                    onChange={(e) => setTempStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={tempEndDate}
+                    onChange={(e) => setTempEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Filter Actions */}
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setFilterMode('year');
+                    setTempYear(2026);
+                    setTempStartMonth('January');
+                    setTempStartDate(firstDayOfMonth(2026, 'January'));
+                    setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setYear(2026);
+                    setStartMonth('January');
+                    setEndMonth('December');
+                    setStartDate(firstDayOfMonth(2026, 'January'));
+                    setEndDate(lastDayOfMonth(2026, 'December'));
+                  }}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={applyFilter}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
