@@ -129,14 +129,15 @@ export default function InspectionSerialsForInspection() {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check if it's an image
-      if (!file.type.startsWith('image/')) {
-        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      // Check if it's an image or PDF
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       setAttachmentFile(file);
@@ -223,12 +224,13 @@ export default function InspectionSerialsForInspection() {
   const handleReuploadFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        Swal.fire({ title: 'Please select an image file (JPG, PNG, etc.)', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 5MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
         return;
       }
       setReuploadFile(file);
@@ -692,7 +694,7 @@ export default function InspectionSerialsForInspection() {
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
                   style={{ display: 'none' }}
                 />
                 
@@ -702,8 +704,8 @@ export default function InspectionSerialsForInspection() {
                     className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
                   >
                     <MdCloudUpload className="mx-auto text-4xl text-blue-600 mb-2" />
-                    <p className="text-sm font-medium text-gray-700">Click to upload image</p>
-                    <p className="text-xs text-gray-500">JPG, PNG (max 5MB)</p>
+                    <p className="text-sm font-medium text-gray-700">Click to upload image or PDF</p>
+                    <p className="text-xs text-gray-500">JPG, PNG, PDF (max 10MB)</p>
                   </div>
                 ) : (
                   <div className="relative inline-block">
@@ -993,7 +995,7 @@ export default function InspectionSerialsForInspection() {
                           type="file"
                           ref={reuploadFileInputRef}
                           onChange={handleReuploadFileSelect}
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
                           style={{ display: 'none' }}
                         />
                         {!reuploadPreview ? (
