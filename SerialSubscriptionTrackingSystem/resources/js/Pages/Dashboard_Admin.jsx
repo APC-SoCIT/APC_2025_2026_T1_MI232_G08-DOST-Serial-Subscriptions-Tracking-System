@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
@@ -130,6 +130,7 @@ const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
 const [startDate, setStartDate] = useState(firstDayOfMonth(2026, "January"));
 const [endDate, setEndDate] = useState(lastDayOfMonth(2026, "December"));
+const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilterModal, setShowFilterModal] = useState(false);
 const [tempYear, setTempYear] = useState(year);
@@ -300,6 +301,63 @@ const pieData = useMemo(() => {
     { name: "Rejected", value: dashboardStats.suppliers.rejected || 0 },
   ];
 }, [chartData.supplier_status_pie, dashboardStats.suppliers]);
+
+const kpiCards = useMemo(() => ([
+  {
+    id: "totalUsers",
+    title: "Total Users",
+    value: isLoading ? '...' : dashboardStats.users.total,
+    sourceLabel: "List of User",
+    sourcePath: "/list-of-user",
+    chartIds: ["approvalTrend", "approvalVsPending", "statusDistribution"],
+  },
+  {
+    id: "approvedUsers",
+    title: "Approved Users",
+    value: isLoading ? '...' : dashboardStats.users.approved,
+    sourceLabel: "Account Approval",
+    sourcePath: "/account-approval",
+    chartIds: ["approvalTrend", "approvalVsPending", "statusDistribution"],
+  },
+  {
+    id: "pendingAccounts",
+    title: "Pending Accounts",
+    value: isLoading ? '...' : dashboardStats.suppliers.pending,
+    sourceLabel: "Account Approval",
+    sourcePath: "/account-approval",
+    chartIds: ["approvalVsPending", "statusDistribution"],
+  },
+  {
+    id: "approvalBacklog",
+    title: "Approval Backlog (>7 days)",
+    value: isLoading ? '...' : approvalBacklog,
+    sourceLabel: "Account Approval",
+    sourcePath: "/account-approval",
+    chartIds: ["approvalVsPending"],
+  },
+  {
+    id: "avgApprovalTime",
+    title: "Avg Approval Time (days)",
+    value: isLoading ? '...' : avgApprovalTime,
+    sourceLabel: "Account Approval",
+    sourcePath: "/account-approval",
+    chartIds: ["approvalTrend"],
+  },
+  {
+    id: "inactiveSuppliers",
+    title: "Inactive Approved Suppliers",
+    value: isLoading ? '...' : inactiveSuppliers,
+    sourceLabel: "List of Supplier",
+    sourcePath: "/list-of-supplier",
+    chartIds: ["supplierCreation", "statusDistribution"],
+  },
+]), [isLoading, dashboardStats, approvalBacklog, avgApprovalTime, inactiveSuppliers]);
+
+const selectedKpi = activeKpi
+  ? kpiCards.find((card) => card.id === activeKpi) || null
+  : null;
+const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
+const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
   return (
     <AdminLayout>
@@ -513,31 +571,40 @@ const pieData = useMemo(() => {
 
         {/* KPIs */}
         {/* ================= KPIs ================= */}
-<div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-  <KPI title="Total Users" value={isLoading ? '...' : dashboardStats.users.total} />
-  <KPI title="Approved Users" value={isLoading ? '...' : dashboardStats.users.approved} />
-  <KPI title="Pending Accounts" value={isLoading ? '...' : dashboardStats.suppliers.pending} />
+{selectedKpi && (
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+    <p className="text-sm text-blue-900">
+      Focus view: <span className="font-semibold">{selectedKpi.title}</span>
+    </p>
+    <button
+      type="button"
+      onClick={() => setActiveKpi(null)}
+      className="px-3 py-1.5 text-sm text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-100"
+    >
+      Show All Metrics
+    </button>
+  </div>
+)}
 
-  <KPI
-    title="Approval Backlog (>7 days)"
-    value={isLoading ? '...' : approvalBacklog}
-  />
-
-  <KPI
-    title="Avg Approval Time (days)"
-    value={isLoading ? '...' : avgApprovalTime}
-  />
-
-  <KPI
-    title="Inactive Approved Suppliers"
-    value={isLoading ? '...' : inactiveSuppliers}
-  />
+<div className={`grid grid-cols-1 gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-6"}`}>
+  {visibleKpiCards.map((card) => (
+    <KPI
+      key={card.id}
+      title={card.title}
+      value={card.value}
+      sourceLabel={card.sourceLabel}
+      isActive={card.id === activeKpi}
+      onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
+      onSeeMore={() => router.visit(card.sourcePath)}
+    />
+  ))}
 </div>
 
 
         {/* CHARTS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
+          {shouldShowChart("approvalTrend") && (
           <Chart title="Account Approval Trend">
             <ResponsiveContainer height={280}>
               <LineChart data={approvalTrend}>
@@ -560,7 +627,9 @@ const pieData = useMemo(() => {
               </LineChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("approvalVsPending") && (
           <Chart title="Approval vs Pending">
   <ResponsiveContainer height={280}>
     <AreaChart data={approvalVsPending}>
@@ -589,8 +658,10 @@ const pieData = useMemo(() => {
     </AreaChart>
   </ResponsiveContainer>
 </Chart>
+          )}
 
 
+          {shouldShowChart("supplierCreation") && (
           <Chart title="Supplier Account Creation">
             <ResponsiveContainer height={280}>
               <BarChart data={supplierCreation}>
@@ -607,7 +678,9 @@ const pieData = useMemo(() => {
               </BarChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("statusDistribution") && (
           <Chart title="Account Status Distribution">
   <ResponsiveContainer height={280}>
     <PieChart>
@@ -629,6 +702,7 @@ const pieData = useMemo(() => {
     </PieChart>
   </ResponsiveContainer>
 </Chart>
+          )}
 
 
         </div>
@@ -639,14 +713,39 @@ const pieData = useMemo(() => {
 
 /* ================= UI COMPONENTS ================= */
 
-const KPI = ({ title, value }) => (
-  <div className="bg-white p-6 rounded-xl shadow">
+const KPI = ({ title, value, sourceLabel, isActive, onSelect, onSeeMore }) => (
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={onSelect}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    }}
+    className={`bg-white p-6 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+  >
     <p className="text-base md:text-lg font-semibold text-gray-600">
       {title}
     </p>
     <p className="text-3xl md:text-4xl font-extrabold text-gray-900 mt-1">
       {value}
     </p>
+    <div className="mt-4 flex justify-end">
+      <button
+        type="button"
+        aria-label={`See more in ${sourceLabel}`}
+        title={`Open ${sourceLabel}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSeeMore();
+        }}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+      >
+        See More
+      </button>
+    </div>
   </div>
 );
 
