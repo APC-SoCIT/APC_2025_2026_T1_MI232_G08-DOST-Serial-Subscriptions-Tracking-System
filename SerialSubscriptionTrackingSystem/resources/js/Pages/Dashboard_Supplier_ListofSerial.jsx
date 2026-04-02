@@ -11,8 +11,10 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi"; // Added for sort icon
 import { FaTruckFast } from "react-icons/fa6";
 import { FaHistory } from "react-icons/fa";
+import { MdListAlt, MdViewList } from "react-icons/md";
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 import SerialsNotification from "@/Components/SerialsNotification";
+import SupplierSerialIssues from "@/Components/SupplierSerialIssues";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -288,6 +290,7 @@ function Dashboard_Supplier_ListofSerial() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+  const [activeTab, setActiveTab] = useState('serials'); // 'serials' or 'issues'
 
   // New State for Search and Sort
   const [searchQuery, setSearchQuery] = useState("");
@@ -348,32 +351,46 @@ function Dashboard_Supplier_ListofSerial() {
     }
   };
 
-  // Status options in sequential order
+  // Status options - for subscriptions: accepted or delivered only
   const statusFlow = [
     { value: 'accepted', label: 'Accepted', color: '#28a745', textColor: '#fff' },
-    { value: 'prepare', label: 'Preparing', color: '#ffc107', textColor: '#333' },
-    { value: 'for_delivery', label: 'For Delivery', color: '#17a2b8', textColor: '#fff' },
-    { value: 'received', label: 'Received', color: '#28a745', textColor: '#fff' },
     { value: 'delivered', label: 'Delivered', color: '#d4edda', textColor: '#155724' },
-    { value: 'for_return', label: 'For Return', color: '#f8d7da', textColor: '#721c24' },
   ];
 
-  // Helper to get the final display status considering inspection_status
+  // Helper to get the subscription status
+  // Subscriptions are either pending (not accepted), accepted, or delivered (when all issues done)
   const getFinalStatus = (serial) => {
     const baseStatus = serialStatuses[serial.id] || serial.status;
-    const inspectionStatus = serial.inspection_status;
-    
-    // If it's received and has been inspected, show the inspection result
-    if (baseStatus === 'received' || inspectionStatus) {
-      if (inspectionStatus === 'inspected') {
-        return 'delivered';
-      }
-      if (inspectionStatus === 'for_return') {
-        return 'for_return';
-      }
-    }
-    
+    // For subscriptions: only show accepted or delivered
+    if (baseStatus === 'accepted') return 'accepted';
+    if (baseStatus === 'delivered') return 'delivered';
+    // Any other status (prepare, for_delivery, received, etc) should still show as "Accepted"
+    // because subscription status is different from issue status
+    if (['prepare', 'for_delivery', 'received'].includes(baseStatus)) return 'accepted';
     return baseStatus;
+  };
+
+  // Handle Accept Subscription button click - accept pending subscription
+  const handleAcceptSubscriptionClick = async (serial) => {
+    try {
+      const response = await axios.post(`/api/subscriptions/${serial.subscription_id}/accept`);
+      if (response.data.success) {
+        Swal.fire({
+          title: 'Subscription Accepted',
+          text: 'The subscription has been accepted. Serial issues are now visible in the "Serial Issues (Recurring)" tab.',
+          icon: 'success',
+          timer: 2000,
+        });
+        // Refresh the list
+        fetchSerials();
+      }
+    } catch (error) {
+      Swal.fire({
+        title: 'Error',
+        text: error.response?.data?.message || 'Failed to accept subscription',
+        icon: 'error',
+      });
+    }
   };
 
   // Handle Accept button click - show confirmation
@@ -444,6 +461,18 @@ function Dashboard_Supplier_ListofSerial() {
 
   // Get status display info
   const getStatusInfo = (serial) => {
+    // Check subscription status first - if pending, show pending status
+    if (serial.subscription_status === 'pending') {
+      return null; // Return null to show "Accept Subscription" button
+    }
+    // If subscription is accepted or delivered, show that status
+    if (serial.subscription_status === 'accepted' || serial.subscription_status === 'Active') {
+      return { value: 'accepted', label: 'Accepted', color: '#d4edda', textColor: '#155724' };
+    }
+    if (serial.subscription_status === 'Delivered') {
+      return { value: 'delivered', label: 'Delivered', color: '#28a745', textColor: '#fff' };
+    }
+    // For non-meta statuses, use the serial status flow
     const status = getFinalStatus(serial);
     if (!status || status === 'pending') return null;
     return statusFlow.find(opt => opt.value === status);
@@ -529,10 +558,56 @@ function Dashboard_Supplier_ListofSerial() {
         <TopBar />
         {activeSidebar === 2 && (
           <div style={{ padding: "40px 60px" }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 32, color: "#222" }}>
+            <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24, color: "#222" }}>
               Serial Subscription Period
             </h1>
-            
+
+            {/* Tab Navigation */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 24 }}>
+              <button
+                onClick={() => setActiveTab('serials')}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  background: activeTab === 'serials' ? '#004A98' : '#e9ecef',
+                  color: activeTab === 'serials' ? '#fff' : '#495057',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <MdListAlt size={18} />
+                All Serials
+              </button>
+              <button
+                onClick={() => setActiveTab('issues')}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  background: activeTab === 'issues' ? '#004A98' : '#e9ecef',
+                  color: activeTab === 'issues' ? '#fff' : '#495057',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <MdViewList size={18} />
+                Serial Issues (Recurring)
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'serials' ? (
             <div
               style={{
                 background: "#fff",
@@ -648,68 +723,46 @@ function Dashboard_Supplier_ListofSerial() {
                         </td>
                         <td style={{ padding: "16px 8px", textAlign: "center", width: 180, position: 'relative' }}>
                           {getStatusInfo(row) ? (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                              <button
-                                onClick={() => handleStatusClick(row)}
-                                disabled={isFinalStatus(row)}
-                                style={{
-                                  padding: '8px 16px',
-                                  borderRadius: 20,
-                                  border: 'none',
-                                  background: getStatusInfo(row).color,
-                                  color: getStatusInfo(row).textColor || '#fff',
-                                  cursor: isFinalStatus(row) ? 'default' : 'pointer',
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  transition: 'all 0.2s',
-                                  opacity: isFinalStatus(row) ? 1 : 0.9,
-                                }}
-                                onMouseOver={(e) => !isFinalStatus(row) && (e.target.style.opacity = '1')}
-                                onMouseOut={(e) => !isFinalStatus(row) && (e.target.style.opacity = '0.9')}
-                                title={isFinalStatus(row) ? 'Final status reached' : 'Click to advance status'}
-                              >
-                                {getStatusInfo(row).label}
-                              </button>
-                              {getFinalStatus(row) === 'for_return' && (
-                                <button
-                                  onClick={() => handleShowReason(row)}
-                                  style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 6,
-                                    border: '1px solid #721c24',
-                                    background: '#fff',
-                                    color: '#721c24',
-                                    cursor: 'pointer',
-                                    fontSize: 12,
-                                    fontWeight: 500,
-                                    transition: 'all 0.2s',
-                                  }}
-                                  onMouseOver={(e) => { e.target.style.background = '#721c24'; e.target.style.color = '#fff'; }}
-                                  onMouseOut={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#721c24'; }}
-                                  title="View remarks for return"
-                                >
-                                  Remarks
-                                </button>
-                              )}
-                            </div>
+                            // Show status as non-clickable badge after acceptance
+                            <span
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 20,
+                                background: getStatusInfo(row).color,
+                                color: getStatusInfo(row).textColor || '#fff',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                display: 'inline-block',
+                              }}
+                            >
+                              {getStatusInfo(row).label}
+                            </span>
                           ) : (
                             <button
-                              onClick={() => handleAcceptClick(row)}
+                              onClick={() => {
+                                // If subscription is pending, accept the subscription; otherwise, accept the serial
+                                if (row.subscription_status === 'pending') {
+                                  handleAcceptSubscriptionClick(row);
+                                } else {
+                                  handleAcceptClick(row);
+                                }
+                              }}
                               style={{
                                 padding: '8px 16px',
                                 borderRadius: 6,
                                 border: 'none',
-                                background: '#28a745',
+                                background: row.subscription_status === 'pending' ? '#ff9800' : '#28a745',
                                 color: '#fff',
                                 cursor: 'pointer',
                                 fontSize: 13,
                                 fontWeight: 600,
                                 transition: 'all 0.2s',
                               }}
-                              onMouseOver={(e) => e.target.style.background = '#218838'}
-                              onMouseOut={(e) => e.target.style.background = '#28a745'}
+                              onMouseOver={(e) => e.target.style.background = row.subscription_status === 'pending' ? '#f57c00' : '#218838'}
+                              onMouseOut={(e) => e.target.style.background = row.subscription_status === 'pending' ? '#ff9800' : '#28a745'}
+                              title={row.subscription_status === 'pending' ? 'Accept Subscription' : 'Accept Serial'}
                             >
-                              Accept
+                              {row.subscription_status === 'pending' ? 'Accept Subscription' : 'Accept'}
                             </button>
                           )}
                         </td>
@@ -758,6 +811,27 @@ function Dashboard_Supplier_ListofSerial() {
                 </span>
               </div>
             </div>
+            ) : (
+              /* Serial Issues Tab - Recurring deliveries */
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 12,
+                  boxShadow: "0 2px 8px #0001",
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    background: "#004A98",
+                    borderTopLeftRadius: 12,
+                    borderTopRightRadius: 12,
+                    height: 32,
+                  }}
+                ></div>
+                <SupplierSerialIssues supplierName={auth?.user?.name || ''} />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -33,6 +33,7 @@ class Subscription extends Model
         'created_by', // TPU user ID who created
         'serials', // Array of serial items
         'transactions', // Array of payment transactions
+        'total_issues', // Total number of serial issues for recurring delivery
     ];
 
     /**
@@ -49,6 +50,7 @@ class Subscription extends Model
             'progress' => 'integer',
             'serials' => 'array',
             'transactions' => 'array',
+            'total_issues' => 'integer',
         ];
     }
 
@@ -74,6 +76,14 @@ class Subscription extends Model
     public function supplier()
     {
         return $this->belongsTo(SupplierAccount::class, 'supplier_id');
+    }
+
+    /**
+     * Get the serial issues for this subscription
+     */
+    public function serialIssues()
+    {
+        return $this->hasMany(SerialIssue::class, 'subscription_id', '_id');
     }
 
     /**
