@@ -1,13 +1,12 @@
-# apc-mssyadd1-template
-Template repository for APC MSSYADD1   
+# apc-PROJMAN-template
+Template repository for APC PROJMAN     
   
-Group Name: CyberSentinels  
+Group Name: CyberSentinels    
    
 Team Leader:
   Fracie Princes G. Puyot    
   
 Members:  
   Ren Henry B Delgado    
-  Mohasien Alingan  
-  Mamadou Djouhe Bah     
+  Mohasien Alingan        
   Jerwin James Bueno  
