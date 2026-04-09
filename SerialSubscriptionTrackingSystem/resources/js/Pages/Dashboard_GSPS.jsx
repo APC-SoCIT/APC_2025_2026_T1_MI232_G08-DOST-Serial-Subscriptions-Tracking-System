@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import GSPSLayout from "@/Layouts/GSPSLayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
@@ -22,6 +22,13 @@ const MONTHS = [
   "July","August","September","October","November","December"
 ];
 
+const formatDateInput = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 const COLORS = {
   received: "#2563eb",
   pending: "#facc15",
@@ -37,10 +44,10 @@ const monthRange = (start, end) =>
   MONTHS.slice(monthIndex(start), monthIndex(end) + 1);
 
 const firstDayOfMonth = (year, month) =>
-  `${year}-${String(monthIndex(month)+1).padStart(2,"0")}-01`;
+  formatDateInput(new Date(year, monthIndex(month), 1));
 
 const lastDayOfMonth = (year, month) =>
-  new Date(year, monthIndex(month)+1, 0).toISOString().split("T")[0];
+  formatDateInput(new Date(year, monthIndex(month)+1, 0));
 
 const yearWeight = (year) =>
   ({2022:0.85, 2023:0.95, 2024:1, 2025:1.1}[year] || 1);
@@ -97,6 +104,7 @@ export default function DashboardGSPS() {
   const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
   const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
   const [showFilter, setShowFilter] = useState(false);
+  const [activeKpi, setActiveKpi] = useState(null);
 
   /* ===== TEMP STATE ===== */
 
@@ -114,6 +122,20 @@ export default function DashboardGSPS() {
     setYear(tempYear);
     setStartDate(tempStartDate);
     setEndDate(tempEndDate);
+    setActiveKpi(null);
+
+    const isYearRange =
+      tempStartDate === firstDayOfMonth(tempYear, "January") &&
+      tempEndDate === lastDayOfMonth(tempYear, "December");
+
+    if (tempStartMonth) {
+      setFilterMode("month");
+    } else if (isYearRange) {
+      setFilterMode("year");
+    } else {
+      const spanDays = (new Date(tempEndDate) - new Date(tempStartDate)) / (1000 * 60 * 60 * 24);
+      setFilterMode(spanDays <= 7 ? "week" : "date");
+    }
 
     const s = new Date(tempStartDate);
     const e = new Date(tempEndDate);
@@ -136,8 +158,8 @@ export default function DashboardGSPS() {
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate()+6);
 
-    setTempStartDate(monday.toISOString().split("T")[0]);
-    setTempEndDate(sunday.toISOString().split("T")[0]);
+    setTempStartDate(formatDateInput(monday));
+    setTempEndDate(formatDateInput(sunday));
   };
 
   /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
@@ -275,6 +297,56 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     { name: "Returned", value: kpis.returned }
   ];
 
+  const kpiCards = useMemo(() => ([
+    {
+      id: "received",
+      title: "Received Deliveries",
+      value: kpis.received,
+      sourceLabel: "Delivery Status",
+      sourcePath: "/dashboard-gsps-deliverystatus",
+      chartIds: ["intake", "pipeline"],
+    },
+    {
+      id: "forwarded",
+      title: "Forwarded to Inspection",
+      value: kpis.forwarded,
+      sourceLabel: "Delivery Status",
+      sourcePath: "/dashboard-gsps-deliverystatus",
+      chartIds: ["pipeline", "monthlyForwarded", "outcome"],
+    },
+    {
+      id: "pending",
+      title: "Pending Forwarding",
+      value: kpis.pending,
+      sourceLabel: "Delivery Status",
+      sourcePath: "/dashboard-gsps-deliverystatus",
+      chartIds: ["pipeline"],
+    },
+    {
+      id: "returned",
+      title: "Returned / Issues",
+      value: kpis.returned,
+      sourceLabel: "Delivery Status",
+      sourcePath: "/dashboard-gsps-deliverystatus",
+      chartIds: ["pipeline", "outcome"],
+    },
+    {
+      id: "success",
+      title: "Handling Success Rate",
+      value: `${kpis.success}%`,
+      sourceLabel: "Delivery Status",
+      sourcePath: "/dashboard-gsps-deliverystatus",
+      chartIds: ["pipeline", "outcome"],
+    },
+  ]), [kpis]);
+
+  const selectedKpi = activeKpi
+    ? kpiCards.find((card) => card.id === activeKpi) || null
+    : null;
+  const visibleKpiCards = kpiCards;
+  const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
+  const hasKpiData = (kpis.received + kpis.forwarded + kpis.pending + kpis.returned) > 0;
+
   /* ================= UI ================= */
 
   return (
@@ -298,8 +370,11 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                 onClick={() => {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
+                    const fullYearStart = firstDayOfMonth(year, "January");
+                    const fullYearEnd = lastDayOfMonth(year, "December");
+
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(startDate === fullYearStart && endDate === fullYearEnd ? "" : startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
                   }
@@ -361,8 +436,15 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     onChange={(e) => {
                       const selectedYear = parseInt(e.target.value);
                       setTempYear(selectedYear);
-                      setTempStartDate(firstDayOfMonth(selectedYear, tempStartMonth || "January"));
-                      setTempEndDate(lastDayOfMonth(selectedYear, tempStartMonth || "December"));
+
+                      if (tempStartMonth) {
+                        setTempStartDate(firstDayOfMonth(selectedYear, tempStartMonth));
+                        setTempEndDate(lastDayOfMonth(selectedYear, tempStartMonth));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(selectedYear, "January"));
+                        setTempEndDate(lastDayOfMonth(selectedYear, "December"));
+                      }
+
                       setCalendarYear(selectedYear);
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -384,6 +466,9 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                        setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -408,8 +493,8 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                         weekStart.setDate(janFirst.getDate() + daysOffset - janFirst.getDay() + 1);
                         const weekEnd = new Date(weekStart);
                         weekEnd.setDate(weekStart.getDate() + 6);
-                        setTempStartDate(weekStart.toISOString().split("T")[0]);
-                        setTempEndDate(weekEnd.toISOString().split("T")[0]);
+                        setTempStartDate(formatDateInput(weekStart));
+                        setTempEndDate(formatDateInput(weekEnd));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -475,17 +560,45 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
         </div>
 
         {/* ===== KPIs ===== */}
-        <div className="grid md:grid-cols-5 gap-4">
-          <KPI title="Received Deliveries" value={kpis.received}/>
-          <KPI title="Forwarded to Inspection" value={kpis.forwarded}/>
-          <KPI title="Pending Forwarding" value={kpis.pending}/>
-          <KPI title="Returned / Issues" value={kpis.returned}/>
-          <KPI title="Handling Success Rate" value={`${kpis.success}%`}/>
+        {selectedKpi && (
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-sm text-blue-900">
+              Focus view: <span className="font-semibold">{selectedKpi.title}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveKpi(null)}
+              className="px-3 py-1.5 text-sm text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-100"
+            >
+              Show All Metrics
+            </button>
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-5">
+          {visibleKpiCards.map((card) => (
+            <KPI
+              key={card.id}
+              title={card.title}
+              value={card.value}
+              sourceLabel={card.sourceLabel}
+              isActive={card.id === activeKpi}
+              onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
+              onSeeMore={() => router.visit(card.sourcePath)}
+            />
+          ))}
         </div>
 
         {/* ===== CHARTS ===== */}
+        {!hasKpiData && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            No dashboard records found for the current date range. Adjust filters to load data.
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6">
 
+          {shouldShowChart("intake") && (
           <Chart title="Delivery Intake Trend">
             <ResponsiveContainer height={280}>
               <LineChart data={intakeTrend}>
@@ -496,7 +609,9 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
               </LineChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("pipeline") && (
           <Chart title="Delivery Pipeline Status">
             <ResponsiveContainer height={280}>
               <AreaChart data={pipelineData}>
@@ -514,7 +629,9 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
               </AreaChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("monthlyForwarded") && (
           <Chart title="Monthly Forwarded to Inspection">
             <ResponsiveContainer height={280}>
               <BarChart data={forwardedMonthly}>
@@ -525,7 +642,9 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
               </BarChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("outcome") && (
           <Chart title="Inspection Handover Outcome">
             <ResponsiveContainer height={280}>
               <PieChart>
@@ -544,6 +663,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
               </PieChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
         </div>
       </div>
@@ -553,10 +673,35 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
 /* ================= UI ================= */
 
-const KPI = ({title,value}) => (
-  <div className="bg-white p-5 rounded-xl shadow">
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={onSelect}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    }}
+    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+  >
     <p className="text-sm font-semibold text-gray-600">{title}</p>
     <p className="text-3xl font-extrabold">{value}</p>
+    <div className="mt-4 flex justify-end">
+      <button
+        type="button"
+        aria-label={`See more in ${sourceLabel}`}
+        title={`Open ${sourceLabel}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSeeMore();
+        }}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+      >
+        See More
+      </button>
+    </div>
   </div>
 );
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import InspectionLayout from "@/Layouts/InspectionLayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
@@ -98,6 +98,7 @@ const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
 const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
 const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilter, setShowFilter] = useState(false);
 
@@ -251,6 +252,55 @@ const factor = useMemo(() => {
     { name: "Inspected (Passed)", value: kpis.inspected },
     { name: "Returned", value: kpis.returned }
   ];
+
+  const kpiCards = useMemo(() => ([
+    {
+      id: "received",
+      title: "Received from GSPS",
+      value: kpis.received,
+      sourceLabel: "List of Serials",
+      sourcePath: "/inspection-serials",
+      chartIds: ["intake", "pipeline"],
+    },
+    {
+      id: "inspected",
+      title: "Inspected (Passed)",
+      value: kpis.inspected,
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
+      chartIds: ["pipeline", "monthlyInspected", "outcome"],
+    },
+    {
+      id: "returned",
+      title: "Returned (Damaged)",
+      value: kpis.returned,
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
+      chartIds: ["pipeline", "outcome"],
+    },
+    {
+      id: "pending",
+      title: "Pending Inspection",
+      value: kpis.pending,
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
+      chartIds: ["pipeline"],
+    },
+    {
+      id: "success",
+      title: "Inspection Success Rate",
+      value: `${kpis.success}%`,
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
+      chartIds: ["monthlyInspected", "outcome"],
+    },
+  ]), [kpis]);
+
+  const selectedKpi = activeKpi
+    ? kpiCards.find((card) => card.id === activeKpi) || null
+    : null;
+  const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
+  const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
   /* ================= UI ================= */
 
@@ -453,17 +503,39 @@ const factor = useMemo(() => {
 
 
         {/* KPIs */}
-        <div className="grid md:grid-cols-5 gap-4">
-          <KPI title="Received from GSPS" value={kpis.received}/>
-          <KPI title="Inspected (Passed)" value={kpis.inspected}/>
-          <KPI title="Returned (Damaged)" value={kpis.returned}/>
-          <KPI title="Pending Inspection" value={kpis.pending}/>
-          <KPI title="Inspection Success Rate" value={`${kpis.success}%`}/>
+        {selectedKpi && (
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-sm text-blue-900">
+              Focus view: <span className="font-semibold">{selectedKpi.title}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveKpi(null)}
+              className="px-3 py-1.5 text-sm text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-100"
+            >
+              Show All Metrics
+            </button>
+          </div>
+        )}
+
+        <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-5"}`}>
+          {visibleKpiCards.map((card) => (
+            <KPI
+              key={card.id}
+              title={card.title}
+              value={card.value}
+              sourceLabel={card.sourceLabel}
+              isActive={card.id === activeKpi}
+              onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
+              onSeeMore={() => router.visit(card.sourcePath)}
+            />
+          ))}
         </div>
 
         {/* CHARTS */}
         <div className="grid md:grid-cols-2 gap-6">
 
+          {shouldShowChart("intake") && (
           <Chart title="Inspection Intake Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={intakeTrend}>
@@ -474,7 +546,9 @@ const factor = useMemo(() => {
               </LineChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+      {shouldShowChart("pipeline") && (
       <Chart title="Inspection Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
@@ -534,8 +608,10 @@ const factor = useMemo(() => {
     </AreaChart>
   </ResponsiveContainer>
 </Chart>
+      )}
 
 
+          {shouldShowChart("monthlyInspected") && (
           <Chart title="Monthly Inspected Volume">
             <ResponsiveContainer height={300}>
               <BarChart data={inspectedVolume}>
@@ -546,7 +622,9 @@ const factor = useMemo(() => {
               </BarChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("outcome") && (
           <Chart title="Inspection Outcome">
             <ResponsiveContainer height={300}>
               <PieChart>
@@ -565,6 +643,7 @@ const factor = useMemo(() => {
               </PieChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
         </div>
       </div>
@@ -574,10 +653,35 @@ const factor = useMemo(() => {
 
 /* UI */
 
-const KPI = ({title,value}) => (
-  <div className="bg-white p-5 rounded-xl shadow">
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={onSelect}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    }}
+    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+  >
     <p className="text-sm text-gray-600">{title}</p>
     <p className="text-3xl font-bold">{value}</p>
+    <div className="mt-4 flex justify-end">
+      <button
+        type="button"
+        aria-label={`See more in ${sourceLabel}`}
+        title={`Open ${sourceLabel}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSeeMore();
+        }}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+      >
+        See More
+      </button>
+    </div>
   </div>
 );
 
