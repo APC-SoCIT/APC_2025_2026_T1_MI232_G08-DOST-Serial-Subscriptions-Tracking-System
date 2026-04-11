@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import TPULayout from "@/Layouts/TPULayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FaFilter, FaFileExcel } from 'react-icons/fa';
@@ -92,6 +92,7 @@ const [tempFilterMode, setTempFilterMode] = useState("year"); // popup
   const [endMonth, setEndMonth] = useState("December");
   const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
   const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [activeKpi, setActiveKpi] = useState(null);
 
   const [showFilter, setShowFilter] = useState(false);
 
@@ -295,6 +296,63 @@ useEffect(() => {
       { name: "Returned", value: kpis.returned || 0 },
     ];
   }, [kpis]);
+
+  const kpiCards = useMemo(() => ([
+    {
+      id: "total",
+      title: "Total Serials Encoded",
+      value: kpis.total,
+      sourceLabel: "Subscription",
+      sourcePath: "/dashboard-tpu-subscriptiontracking",
+      chartIds: ["pipeline", "supplierRanking"],
+    },
+    {
+      id: "delivered",
+      title: "Delivered to GSPS",
+      value: kpis.delivered,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline", "deliveryTrend"],
+    },
+    {
+      id: "awaiting",
+      title: "Awaiting delivery",
+      value: kpis.awaiting,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline"],
+    },
+    {
+      id: "returned",
+      title: "Overdue / Returned",
+      value: kpis.returned,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline", "inspectionOutcomes"],
+    },
+    {
+      id: "inspected",
+      title: "Inspected",
+      value: kpis.inspected,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline", "inspectionOutcomes"],
+    },
+    {
+      id: "success",
+      title: "Delivery Success Rate",
+      value: `${kpis.success}%`,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["deliveryTrend", "inspectionOutcomes", "supplierRanking"],
+    },
+  ]), [kpis]);
+
+  const selectedKpi = activeKpi
+    ? kpiCards.find((card) => card.id === activeKpi) || null
+    : null;
+  const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
+  const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
   const supplierRanking = [
     { name:"ABC Books", value: 100 },
@@ -516,18 +574,39 @@ useEffect(() => {
         </div>
 
         {/* KPIs */}
-        <div className="grid md:grid-cols-6 gap-4">
-          <KPI title="Total Serials Encoded" value={kpis.total}/>
-          <KPI title="Delivered to GSPS" value={kpis.delivered}/>
-          <KPI title="Awaiting delivery" value={kpis.awaiting}/>
-          <KPI title="Overdue / Returned" value={kpis.returned}/>
-          <KPI title="Inspected" value={kpis.inspected}/>
-          <KPI title="Delivery Success Rate" value={`${kpis.success}%`}/>
+        {selectedKpi && (
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-sm text-blue-900">
+              Focus view: <span className="font-semibold">{selectedKpi.title}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveKpi(null)}
+              className="px-3 py-1.5 text-sm text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-100"
+            >
+              Show All Metrics
+            </button>
+          </div>
+        )}
+
+        <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-6"}`}>
+          {visibleKpiCards.map((card) => (
+            <KPI
+              key={card.id}
+              title={card.title}
+              value={card.value}
+              sourceLabel={card.sourceLabel}
+              isActive={card.id === activeKpi}
+              onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
+              onSeeMore={() => router.visit(card.sourcePath)}
+            />
+          ))}
         </div>
 
         {/* Charts */}
         <div className="grid md:grid-cols-2 gap-6">
 
+ {shouldShowChart("pipeline") && (
  <Chart title="Serial Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
@@ -593,9 +672,10 @@ useEffect(() => {
     </AreaChart>
   </ResponsiveContainer>
 </Chart>
+ )}
 
 
-
+          {shouldShowChart("deliveryTrend") && (
           <Chart title="Delivery Performance Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={deliveryTrend}>
@@ -606,7 +686,9 @@ useEffect(() => {
               </LineChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("supplierRanking") && (
           <Chart title="Supplier Reliability Ranking">
             <ResponsiveContainer height={300}>
               <BarChart data={supplierRanking} layout="vertical">
@@ -619,7 +701,9 @@ useEffect(() => {
               </BarChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
+          {shouldShowChart("inspectionOutcomes") && (
           <Chart title="Inspection Outcomes">
             <ResponsiveContainer height={300}>
               <PieChart>
@@ -639,6 +723,7 @@ useEffect(() => {
               </PieChart>
             </ResponsiveContainer>
           </Chart>
+          )}
 
         </div>
       </div>
@@ -648,10 +733,35 @@ useEffect(() => {
 
 /* ================= UI ================= */
 
-const KPI = ({title,value}) => (
-  <div className="bg-white p-5 rounded-xl shadow">
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={onSelect}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    }}
+    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+  >
     <p className="text-sm text-gray-600">{title}</p>
     <p className="text-3xl font-bold">{value}</p>
+    <div className="mt-4 flex justify-end">
+      <button
+        type="button"
+        aria-label={`See more in ${sourceLabel}`}
+        title={`Open ${sourceLabel}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSeeMore();
+        }}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+      >
+        See More
+      </button>
+    </div>
   </div>
 );
 
