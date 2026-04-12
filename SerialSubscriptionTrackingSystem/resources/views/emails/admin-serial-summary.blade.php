@@ -93,23 +93,23 @@
                         </td>
                     </tr>
                     
-                    <!-- Status Timeline -->
+                    <!-- Serial Journey (Status Timeline) -->
                     <tr>
                         <td style="padding: 20px 40px 30px;">
                             <h2 style="margin: 0 0 20px 0; font-size: 18px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                                📜 Status Journey
+                                📜 Serial Journey
                             </h2>
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                                 @foreach($statusHistory as $index => $history)
                                 <tr>
                                     <td style="padding: 0; vertical-align: top; width: 30px;">
-                                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: {{ $index === 0 ? '#004A98' : '#ccc' }}; margin: 4px auto;"></div>
+                                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: #ccc; margin: 4px auto;"></div>
                                         @if($index < count($statusHistory) - 1)
                                         <div style="width: 2px; height: 30px; background-color: #ddd; margin: 0 auto;"></div>
                                         @endif
                                     </td>
                                     <td style="padding: 0 0 15px 15px; vertical-align: top;">
-                                        <p style="margin: 0; font-size: 14px; font-weight: 600; color: {{ $index === 0 ? '#004A98' : '#333' }};">
+                                        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">
                                             {{ $history['status_label'] ?? ucfirst(str_replace('_', ' ', $history['status'])) }}
                                         </p>
                                         <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">

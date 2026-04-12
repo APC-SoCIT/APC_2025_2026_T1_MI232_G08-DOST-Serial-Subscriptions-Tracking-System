@@ -1,0 +1,85 @@
+$testEmails = [
+    'tpu' => 'fobov47923@muncloud.com',
+    'gsps' => 'jokepa9809@muncloud.com',
+    'inspection' => 'rayipi9335@exespay.com',
+    'admin' => 'sibohov673@exespay.com',
+    'supplier' => 'febagev799@fabaos.com',
+];
+
+echo "╔════════════════════════════════════════════════════════════╗\n";
+echo "║          RECEIVED NOTIFICATION EMAIL TEST                 ║\n";
+echo "╚════════════════════════════════════════════════════════════╝\n\n";
+
+echo "📧 Checking test user email addresses...\n";
+foreach ($testEmails as $role => $email) {
+    $user = \App\Models\User::where('role', $role)->first();
+    if ($user) {
+        echo "   ✓ {$role}: " . $user->email . "\n";
+    }
+}
+
+echo "\n🔍 Finding subscription with serial for testing...\n";
+$subscription = \App\Models\Subscription::where('serial_title', '4 Seasons')->first();
+
+if (!$subscription) {
+    echo "   ✗ ERROR: 4 Seasons subscription not found!\n";
+    exit();
+}
+
+echo "   ✓ Found: " . $subscription->serial_title . "\n";
+echo "   • Supplier: " . $subscription->supplier_name . "\n";
+echo "   • ID: " . $subscription->_id . "\n";
+
+$issue = \App\Models\SerialIssue::where('subscription_id', $subscription->_id)->first();
+
+if (!$issue) {
+    echo "   ✗ ERROR: No issues found!\n";
+    exit();
+}
+
+echo "   ✓ Issue #" . $issue->issue_number . " found\n";
+echo "   • Current status: " . $issue->status . "\n";
+echo "   • Issue ID: " . $issue->_id . "\n";
+
+$beforeCount = \App\Models\UserNotification::count();
+echo "\n📊 Notifications BEFORE: $beforeCount\n";
+
+echo "\n🚀 Triggering RECEIVED notification...\n";
+\App\Services\ProcessMovementService::createStatusNotifications(
+    'received',
+    $subscription->serial_title . " - Issue #" . $issue->issue_number,
+    (string) $subscription->_id,
+    "ISSUE-" . $issue->issue_number,
+    $subscription->supplier_name,
+    (string) $issue->_id,
+    'gsps',
+    'Test GSPS User'
+);
+
+echo "   ✓ Notification queued!\n";
+
+$afterCount = \App\Models\UserNotification::count();
+$newCount = $afterCount - $beforeCount;
+echo "\n📬 Notifications AFTER: $afterCount (+" . $newCount . " new)\n";
+
+echo "\n📧 New notifications created:\n";
+if ($newCount > 0) {
+    $newNotifications = \App\Models\UserNotification::orderBy('created_at', 'desc')->limit($newCount)->get();
+    foreach ($newNotifications as $n) {
+        $user = \App\Models\User::findById($n->user_id);
+        $email = $user?->email ?? 'unknown';
+        echo "   • " . strtoupper($n->user_role) . " ({$email}): " . $n->title . "\n";
+    }
+}
+
+$queuedJobs = \DB::table('jobs')->count();
+echo "\n⏳ Queued jobs: $queuedJobs\n";
+
+echo "\n✅ TEST COMPLETE!\n";
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+echo "Expected emails sent to:\n";
+foreach ($testEmails as $role => $email) {
+    echo "   • {$role}: {$email}\n";
+}
+echo "\nCheck your email inboxes and spam folders for the notifications!\n";
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";

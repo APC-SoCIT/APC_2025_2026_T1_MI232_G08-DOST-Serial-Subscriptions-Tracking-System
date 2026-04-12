@@ -7,6 +7,8 @@ use App\Mail\AdminSerialSummaryNotification;
 use App\Models\SupplierAccount;
 use App\Models\User;
 use App\Models\ProcessMovementLog;
+use App\Models\Subscription;
+use App\Models\SerialIssue;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Carbon;
@@ -70,7 +72,8 @@ class EmailNotificationService
         ?string $supplierName = null,
         ?string $subscriptionId = null,
         ?string $serialIssn = null,
-        ?string $actorName = null
+        ?string $actorName = null,
+        ?string $issueId = null
     ): bool {
         // Check if this status should trigger a notification
         if (!isset(self::$notifiableStatuses[strtolower($newStatus)])) {
@@ -98,8 +101,11 @@ class EmailNotificationService
                 return false;
             }
 
-            $updateDateTime = Carbon::now()->format('F j, Y \a\t g:i A');
+            $updateDateTime = Carbon::now(config('app.timezone'))->format('F j, Y \a\t g:i A');
             $action = self::$statusActions[strtolower($newStatus)] ?? null;
+
+            // Fetch recurring issue information if subscription ID provided
+            $recurringInfo = self::getRecurringIssueInfo($subscriptionId, $issueId);
 
             $sentCount = 0;
             foreach ($recipients as $recipient) {
@@ -108,7 +114,7 @@ class EmailNotificationService
                     $recipient['email'] .
                     $serialTitle .
                     $newStatus .
-                    Carbon::now()->format('Y-m-d')
+                    Carbon::now(config('app.timezone'))->format('Y-m-d')
                 );
 
                 // Skip if already sent today
@@ -126,7 +132,12 @@ class EmailNotificationService
                         $supplierName,
                         $recipient['name'],
                         $actorName,
-                        $targetRole
+                        $targetRole,
+                        $recurringInfo['issue_number'] ?? null,
+                        $recurringInfo['total_issues'] ?? null,
+                        $recurringInfo['frequency'] ?? null,
+                        $recurringInfo['expected_delivery_date'] ?? null,
+                        $recurringInfo['next_issue_date'] ?? null
                     ));
 
                 // Mark as sent
@@ -137,6 +148,8 @@ class EmailNotificationService
                     'to' => $recipient['email'],
                     'serial_title' => $serialTitle,
                     'status' => $newStatus,
+                    'issue_number' => $recurringInfo['issue_number'] ?? 'N/A',
+                    'frequency' => $recurringInfo['frequency'] ?? 'N/A',
                 ]);
             }
 
@@ -173,7 +186,7 @@ class EmailNotificationService
                 return false;
             }
 
-            $updateDateTime = Carbon::now()->format('F j, Y \a\t g:i A');
+            $updateDateTime = Carbon::now(config('app.timezone'))->format('F j, Y \a\t g:i A');
             
             // Build status history from ProcessMovementLog
             $statusHistory = self::getStatusHistory($subscriptionId, $serialIssn, $serialTitle, $supplierName, $currentStatus);
@@ -189,7 +202,7 @@ class EmailNotificationService
                     $serialTitle .
                     $currentStatus .
                     'admin_summary' .
-                    Carbon::now()->format('Y-m-d-H')
+                    Carbon::now(config('app.timezone'))->format('Y-m-d-H')
                 );
 
                 // Skip if already sent this hour
@@ -235,10 +248,24 @@ class EmailNotificationService
 
     /**
      * Get status history for a serial from ProcessMovementLog
+     * Returns history in DESCENDING order (newest/most recent at TOP, oldest at BOTTOM)
+     * All timestamps are converted to the app timezone (Asia/Manila by default)
      */
     private static function getStatusHistory(?string $subscriptionId, ?string $serialIssn, string $serialTitle, ?string $supplierName = null, string $currentStatus = 'unknown'): array
     {
         $history = [];
+        $appTimezone = config('app.timezone');
+        
+        // Add current status at the TOP (most recent) - use app timezone
+        $now = Carbon::now($appTimezone);
+        $history[] = [
+            'status' => $currentStatus,
+            'status_label' => ucfirst(str_replace('_', ' ', $currentStatus)),
+            'date' => $now->format('M j, Y'),
+            'time' => $now->format('g:i A'),
+            'actor' => 'System',
+            'description' => null,
+        ];
         
         // Try to get from ProcessMovementLog
         if ($subscriptionId) {
@@ -249,32 +276,39 @@ class EmailNotificationService
                         $q->orWhere('record_title', 'like', "%{$serialIssn}%");
                     }
                 })
-                ->orderBy('created_at', 'desc')
+                ->orderBy('created_at', 'desc')  // DESC order: newest first
                 ->limit(10)
                 ->get();
 
             foreach ($logs as $log) {
+                // Convert UTC timestamp to app timezone
+                $logTime = $log->created_at 
+                    ? $log->created_at->setTimezone($appTimezone) 
+                    : null;
+                
                 $history[] = [
                     'status' => $log->status_to ?? $log->action ?? 'unknown',
                     'status_label' => ucfirst(str_replace('_', ' ', $log->status_to ?? $log->action ?? 'unknown')),
-                    'date' => $log->created_at ? $log->created_at->format('M j, Y') : 'N/A',
-                    'time' => $log->created_at ? $log->created_at->format('g:i A') : 'N/A',
+                    'date' => $logTime ? $logTime->format('M j, Y') : 'N/A',
+                    'time' => $logTime ? $logTime->format('g:i A') : 'N/A',
                     'actor' => $log->from_user_name ?? 'System',
                     'description' => $log->remarks ?? null,
                 ];
             }
             
-            // Add 'created' at the end if not present
+            // Check if 'created' status is already in history
             $hasCreated = collect($history)->contains(function ($h) {
                 return ($h['status'] === 'created') || (stripos($h['status_label'] ?? '', 'created') !== false);
             });
             
+            // Add 'created' at the BOTTOM (oldest status)
             if (!$hasCreated) {
+                $createdTime = Carbon::now($appTimezone)->subDays(count($history) + 1);
                 $history[] = [
                     'status' => 'created',
                     'status_label' => 'Subscription Created',
-                    'date' => Carbon::now()->subDays(count($history) + 1)->format('M j, Y'),
-                    'time' => '9:00 AM',
+                    'date' => $createdTime->format('M j, Y'),
+                    'time' => $createdTime->format('g:i A'),
                     'actor' => 'TPU User',
                     'description' => 'Serial subscription created and assigned to supplier',
                 ];
@@ -294,13 +328,14 @@ class EmailNotificationService
                 'for_return' => 'Inspection Team',
             ];
             
-            // Handle inspected or for_return
-            if ($currentStatus === 'inspected' || $currentStatus === 'for_return') {
+            // Handle inspected, delivered or for_return
+            $appTz = config('app.timezone');
+            if ($currentStatus === 'inspected' || $currentStatus === 'delivered' || $currentStatus === 'for_return') {
                 $history[] = [
                     'status' => $currentStatus,
-                    'status_label' => $currentStatus === 'inspected' ? 'Delivered (Inspected)' : 'For Return',
-                    'date' => Carbon::now()->format('M j, Y'),
-                    'time' => Carbon::now()->format('g:i A'),
+                    'status_label' => ($currentStatus === 'inspected' || $currentStatus === 'delivered') ? 'Delivered (Inspected)' : 'For Return',
+                    'date' => Carbon::now($appTz)->format('M j, Y'),
+                    'time' => Carbon::now($appTz)->format('g:i A'),
                     'actor' => $statusActors[$currentStatus] ?? 'Inspection Team',
                     'description' => $currentStatus === 'for_return' ? 'Serial marked for return due to issues' : 'Serial inspected and approved',
                 ];
@@ -309,8 +344,8 @@ class EmailNotificationService
                     $history[] = [
                         'status' => $status,
                         'status_label' => $status === 'created' ? 'Subscription Created' : ucfirst(str_replace('_', ' ', $status)),
-                        'date' => Carbon::now()->subDays(count($history))->format('M j, Y'),
-                        'time' => Carbon::now()->subHours(count($history) + 2)->format('g:i A'),
+                        'date' => Carbon::now($appTz)->subDays(count($history))->format('M j, Y'),
+                        'time' => Carbon::now($appTz)->subHours(count($history) + 2)->format('g:i A'),
                         'actor' => $statusActors[$status] ?? 'System',
                         'description' => $status === 'created' ? 'Serial subscription created and assigned to supplier' : null,
                     ];
@@ -320,16 +355,16 @@ class EmailNotificationService
                 $history[] = [
                     'status' => $currentStatus,
                     'status_label' => ucfirst(str_replace('_', ' ', $currentStatus)),
-                    'date' => Carbon::now()->format('M j, Y'),
-                    'time' => Carbon::now()->format('g:i A'),
+                    'date' => Carbon::now($appTz)->format('M j, Y'),
+                    'time' => Carbon::now($appTz)->format('g:i A'),
                     'actor' => $statusActors[$currentStatus] ?? 'System',
                     'description' => null,
                 ];
                 $history[] = [
                     'status' => 'created',
                     'status_label' => 'Subscription Created',
-                    'date' => Carbon::now()->subDays(1)->format('M j, Y'),
-                    'time' => '9:00 AM',
+                    'date' => Carbon::now($appTz)->subDays(1)->format('M j, Y'),
+                    'time' => Carbon::now($appTz)->subDays(1)->format('g:i A'),
                     'actor' => 'TPU User',
                     'description' => 'Serial subscription created and assigned to supplier',
                 ];
@@ -360,98 +395,97 @@ class EmailNotificationService
 
     /**
      * Get email recipients based on role
+     * Uses raw MongoDB queries because Eloquent queries don't work reliably in service context
      */
     private static function getRecipientsForRole(string $role, ?string $supplierName = null): array
     {
         $recipients = [];
 
-        switch (strtolower($role)) {
-            case 'supplier':
-                // Get supplier email by company name
-                if ($supplierName) {
-                    $supplier = SupplierAccount::where('company_name', 'like', "%{$supplierName}%")
-                        ->where('status', 'approved')
-                        ->first();
+        try {
+            // Use MongoDB client directly for reliability
+            $client = new \MongoDB\Client(env('DB_DSN', 'mongodb://localhost:27017'));
+            $db = $client->selectDatabase(env('DB_DATABASE', 'test'));
+            $usersCollection = $db->selectCollection('users');
+            $suppliersCollection = $db->selectCollection('supplier_accounts');
 
-                    if ($supplier && $supplier->email) {
-                        $recipients[] = [
-                            'email' => $supplier->email,
-                            'name' => $supplier->contact_person ?? $supplier->company_name,
-                        ];
-                    }
+            switch (strtolower($role)) {
+                case 'supplier':
+                    // Get supplier email by company name
+                    if ($supplierName) {
+                        // First try SupplierAccount collection
+                        $supplier = $suppliersCollection->findOne([
+                            'company_name' => new \MongoDB\BSON\Regex($supplierName, 'i'),
+                            'status' => 'approved',
+                            'is_disabled' => false
+                        ]);
 
-                    // Also check User table for supplier role
-                    $supplierUser = User::where('role', 'supplier')
-                        ->where(function ($query) use ($supplierName) {
-                            $query->where('name', 'like', "%{$supplierName}%")
-                                  ->orWhere('email', 'like', "%{$supplierName}%");
-                        })
-                        ->first();
-
-                    if ($supplierUser && $supplierUser->email) {
-                        // Avoid duplicate emails
-                        $exists = collect($recipients)->contains('email', $supplierUser->email);
-                        if (!$exists) {
+                        if ($supplier && isset($supplier['email']) && $supplier['email']) {
                             $recipients[] = [
-                                'email' => $supplierUser->email,
-                                'name' => $supplierUser->name,
+                                'email' => $supplier['email'],
+                                'name' => $supplier['contact_person'] ?? $supplier['company_name'],
+                            ];
+                            Log::info("Found supplier in SupplierAccount", [
+                                'supplier_name' => $supplierName,
+                                'email' => $supplier['email'],
+                            ]);
+                        }
+
+                        // Also check users collection for supplier role
+                        $supplierUser = $usersCollection->findOne([
+                            'role' => 'supplier',
+                            'is_disabled' => false,
+                            '$or' => [
+                                ['name' => new \MongoDB\BSON\Regex($supplierName, 'i')],
+                                ['email' => new \MongoDB\BSON\Regex($supplierName, 'i')]
+                            ]
+                        ]);
+
+                        if ($supplierUser && isset($supplierUser['email']) && $supplierUser['email']) {
+                            $exists = collect($recipients)->contains('email', $supplierUser['email']);
+                            if (!$exists) {
+                                $recipients[] = [
+                                    'email' => $supplierUser['email'],
+                                    'name' => $supplierUser['name'],
+                                ];
+                                Log::info("Found supplier in User table", [
+                                    'supplier_name' => $supplierName,
+                                    'email' => $supplierUser['email'],
+                                ]);
+                            }
+                        }
+                    }
+                    break;
+
+                case 'tpu':
+                case 'gsps':
+                case 'inspection':
+                case 'admin':
+                    // Get all users with this role and is_disabled = false
+                    $users = $usersCollection->find([
+                        'role' => $role,
+                        'is_disabled' => false
+                    ]);
+
+                    foreach ($users as $user) {
+                        if (isset($user['email']) && $user['email']) {
+                            $recipients[] = [
+                                'email' => $user['email'],
+                                'name' => $user['name'] ?? 'User',
                             ];
                         }
                     }
-                }
-                break;
 
-            case 'tpu':
-                // Get all TPU users
-                $tpuUsers = User::where('role', 'tpu')->get();
-                foreach ($tpuUsers as $user) {
-                    if ($user->email) {
-                        $recipients[] = [
-                            'email' => $user->email,
-                            'name' => $user->name,
-                        ];
-                    }
-                }
-                break;
+                    Log::info("Found {$role} recipients", [
+                        'role' => $role,
+                        'count' => count($recipients),
+                    ]);
+                    break;
+            }
 
-            case 'gsps':
-                // Get all GSPS users
-                $gspsUsers = User::where('role', 'gsps')->get();
-                foreach ($gspsUsers as $user) {
-                    if ($user->email) {
-                        $recipients[] = [
-                            'email' => $user->email,
-                            'name' => $user->name,
-                        ];
-                    }
-                }
-                break;
-
-            case 'inspection':
-                // Get all Inspection users
-                $inspectionUsers = User::where('role', 'inspection')->get();
-                foreach ($inspectionUsers as $user) {
-                    if ($user->email) {
-                        $recipients[] = [
-                            'email' => $user->email,
-                            'name' => $user->name,
-                        ];
-                    }
-                }
-                break;
-
-            case 'admin':
-                // Get all Admin users
-                $adminUsers = User::where('role', 'admin')->get();
-                foreach ($adminUsers as $user) {
-                    if ($user->email) {
-                        $recipients[] = [
-                            'email' => $user->email,
-                            'name' => $user->name,
-                        ];
-                    }
-                }
-                break;
+        } catch (\Exception $e) {
+            Log::error("Error fetching recipients for role: {$role}", [
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return $recipients;
@@ -560,8 +594,9 @@ class EmailNotificationService
     }
 
     /**
-     * Send confirmation email to the actor (GSPS/Inspection) for their own action
-     * This serves as a copy/confirmation that they completed an action in the system
+     * Send confirmation email to the specific actor (GSPS/Inspection) for their own action
+     * This serves as a copy/confirmation that THEY completed an action in the system
+     * Only the actor who performed the action gets this email, not all users of that role
      */
     public static function sendConfirmationEmail(
         string $serialTitle,
@@ -571,21 +606,93 @@ class EmailNotificationService
         ?string $actorName = null
     ): bool {
         try {
-            // Get all users with the actor's role
-            $recipients = self::getRecipientsForRole($actorRole, $supplierName);
+            Log::info("sendConfirmationEmail called", [
+                'serial_title' => $serialTitle,
+                'status' => $status,
+                'actor_role' => $actorRole,
+                'actor_name' => $actorName,
+            ]);
+
+            // Get the specific actor by name and role
+            if ($actorName && $actorRole) {
+                Log::info("Searching for actor by name and role");
+                
+                // Use raw MongoDB query for reliability
+                try {
+                    $client = new \MongoDB\Client(env('DB_DSN', 'mongodb://localhost:27017'));
+                    $db = $client->selectDatabase(env('DB_DATABASE', 'test'));
+                    $usersCollection = $db->selectCollection('users');
+                    
+                    $user = $usersCollection->findOne([
+                        'role' => $actorRole,
+                        'is_disabled' => false,
+                        '$or' => [
+                            ['name' => $actorName],
+                            ['email' => new \MongoDB\BSON\Regex($actorName, 'i')]
+                        ]
+                    ]);
+                    
+                    Log::info("User search result", [
+                        'actor_name' => $actorName,
+                        'actor_role' => $actorRole,
+                        'user_found' => $user ? 'yes' : 'no',
+                        'user_email' => $user ? ($user['email'] ?? 'N/A') : 'N/A'
+                    ]);
+                    
+                    if ($user && isset($user['email']) && $user['email']) {
+                        $recipients = [[
+                            'email' => $user['email'],
+                            'name' => $user['name'] ?? 'User'
+                        ]];
+                        Log::info("Sending confirmation to specific actor", [
+                            'actor' => $actorName,
+                            'role' => $actorRole,
+                            'email' => $user['email']
+                        ]);
+                    } else {
+                        Log::info("Actor not found for confirmation email", [
+                            'actor_name' => $actorName,
+                            'actor_role' => $actorRole
+                        ]);
+                        return false;
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Error searching for actor", [
+                        'error' => $e->getMessage(),
+                        'actor_name' => $actorName,
+                        'actor_role' => $actorRole
+                    ]);
+                    return false;
+                }
+            } else {
+                Log::info("No actor name or role provided, using fallback");
+                // Fallback: get all users with the actor's role
+                $recipients = self::getRecipientsForRole($actorRole, $supplierName);
+                
+                if (empty($recipients)) {
+                    Log::info("No email recipients found for confirmation to role: {$actorRole}");
+                    return false;
+                }
+            }
 
             if (empty($recipients)) {
-                Log::info("No email recipients found for confirmation to role: {$actorRole}");
+                Log::info("Recipients array is empty");
                 return false;
             }
 
-            $updateDateTime = Carbon::now()->format('F j, Y \a\t g:i A');
+            $updateDateTime = Carbon::now(config('app.timezone'))->format('F j, Y \a\t g:i A');
             
-            // Confirmation-specific messages
+            // Confirmation-specific messages for each role/action
             $confirmationMessages = [
+                // Supplier confirmations
+                'prepare' => "This is to confirm that you have started preparing the serial '{$serialTitle}'. The serial is now in preparation status and awaiting shipment.",
+                'for_delivery' => "This is to confirm that you have marked the serial '{$serialTitle}' as ready for delivery. It is now awaiting pickup by GSPS.",
+                // GSPS confirmation
                 'received' => "This is to confirm that you have successfully received the serial '{$serialTitle}' from {$supplierName}. The serial is now pending inspection.",
+                // Inspection confirmations
                 'inspected' => "This is to confirm that you have successfully inspected the serial '{$serialTitle}' from {$supplierName} and marked it as Delivered.",
-                'for_return' => "This is to confirm that you have marked the serial '{$serialTitle}' from {$supplierName} for return.",
+                'delivered' => "This is to confirm that you have successfully inspected the serial '{$serialTitle}' from {$supplierName} and marked it as Delivered.",
+                'for_return' => "This is to confirm that you have marked the serial '{$serialTitle}' from {$supplierName} for return due to inspection findings.",
             ];
             
             $action = $confirmationMessages[$status] ?? "Action completed for '{$serialTitle}'.";
@@ -598,37 +705,57 @@ class EmailNotificationService
                     $serialTitle .
                     $status .
                     'confirmation' .
-                    Carbon::now()->format('Y-m-d')
+                    Carbon::now(config('app.timezone'))->format('Y-m-d')
                 );
 
                 // Skip if already sent today
                 if (isset(self::$sentNotifications[$notificationHash])) {
+                    Log::info("Skipping duplicate confirmation email", [
+                        'to' => $recipient['email'],
+                        'status' => $status
+                    ]);
                     continue;
                 }
 
-                // Send the confirmation email
-                Mail::to($recipient['email'])
-                    ->send(new SerialStatusNotification(
-                        $serialTitle,
-                        $status,
-                        $updateDateTime,
-                        $action,
-                        $supplierName,
-                        $recipient['name'],
-                        $actorName ?? $recipient['name'],
-                        $actorRole // targetRole is same as actor for confirmation
-                    ));
+                try {
+                    // Send the confirmation email IMMEDIATELY (synchronously, not queued)
+                    Log::info("Attempting to send confirmation email", [
+                        'to' => $recipient['email'],
+                        'serial_title' => $serialTitle,
+                        'status' => $status,
+                        'action_message' => $action
+                    ]);
 
-                // Mark as sent
-                self::$sentNotifications[$notificationHash] = true;
-                $sentCount++;
+                    Mail::to($recipient['email'])
+                        ->sendNow(new SerialStatusNotification(  // Use sendNow() to skip queue
+                            $serialTitle,
+                            $status,
+                            $updateDateTime,
+                            $action,
+                            $supplierName,
+                            $recipient['name'],
+                            $actorName ?? $recipient['name'],
+                            $actorRole // targetRole is same as actor for confirmation
+                        ));
 
-                Log::info("Confirmation email sent", [
-                    'to' => $recipient['email'],
-                    'serial_title' => $serialTitle,
-                    'status' => $status,
-                    'role' => $actorRole,
-                ]);
+                    // Mark as sent
+                    self::$sentNotifications[$notificationHash] = true;
+                    $sentCount++;
+
+                    Log::info("✅ Confirmation email successfully sent", [
+                        'to' => $recipient['email'],
+                        'serial_title' => $serialTitle,
+                        'status' => $status,
+                        'role' => $actorRole,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("❌ Failed to send confirmation email", [
+                        'to' => $recipient['email'],
+                        'serial_title' => $serialTitle,
+                        'status' => $status,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return $sentCount > 0;
@@ -641,6 +768,117 @@ class EmailNotificationService
                 'actor_role' => $actorRole,
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Get recurring issue information for email notifications
+     * Fetches subscription details and calculates recurring issue metrics
+     */
+    private static function getRecurringIssueInfo(?string $subscriptionId, ?string $issueId = null): array
+    {
+        if (!$subscriptionId) {
+            return [];
+        }
+
+        try {
+            // Fetch subscription details
+            $subscription = Subscription::find($subscriptionId);
+            if (!$subscription) {
+                return [];
+            }
+
+            $frequency = strtolower($subscription->frequency ?? 'monthly');
+            $totalIssues = $subscription->total_issues ?? 0;
+
+            if ($totalIssues === 0) {
+                return [];
+            }
+
+            // Get the specific issue if issueId provided, otherwise get the latest
+            $currentIssue = null;
+            if ($issueId) {
+                // Fetch the specific issue by ID
+                $currentIssue = SerialIssue::where('subscription_id', $subscriptionId)
+                    ->where('_id', $issueId)
+                    ->first();
+            }
+            
+            // If no specific issue found or not provided, get the latest issue
+            if (!$currentIssue) {
+                $currentIssue = SerialIssue::where('subscription_id', $subscriptionId)
+                    ->orderBy('issue_number')
+                    ->latest()
+                    ->first();
+            }
+
+            if (!$currentIssue) {
+                return [];
+            }
+
+            $issueNumber = $currentIssue->issue_number ?? 1;
+            $expectedDeliveryDate = $currentIssue->expected_delivery_date 
+                ? Carbon::parse($currentIssue->expected_delivery_date)->format('M d, Y')
+                : null;
+
+            // Calculate next issue date
+            $nextIssueDate = null;
+            if ($issueNumber < $totalIssues) {
+                $nextIssueDate = self::calculateNextIssueDate(
+                    $currentIssue->expected_delivery_date,
+                    $frequency
+                );
+            }
+
+            return [
+                'issue_number' => $issueNumber,
+                'total_issues' => $totalIssues,
+                'frequency' => $frequency,
+                'expected_delivery_date' => $expectedDeliveryDate,
+                'next_issue_date' => $nextIssueDate,
+            ];
+
+        } catch (\Exception $e) {
+            Log::warning("Failed to get recurring issue info", [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Calculate next issue expected date based on frequency
+     * Supports: weekly, biweekly, monthly, quarterly, annually
+     */
+    private static function calculateNextIssueDate(?string $currentDate, string $frequency): ?string
+    {
+        if (!$currentDate) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::parse($currentDate);
+            $frequency = strtolower(trim($frequency ?? 'monthly'));
+
+            $nextDate = match ($frequency) {
+                'weekly' => $date->copy()->addWeek(),
+                'biweekly', 'bi-weekly' => $date->copy()->addWeeks(2),
+                'monthly' => $date->copy()->addMonth(),
+                'quarterly' => $date->copy()->addMonths(3),
+                'annually', 'annual', 'yearly' => $date->copy()->addYear(),
+                default => $date->copy()->addMonth(), // Default to monthly
+            };
+
+            return $nextDate->format('M d, Y');
+
+        } catch (\Exception $e) {
+            Log::warning("Failed to calculate next issue date", [
+                'current_date' => $currentDate,
+                'frequency' => $frequency,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
         }
     }
 }
