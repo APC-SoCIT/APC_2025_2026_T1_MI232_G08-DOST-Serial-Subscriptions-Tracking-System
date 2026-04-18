@@ -6,6 +6,7 @@ import { usePage } from '@inertiajs/react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
+import SerialIssuesTable from '@/Components/SerialIssuesTable';
 
 // Subscription Tracking Component
 function SubscriptionTracking() {
@@ -15,6 +16,10 @@ function SubscriptionTracking() {
   const [periodFilter, setPeriodFilter] = useState('All');
   const [sortBy, setSortBy] = useState('deliveryDate');
   const [loading, setLoading] = useState(true);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
   
   // Add Serial Modal state
   const [showAddSerialModal, setShowAddSerialModal] = useState(false);
@@ -135,7 +140,9 @@ function SubscriptionTracking() {
           category: sub.category,
           serials: sub.serials || [],
           transactions: sub.transactions || [],
+          created_at: sub.created_at, // Keep created_at for sorting
         }));
+        // API already returns newest first via orderBy('created_at', 'desc')
         setSubscriptions(apiSubscriptions);
       }
     } catch (error) {
@@ -145,11 +152,9 @@ function SubscriptionTracking() {
     }
   };
   
-  // Get supplier options - prioritize approved suppliers from backend, fallback to localStorage
-  // This ensures any newly approved supplier is immediately available
-  const supplierOptions = approvedSuppliers.length > 0 
-    ? approvedSuppliers.map(s => s.company_name)
-    : addedSuppliers.map(s => s.supplierName);
+  // Get supplier options - only from Active Suppliers (manually added in Supplier Info)
+  // Suppliers must be explicitly added to Active Suppliers before they can be used here
+  const supplierOptions = addedSuppliers.map(s => s.supplierName);
 
   // Use subscriptions from API
   const allSubscriptions = subscriptions;
@@ -165,7 +170,7 @@ function SubscriptionTracking() {
     return matchesSearch && matchesPeriod;
   });
 
-  // Sort subscriptions
+  // Sort subscriptions - newest first (by index, newest subscriptions appear at the top)
   const sortedSubscriptions = [...filteredSubscriptions].sort((a, b) => {
     if (sortBy === 'serialTitle') return a.serialTitle.localeCompare(b.serialTitle);
     if (sortBy === 'supplierName') return a.supplierName.localeCompare(b.supplierName);
@@ -174,11 +179,73 @@ function SubscriptionTracking() {
       const bCost = parseFloat(b.remainingCost.replace(/[^0-9.]/g, '') || 0);
       return bCost - aCost;
     }
-    // Default sort by delivery date (period) - earliest first
-    const aDate = a.period ? new Date(a.period) : new Date('9999-12-31');
-    const bDate = b.period ? new Date(b.period) : new Date('9999-12-31');
-    return aDate - bDate;
+    // Default: maintain current order (newest first from reversed API response)
+    return 0;
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(sortedSubscriptions.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedSubscriptions = sortedSubscriptions.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, periodFilter, sortBy]);
+
+  // Pagination handlers
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePageClick = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
 
   // Calculate total stats
   const totalAwardCost = allSubscriptions.reduce((sum, item) => {
@@ -225,13 +292,23 @@ function SubscriptionTracking() {
     },
   ];
 
-  const getPaymentStatusColor = (status) => {
+  const getStatusColor = (status) => {
     switch(status) {
-      case 'Fully Paid': return '#d4edda';
-      case 'Partially Paid': return '#fff3cd';
-      case 'Overpaid': return '#cce5ff';
-      default: return '#e2e3e5';
+      case 'Active': return { bg: '#fff3cd', text: '#856404' };
+      case 'Delivered': return { bg: '#d4edda', text: '#155724' };
+      default: return { bg: '#e2e3e5', text: '#383d41' };
     }
+  };
+
+  // Helper to get display status based on database status
+  const getDisplayStatus = (subscription) => {
+    // 'Delivered' status means all issues have been delivered
+    // 'delivered' (lowercase) for backward compatibility
+    if (subscription.status === 'Delivered' || subscription.status === 'delivered') {
+      return 'Delivered';
+    }
+    // 'accepted' or 'Active' or any other status that's not delivered = Active/Ongoing
+    return 'Active';
   };
 
   const getPaymentStatusTextColor = (status) => {
@@ -456,13 +533,27 @@ function SubscriptionTracking() {
   const handleSerialInputChange = (e) => {
     const { name, value } = e.target;
     
-    // If frequency is changed, automatically set the delivery date
+    // Helper function to calculate quantity based on frequency
+    const getQuantityByFrequency = (frequency) => {
+      const quantityMap = {
+        'Weekly': 52,
+        'Biweekly': 26,
+        'Monthly': 12,
+        'Quarterly': 4,
+        'Annually': 1
+      };
+      return quantityMap[frequency] || 0;
+    };
+    
+    // If frequency is changed, automatically set the delivery date and quantity
     if (name === 'frequency') {
       const newDeliveryDate = calculateDeliveryDate(value);
+      const newQuantity = getQuantityByFrequency(value);
       setSerialFormData({ 
         ...serialFormData, 
         [name]: value,
-        deliveryDate: newDeliveryDate
+        deliveryDate: newDeliveryDate,
+        amount: newQuantity // Auto-set quantity based on frequency
       });
     } else if (name === 'category' && value !== 'Others') {
       // If category is changed and it's not "Others", clear customCategory
@@ -546,6 +637,10 @@ function SubscriptionTracking() {
           period: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
           award_cost: totalCost,
           delivered_cost: 0,
+          // Add frequency and total_issues for serial issue generation
+          frequency: firstItem.frequency || 'monthly',
+          total_issues: parseInt(firstItem.amount) || 12,
+          start_date: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
           serials: items.map(item => ({
             id: item.id,
             serialTitle: item.serialTitle,
@@ -578,6 +673,9 @@ function SubscriptionTracking() {
       
       // Refresh subscriptions from API
       await fetchSubscriptions();
+      
+      // Reset to page 1 so the new subscription appears at the top
+      setCurrentPage(1);
       
       setSuccessMessage(`Successfully added ${serialItems.length} serial(s) as ${createdSubscriptions.length} subscription(s)`);
       handleCloseAddSerialModal();
@@ -833,7 +931,7 @@ function SubscriptionTracking() {
                   </td>
                 </tr>
               )}
-              {!loading && sortedSubscriptions.map((subscription) => (
+              {!loading && paginatedSubscriptions.map((subscription) => (
                 <tr key={subscription.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '16px', fontWeight: 500 }}>{subscription.serialTitle}</td>
                   <td style={{ padding: '16px' }}>{subscription.supplierName}</td>
@@ -843,12 +941,12 @@ function SubscriptionTracking() {
                     <span style={{
                       padding: '6px 16px',
                       borderRadius: 20,
-                      background: '#d4edda',
-                      color: '#155724',
+                      background: getStatusColor(getDisplayStatus(subscription)).bg,
+                      color: getStatusColor(getDisplayStatus(subscription)).text,
                       fontSize: 12,
                       fontWeight: 500,
                     }}>
-                      {subscription.status}
+                      {getDisplayStatus(subscription)}
                     </span>
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -945,98 +1043,126 @@ function SubscriptionTracking() {
           paddingTop: 20, 
           borderTop: '1px solid #eee',
           display: 'flex', 
-          justifyContent: 'flex-end', 
+          justifyContent: 'space-between', 
           alignItems: 'center' 
         }}>
           <div style={{ color: '#666', fontSize: 14 }}>
-            Showing {sortedSubscriptions.length} of {allSubscriptions.length} results
-            {subscriptions.length > 0 && ` (${subscriptions.length} added)`}
+            {sortedSubscriptions.length > 0 
+              ? `Showing ${startIndex + 1}-${Math.min(endIndex, sortedSubscriptions.length)} of ${sortedSubscriptions.length} results`
+              : 'No results found'}
+          </div>
+          <div style={{ color: '#666', fontSize: 14 }}>
+            Page {currentPage} of {totalPages || 1}
           </div>
         </div>
 
         {/* Pagination */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Previous
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #004A98', 
-              background: '#004A98', 
-              color: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              1
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              2
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer' 
-            }}>
-              3
-            </button>
-            <button style={{ 
-              padding: '8px 16px', 
-              border: '1px solid #ddd', 
-              background: '#fff', 
-              borderRadius: 6, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              Next
-            </button>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button 
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+                style={{ 
+                  padding: '8px 16px', 
+                  border: '1px solid #ddd', 
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff', 
+                  borderRadius: 6, 
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: currentPage === 1 ? 0.5 : 1,
+                  color: currentPage === 1 ? '#999' : '#333',
+                }}
+              >
+                Previous
+              </button>
+              {getPageNumbers().map((page, index) => (
+                page === '...' ? (
+                  <span key={`ellipsis-${index}`} style={{ 
+                    padding: '8px 12px', 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    color: '#666'
+                  }}>...</span>
+                ) : (
+                  <button 
+                    key={page}
+                    onClick={() => handlePageClick(page)}
+                    style={{ 
+                      padding: '8px 16px', 
+                      border: page === currentPage ? '1px solid #004A98' : '1px solid #ddd', 
+                      background: page === currentPage ? '#004A98' : '#fff', 
+                      color: page === currentPage ? '#fff' : '#333', 
+                      borderRadius: 6, 
+                      cursor: 'pointer',
+                      fontWeight: page === currentPage ? 600 : 400,
+                    }}
+                  >
+                    {page}
+                  </button>
+                )
+              ))}
+              <button 
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                style={{ 
+                  padding: '8px 16px', 
+                  border: '1px solid #ddd', 
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff', 
+                  borderRadius: 6, 
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: currentPage === totalPages ? 0.5 : 1,
+                  color: currentPage === totalPages ? '#999' : '#333',
+                }}
+              >
+                Next
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Add Serial Modal */}
       {showAddSerialModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseAddSerialModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          `}</style>
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -1265,7 +1391,7 @@ function SubscriptionTracking() {
                   )}
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Amount</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Quantity</label>
                   <input
                     type="number"
                     name="amount"
@@ -1427,7 +1553,7 @@ function SubscriptionTracking() {
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>ISSN</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Supplier</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Delivery Date</th>
-                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Amount</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Quantity</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Unit Price</th>
                         <th style={{ padding: '12px', textAlign: 'center', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd' }}>Action</th>
                       </tr>
@@ -1513,28 +1639,36 @@ function SubscriptionTracking() {
 
       {/* View Details Modal */}
       {showViewDetailsModal && viewDetailsSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseViewDetailsModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -1554,12 +1688,12 @@ function SubscriptionTracking() {
                 <span style={{
                   padding: '6px 16px',
                   borderRadius: 20,
-                  background: '#d4edda',
-                  color: '#155724',
+                  background: getStatusColor(getDisplayStatus(viewDetailsSubscription)).bg,
+                  color: getStatusColor(getDisplayStatus(viewDetailsSubscription)).text,
                   fontSize: 13,
                   fontWeight: 500,
                 }}>
-                  {viewDetailsSubscription.status}
+                  {getDisplayStatus(viewDetailsSubscription)}
                 </span>
                 <button
                   onClick={handleCloseViewDetailsModal}
@@ -1646,50 +1780,16 @@ function SubscriptionTracking() {
               </div>
             </div>
 
-            {/*  History Section */}
+            {/* Serial Issues Section - Recurring Deliveries */}
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#004A98' }}>
-                 History
+                Serial Issues (Recurring Deliveries)
               </h3>
-              {viewDetailsSubscription.transactions && viewDetailsSubscription.transactions.length > 0 ? (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f5f5f5' }}>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Date</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Type</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Amount</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewDetailsSubscription.transactions.map((transaction) => (
-                        <tr key={transaction.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', color: '#666' }}>{transaction.date}</td>
-                          <td style={{ padding: '14px 16px' }}>
-                            <span style={{
-                              padding: '5px 14px',
-                              borderRadius: 20,
-                              background: '#cce5ff',
-                              color: '#004085',
-                              fontSize: 12,
-                              fontWeight: 500,
-                            }}>
-                              {transaction.type === 'Payment' ? 'Subscription Created' : transaction.type}
-                            </span>
-                          </td>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: '600', color: '#004A98' }}>{transaction.amount}</td>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', color: '#666' }}>
-                            {transaction.description || transaction.note || 'Initial subscription'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p style={{ color: '#666', fontSize: '14px' }}>No transactions available for this subscription.</p>
-              )}
+              <SerialIssuesTable 
+                subscriptionId={viewDetailsSubscription.id}
+                userRole="tpu"
+                onCostUpdate={fetchSubscriptions}
+              />
             </div>
 
             {/* Modal Footer */}
@@ -1722,28 +1822,36 @@ function SubscriptionTracking() {
 
       {/* Edit Subscription Modal */}
       {showEditModal && editSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
-            overflowY: 'auto'
-          }}>
+        <div 
+          onClick={handleCloseEditModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Modal Header */}
             <div style={{
               display: 'flex',
@@ -2052,27 +2160,35 @@ function SubscriptionTracking() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && deleteSubscription && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '100%',
-            textAlign: 'center'
-          }}>
+        <div 
+          onClick={handleCloseDeleteModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '500px',
+              width: '100%',
+              textAlign: 'center',
+              animation: 'slideIn 0.25s ease-out'
+            }}
+          >
             {/* Warning Icon */}
             <div style={{
               width: 60,

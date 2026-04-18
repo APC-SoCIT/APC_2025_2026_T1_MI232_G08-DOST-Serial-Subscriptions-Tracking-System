@@ -4,10 +4,12 @@ import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaTruck, FaUserPlus, FaUserCircle } from "react-icons/fa";
-import { MdMarkEmailRead, MdNotifications } from "react-icons/md";
+import { MdMarkEmailRead } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -27,14 +29,14 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
   const sidebarWidth = isMobile ? 200 : 160;
   const [hoveredItem, setHoveredItem] = useState(null);
   
-  // Map routes to their URL paths for exact matching
+  // Map routes to their URL paths for exact matching (based on routes/web.php)
   const routeToPath = {
     'tpu.dashboard': '/dashboard-tpu',
-    'tpu.chat': '/chat',
-    'tpu.supplierinfo': '/supplierinfo',
-    'tpu.subscriptiontracking': '/subscriptiontracking',
-    'tpu.monitordelivery': '/monitordelivery',
-    'tpu.addaccount': '/addaccount',
+    'tpu.chat': '/dashboard-tpu-chat',
+    'tpu.supplierinfo': '/dashboard-tpu-supplierinfo',
+    'tpu.subscriptiontracking': '/dashboard-tpu-subscriptiontracking',
+    'tpu.monitordelivery': '/dashboard-tpu-monitordelivery',
+    'tpu.addaccount': '/dashboard-tpu-addaccount',
   };
   
   return (
@@ -196,9 +198,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdNotifications />
-        </span>
+        <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
@@ -381,6 +381,7 @@ export default function TPULayout({ children, title, hideTitle = false }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

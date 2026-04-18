@@ -3,24 +3,25 @@ import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { FaTruck, FaUserCircle } from "react-icons/fa";
-import { MdNotifications } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard' },
-  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat' },
-  { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo' },
-  { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: 'gsps.dashboard', path: '/dashboard-gsps' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat', path: '/dashboard-gsps-chat' },
+  { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo', path: '/dashboard-gsps-supplierinfo' },
+  { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus', path: '/dashboard-gsps-deliverystatus' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
-  const currentRouteName = usePage().url.split('/').pop() || 'gsps.dashboard';
+  const currentUrl = usePage().url;
   const sidebarWidth = isMobile ? 200 : 160;
   const [hoveredItem, setHoveredItem] = useState(null);
   
@@ -94,9 +95,8 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const routePart = item.route.split('.').pop();
-            const isActive = currentRouteName.includes(routePart) || 
-                           (item.route === 'gsps.dashboard' && (currentRouteName === 'dashboard-gsps' || currentRouteName === ''));
+            // Use exact path matching for accurate active state
+            const isActive = currentUrl === item.path || currentUrl.startsWith(item.path + '/');
             
             return (
               <li key={item.label}>
@@ -183,28 +183,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer', position: 'relative' }}>
-          <MdNotifications />
-          
-          {activeIcon === 'notifications' && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '35px',
-                right: 0,
-                background: '#fff',
-                borderRadius: 10,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                width: isMobile ? 180 : 200,
-                padding: '16px 18px',
-                zIndex: 10000,
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 14, color: '#555' }}>You're all caught up!</p>
-            </div>
-          )}
-        </span>
+        <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
@@ -387,6 +366,7 @@ export default function GSPSLayout({ children, title, hideTitle = false }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
+
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024; // 10MB in bytes
 
 export default function CommunityChat({ userId, userRole }) {
   const [chats, setChats] = useState([]);
@@ -84,6 +88,18 @@ export default function CommunityChat({ userId, userRole }) {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size - max 10MB
+      if (file.size > MAX_FILE_SIZE) {
+        Swal.fire({
+          title: 'Maximum of 10 MB',
+          text: 'Please try again with a smaller file.',
+          icon: 'warning',
+          confirmButtonColor: '#0062f4',
+          confirmButtonText: 'OK'
+        });
+        e.target.value = ''; // Reset input
+        return;
+      }
       setAttachment(file);
     }
   };

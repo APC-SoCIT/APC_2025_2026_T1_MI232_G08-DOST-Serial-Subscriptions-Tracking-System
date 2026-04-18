@@ -2,26 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
-import { MdNotifications } from "react-icons/md";
 import { FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { FaTruckFast } from "react-icons/fa6";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
 );
 
 const sidebarItems = [
-  { icon: <GoHomeFill />, label: 'Dashboard', route: 'supplier.dashboard' },
-  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'supplier.chat' },
-  { icon: <HiUsers />, label: 'List of Serials', route: 'supplier.listofserial' },
-  { icon: <FaTruckFast />, label: 'Delivery', route: 'supplier.delivery' },
+  { icon: <GoHomeFill />, label: 'Dashboard', route: 'supplier.dashboard', path: '/dashboard-supplier' },
+  { icon: <BsFillChatTextFill />, label: 'Chat', route: 'supplier.chat', path: '/dashboard-supplier-chat' },
+  { icon: <HiUsers />, label: 'List of Serials', route: 'supplier.listofserial', path: '/dashboard-supplier-listofserial' },
+  { icon: <FaTruckFast />, label: 'Delivery', route: 'supplier.delivery', path: '/dashboard-supplier-delivery' },
 ];
 
-function Sidebar({ isMobile, sidebarOpen }) {
-  const currentRouteName = usePage().url;
+function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
+  const currentUrl = usePage().url;
   const [hoveredItem, setHoveredItem] = useState(null);
   
   return (
@@ -40,20 +41,38 @@ function Sidebar({ isMobile, sidebarOpen }) {
       zIndex: 100,
       transition: 'left 0.3s ease',
     }}>
+      {/* Close button for mobile */}
+      {isMobile && (
+        <button
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          <HiX size={24} />
+        </button>
+      )}
       <Link href={route('supplier.dashboard')} style={{ textDecoration: 'none' }}>
         <div style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           gap: 10,
-          marginBottom: 24
+          marginBottom: 24,
+          marginTop: isMobile ? 20 : 0,
         }}>
           <img
             src="/images/dost-logo1.png"
             alt="LOGO"
             style={{
-              width: 55,
-              height: 55,
+              width: isMobile ? 45 : 55,
+              height: isMobile ? 45 : 55,
               borderRadius: 12,
               cursor: 'pointer'
             }}
@@ -61,7 +80,7 @@ function Sidebar({ isMobile, sidebarOpen }) {
           <div style={{
             color: '#fff',
             fontWeight: 600,
-            fontSize: 16,
+            fontSize: isMobile ? 14 : 16,
             letterSpacing: 1,
             fontFamily: 'Montserrat Bold',
             textAlign: 'left',
@@ -75,14 +94,14 @@ function Sidebar({ isMobile, sidebarOpen }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const routePart = item.route.split('.').pop();
-            const isActive = currentRouteName.includes(routePart) || 
-                           (item.route === 'supplier.dashboard' && (currentRouteName === 'dashboard-supplier' || currentRouteName === ''));
+            // Use exact path matching for accurate active state
+            const isActive = currentUrl === item.path || currentUrl.startsWith(item.path + '/');
             
             return (
               <li key={item.label}>
                 <Link
                   href={route(item.route)}
+                  onClick={() => isMobile && setSidebarOpen(false)}
                   onMouseEnter={() => setHoveredItem(idx)}
                   onMouseLeave={() => setHoveredItem(null)}
                   style={{
@@ -90,13 +109,13 @@ function Sidebar({ isMobile, sidebarOpen }) {
                     display: 'flex',
                     alignItems: 'center',
                     cursor: 'pointer',
-                    fontSize: 16,
+                    fontSize: isMobile ? 14 : 16,
                     fontWeight: 500,
                     color: '#fff',
                     background: isActive ? '#0062f4ff' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                     borderRadius: 6,
                     padding: '8px 12px',
-                    width: '140px',
+                    width: isMobile ? '170px' : '140px',
                     marginLeft: '10px',
                     transition: 'background 0.2s, transform 0.1s',
                     boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
@@ -104,7 +123,7 @@ function Sidebar({ isMobile, sidebarOpen }) {
                   }}
                 >
                   <Icon>{item.icon}</Icon>
-                  <span style={{ fontSize: 15 }}>{item.label}</span>
+                  <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
                 </Link>
               </li>
             );
@@ -163,25 +182,7 @@ function TopBar({ title, isMobile, sidebarOpen, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdNotifications />
-        </span>
-        {activeIcon === 'notifications' && (
-          <div style={{
-            position: 'absolute',
-            top: 60,
-            right: 20,
-            background: '#fff',
-            borderRadius: 12,
-            boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
-            padding: 16,
-            width: 260,
-            zIndex: 10,
-          }}>
-            <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>You're all caught up!</p>
-          </div>
-        )}
+        <SerialsNotification isMobile={isMobile} />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <FaUserCircle size={22} />
@@ -328,7 +329,7 @@ export default function SupplierLayout({ children, title }) {
           }}
         />
       )}
-      <Sidebar isMobile={isMobile} sidebarOpen={sidebarOpen} />
+      <Sidebar isMobile={isMobile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div style={{ flex: 1, marginLeft: isMobile ? 0 : 160, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', transition: 'margin-left 0.3s ease' }}>
         <TopBar title={pageTitle} isMobile={isMobile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         <div style={{ 
@@ -343,6 +344,7 @@ export default function SupplierLayout({ children, title }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

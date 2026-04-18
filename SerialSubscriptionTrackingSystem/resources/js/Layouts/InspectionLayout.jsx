@@ -3,10 +3,11 @@ import { router, usePage, Link } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
 import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
-import { MdNotifications } from "react-icons/md";
 import { HiMenu, HiX } from "react-icons/hi";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
+import SerialsNotification from "@/Components/SerialsNotification";
+import SessionManager from "@/Components/SessionManager";
 
 const navItems = [
   { icon: <GoHomeFill size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
@@ -213,35 +214,7 @@ export default function InspectionLayout({ children, title }) {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
               {/* Notifications */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => {
-                    setOpenNotifications(!openNotifications);
-                    setOpenAccount(false);
-                  }}
-                  style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0 }}
-                >
-                  <MdNotifications size={20} />
-                </button>
-
-                {openNotifications && (
-                  
-                  <div style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: '35px',
-                    background: '#fff',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                    width: 200,
-                    padding: '16px 18px',
-                    zIndex: 10000,
-                    transition: 'all 0.2s ease',
-                  }}>
-                    <p style={{ margin: 0, fontSize: 14, color: '#555' }}>You're all caught up!</p>
-                  </div>
-                )}
-              </div>
+              <SerialsNotification isMobile={isMobile} />
 
               {/* Account */}
               <div style={{ position: 'relative' }}>
@@ -342,6 +315,7 @@ export default function InspectionLayout({ children, title }) {
         </div>
       </div>
       <ChatNotification />
+      <SessionManager />
     </div>
   );
 }

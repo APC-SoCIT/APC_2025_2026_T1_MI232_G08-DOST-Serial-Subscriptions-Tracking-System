@@ -4,11 +4,12 @@ import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { IoSearchOutline } from "react-icons/io5";
-import { MdOutlineNotificationsActive } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
+import SerialsNotification from "@/Components/SerialsNotification";
+import { MdRefresh } from "react-icons/md";
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -136,15 +137,7 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | Delivery</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <span onClick={() => handleIconClick('notifications')} style={{ cursor: 'pointer' }}>
-          <MdOutlineNotificationsActive />
-        </span>
-        {activeIcon === 'notifications' && (
-          <div style={popupStyle}>
-            <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>You're all caught up!</p>
-          </div>
-        )}
+        <SerialsNotification />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
           <VscAccount size={22} />
@@ -214,80 +207,7 @@ function TopBar() {
   );
 }
 
-// Sample data - in production, this would come from the API
-// Combined data with status field for unified table
-const allSerials = [
-  {
-    id: 1,
-    serial_title: "Time Magazine",
-    purchase_order_no: "PO-2025-0001",
-    issues: "4",
-    amount: "₱430",
-    date: "2025-01-15",
-    remarks: "Jan-Feb issues delivered in March",
-    status: "late",
-  },
-  {
-    id: 2,
-    serial_title: "Nature",
-    purchase_order_no: "PO-2024-1256",
-    issues: "48",
-    amount: "₱14,500",
-    date: "2024-12-15",
-    remarks: "",
-    status: "delivered",
-  },
-  {
-    id: 3,
-    serial_title: "Time Magazine",
-    purchase_order_no: "PO-2025-0001",
-    issues: "4",
-    amount: "₱430",
-    date: "",
-    remarks: "Pending shipment",
-    status: "undelivered",
-  },
-  {
-    id: 4,
-    serial_title: "The Economist",
-    purchase_order_no: "PO-2025-0004",
-    issues: "3",
-    amount: "₱900",
-    date: "2024-12-28",
-    remarks: "Issues delivered one month late",
-    status: "late",
-  },
-  {
-    id: 5,
-    serial_title: "Science",
-    purchase_order_no: "PO-2024-1302",
-    issues: "52",
-    amount: "₱18,200",
-    date: "2024-11-28",
-    remarks: "",
-    status: "delivered",
-  },
-  {
-    id: 6,
-    serial_title: "The Economist",
-    purchase_order_no: "PO-2025-0004",
-    issues: "1",
-    amount: "₱300",
-    date: "",
-    remarks: "Awaiting stock",
-    status: "undelivered",
-  },
-  {
-    id: 7,
-    serial_title: "The Lancet",
-    purchase_order_no: "PO-2024-1378",
-    issues: "24",
-    amount: "₱9,800",
-    date: "2024-12-10",
-    remarks: "",
-    status: "delivered",
-  },
-];
+
 
 function Pagination({ current, total, onPage }) {
   const pages = [];
@@ -355,21 +275,123 @@ function Pagination({ current, total, onPage }) {
 }
 
 function Dashboard_Supplier_Delivery() {
+  const { auth } = usePage().props;
   const [activeSidebar, setActiveSidebar] = useState(3);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // Status filter dropdown: 'all', 'late', 'delivered', 'undelivered'
   const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [issues, setIssues] = useState([]);
 
   const itemsPerPage = 10;
+
+  // Fetch issues on component mount
+  useEffect(() => {
+    if (auth?.user?.name) {
+      fetchIssues();
+      // Auto-refresh every 30 seconds to keep data synchronized
+      const interval = setInterval(() => {
+        fetchIssues();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [auth?.user?.name]);
+
+  const fetchIssues = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get('/api/serial-issues/supplier', {
+        params: { supplier_name: auth?.user?.name || '' }
+      });
+      if (response.data.success) {
+        const fetchedIssues = response.data.issues || [];
+        // Map issue status directly to delivery display status
+        const issuesWithDeliveryStatus = fetchedIssues.map(issue => {
+          let deliveryStatus = 'undelivered';
+          
+          // Determine delivery status based on issue status and dates
+          if (issue.status === 'pending') {
+            deliveryStatus = 'undelivered'; // Pending = Undelivered
+          } else if (['prepare', 'for_delivery', 'received'].includes(issue.status)) {
+            deliveryStatus = 'ongoing'; // Preparing/For Delivery/Received = Ongoing
+          } else if (issue.status === 'for_return') {
+            deliveryStatus = 'for_return'; // For Return = For Return
+          } else if (issue.status === 'delivered') {
+            // Check if delivered on time or late
+            const deliveredDate = issue.delivered_date ? new Date(issue.delivered_date) : null;
+            const expectedDate = issue.expected_delivery_date ? new Date(issue.expected_delivery_date) : null;
+            
+            if (deliveredDate && expectedDate) {
+              // Compare only the dates, not the time
+              const deliveredDateOnly = new Date(deliveredDate.getFullYear(), deliveredDate.getMonth(), deliveredDate.getDate());
+              const expectedDateOnly = new Date(expectedDate.getFullYear(), expectedDate.getMonth(), expectedDate.getDate());
+              
+              if (deliveredDateOnly > expectedDateOnly) {
+                deliveryStatus = 'late'; // Delivered but exceeded expected date
+              } else {
+                deliveryStatus = 'delivered'; // Delivered on time or before
+              }
+            } else {
+              deliveryStatus = 'delivered'; // Delivered (no expected date to compare)
+            }
+          }
+          
+          return {
+            ...issue,
+            deliveryStatus,
+          };
+        });
+        setIssues(issuesWithDeliveryStatus);
+      }
+    } catch (error) {
+      console.error('Error fetching issues:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Determine status - count statuses
+  const lateCount = issues.filter(i => i.deliveryStatus === 'late').length;
+  const ongoingCount = issues.filter(i => i.deliveryStatus === 'ongoing').length;
+  const forReturnCount = issues.filter(i => i.deliveryStatus === 'for_return').length;
+  const deliveredCount = issues.filter(i => i.deliveryStatus === 'delivered').length;
+  const undeliveredCount = issues.filter(i => i.deliveryStatus === 'undelivered').length;
+
+  // Filter data based on dropdown selection
+  const filteredIssues = useMemo(() => {
+    let result = issues.filter(item => {
+      if (statusFilter === 'all') return true;
+      return item.deliveryStatus === statusFilter;
+    });
+
+    // Search filter
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          (item.serial_title?.toLowerCase() || '').includes(lowerQuery) ||
+          (item.issue_number?.toLowerCase() || '').includes(lowerQuery)
+      );
+    }
+
+    // Sort by status order: For Return, Late, Ongoing, Undelivered, Delivered
+    const statusOrder = { for_return: 0, late: 1, ongoing: 2, undelivered: 3, delivered: 4 };
+    result.sort((a, b) => statusOrder[a.deliveryStatus] - statusOrder[b.deliveryStatus]);
+
+    return result;
+  }, [statusFilter, searchQuery, issues]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredIssues.length / itemsPerPage));
+  const paginatedIssues = filteredIssues.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   // Status badge component
   const StatusBadge = ({ status }) => {
     const colors = {
-      late: { bg: '#fff3cd', text: '#856404', border: '#ffc107' },
-      delivered: { bg: '#d4edda', text: '#155724', border: '#28a745' },
-      undelivered: { bg: '#f8d7da', text: '#721c24', border: '#dc3545' },
+      for_return: { bg: '#f8d7da', text: '#721c24', border: '#f5c6cb' },
+      late: { bg: '#fff3cd', text: '#856404', border: '#ffeaa7' },
+      ongoing: { bg: '#d1ecf1', text: '#0c5460', border: '#bee5eb' },
+      delivered: { bg: '#d4edda', text: '#155724', border: '#c3e6cb' },
+      undelivered: { bg: '#f8f9fa', text: '#6c757d', border: '#e9ecef' },
     };
     const style = colors[status] || colors.undelivered;
     
@@ -387,42 +409,10 @@ function Dashboard_Supplier_Delivery() {
           textTransform: 'capitalize',
         }}
       >
-        {status}
+        {status === 'for_return' ? 'For Return' : status}
       </span>
     );
   };
-
-  // Filter data based on dropdown selection
-  const filteredSerials = useMemo(() => {
-    let result = allSerials.filter(item => {
-      if (statusFilter === 'all') return true;
-      return item.status === statusFilter;
-    });
-
-    // Search filter
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.serial_title.toLowerCase().includes(lowerQuery) ||
-          item.purchase_order_no.toLowerCase().includes(lowerQuery)
-      );
-    }
-
-    // Sort by status order: Late, Delivered, Undelivered
-    const statusOrder = { late: 0, delivered: 1, undelivered: 2 };
-    result.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-
-    return result;
-  }, [statusFilter, searchQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSerials.length / itemsPerPage));
-  const paginatedSerials = filteredSerials.slice((page - 1) * itemsPerPage, page * itemsPerPage);
-
-  // Count by status for filter labels
-  const lateCount = allSerials.filter(s => s.status === 'late').length;
-  const deliveredCount = allSerials.filter(s => s.status === 'delivered').length;
-  const undeliveredCount = allSerials.filter(s => s.status === 'undelivered').length;
 
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
@@ -457,7 +447,7 @@ function Dashboard_Supplier_Delivery() {
                   <IoSearchOutline style={{ position: 'absolute', left: 12, color: '#666', fontSize: 18 }} />
                   <input 
                     type="text" 
-                    placeholder="Search Serial or PO No..." 
+                    placeholder="Search Serial or Issue No..." 
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -476,7 +466,7 @@ function Dashboard_Supplier_Delivery() {
                   />
                 </div>
 
-                {/* Status Filter Dropdown */}
+                {/* Status Filter Dropdown and Refresh */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#555' }}>Status:</span>
                   <select
@@ -494,14 +484,36 @@ function Dashboard_Supplier_Delivery() {
                       color: '#333',
                       background: '#f9f9f9',
                       cursor: 'pointer',
-                      minWidth: 160,
+                      minWidth: 200,
                     }}
                   >
-                    <option value="all">All Status ({allSerials.length})</option>
+                    <option value="all">All Status ({issues.length})</option>
+                    <option value="for_return">For Return ({forReturnCount})</option>
                     <option value="late">Late ({lateCount})</option>
-                    <option value="delivered">Delivered ({deliveredCount})</option>
+                    <option value="ongoing">Ongoing ({ongoingCount})</option>
                     <option value="undelivered">Undelivered ({undeliveredCount})</option>
+                    <option value="delivered">Delivered ({deliveredCount})</option>
                   </select>
+                  <button
+                    onClick={fetchIssues}
+                    disabled={loading}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      background: '#f9f9f9',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#004A98',
+                      opacity: loading ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <MdRefresh style={{ transform: loading ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }} /> Refresh
+                  </button>
                 </div>
               </div>
 
@@ -510,33 +522,47 @@ function Dashboard_Supplier_Delivery() {
                 <thead>
                   <tr style={{ color: "#222", fontWeight: 700, borderBottom: '1px solid #eee' }}>
                     <th style={{ padding: "12px 8px", textAlign: "center", width: 60 }}>NO.</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Serial Title</th>
-                    <th style={{ padding: "12px 8px", textAlign: "left" }}>Purchase Order No.</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Issues</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Amount</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Date</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left" }}>Serial Title</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Issue No.</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Expected Delivery</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Delivered Date</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Amount (₱)</th>
                     <th style={{ padding: "12px 8px", textAlign: "center" }}>Status</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center" }}>Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedSerials.length > 0 ? (
-                    paginatedSerials.map((row, idx) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: '48px', textAlign: 'center', color: '#666' }}>
+                        Loading delivery data...
+                      </td>
+                    </tr>
+                  ) : paginatedIssues.length > 0 ? (
+                    paginatedIssues.map((row, idx) => (
                       <tr key={row.id} style={{ background: idx % 2 === 0 ? "#f9f9f9" : "#fff", borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 500 }}>{(page - 1) * itemsPerPage + idx + 1}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 700, color: "#004A98" }}>{row.serial_title}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "left" }}>{row.purchase_order_no}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "center" }}>{row.issues}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "center" }}>{row.amount}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555" }}>{row.date || '-'}</td>
-                        <td style={{ padding: "14px 8px", textAlign: "center" }}><StatusBadge status={row.status} /></td>
-                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555", maxWidth: 200 }}>{row.remarks || '-'}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "left", fontWeight: 600, color: "#004A98" }}>{row.serial_title}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 500 }}>{row.issue_number}</td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555" }}>
+                          {row.expected_delivery_date 
+                            ? new Date(row.expected_delivery_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                            : '-'}
+                        </td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", color: "#555" }}>
+                          {row.delivered_date 
+                            ? new Date(row.delivered_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                            : '-'}
+                        </td>
+                        <td style={{ padding: "14px 8px", textAlign: "center", fontWeight: 600, color: "#004A98" }}>
+                          {row.cost ? `₱${parseFloat(row.cost).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
+                        </td>
+                        <td style={{ padding: "14px 8px", textAlign: "center" }}><StatusBadge status={row.deliveryStatus} /></td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
-                        No serials found {searchQuery && `matching "${searchQuery}"`}
+                      <td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#888" }}>
+                        No issues found {searchQuery && `matching "${searchQuery}"`}
                       </td>
                     </tr>
                   )}
@@ -546,7 +572,7 @@ function Dashboard_Supplier_Delivery() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px" }}>
                 <Pagination current={page} total={totalPages} onPage={setPage} />
                 <span style={{ color: "#444", fontSize: 15 }}>
-                  Showing {filteredSerials.length} results
+                  Showing {filteredIssues.length} results
                 </span>
               </div>
             </div>

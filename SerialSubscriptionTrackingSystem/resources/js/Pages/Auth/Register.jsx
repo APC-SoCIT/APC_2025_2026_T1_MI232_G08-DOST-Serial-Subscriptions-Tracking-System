@@ -95,13 +95,14 @@ export default function Register() {
                         {/* Email */}
                         <div className="mb-4">
                             <input
-                                type="email"
+                                type="text"
                                 name="email"
                                 value={data.email}
                                 onChange={(e) =>
                                     setData('email', e.target.value)
                                 }
                                 placeholder="Email"
+                                autoComplete="email"
                                 className="w-full border border-gray-400 px-3 py-2 rounded-md focus:ring focus:ring-blue-500 focus:outline-none"
                                 required
                             />

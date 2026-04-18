@@ -26,7 +26,7 @@ class DashboardStatsController extends Controller
 
             $subscriptions = Subscription::all();
             
-            // Calculate serial statistics
+            // Calculate serial statistics (filtered by date range)
             $totalSerials = 0;
             $awardedCount = 0;
             $deliveredCount = 0;
@@ -40,6 +40,14 @@ class DashboardStatsController extends Controller
                 $serials = $subscription->serials ?? [];
                 
                 foreach ($serials as $serial) {
+                    // Filter serials by delivery date within date range
+                    // Use subscription created_at as fallback if no delivery date
+                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
+                    $serialCarbon = Carbon::parse($serialDate);
+                    if ($serialCarbon < $startDate || $serialCarbon > $endDate) {
+                        continue; // Skip serials outside date range
+                    }
+                    
                     $totalSerials++;
                     $status = $serial['status'] ?? 'pending';
                     $inspectionStatus = $serial['inspection_status'] ?? null;
@@ -59,10 +67,10 @@ class DashboardStatsController extends Controller
                             break;
                         case 'received':
                             $deliveredCount++;
-                            // Check inspection status
+                            // Check inspection status (uses 'for_return' from SubscriptionController)
                             if ($inspectionStatus === 'inspected') {
                                 $inspectedCount++;
-                            } elseif ($inspectionStatus === 'rejected') {
+                            } elseif ($inspectionStatus === 'for_return') {
                                 $returnedCount++;
                             }
                             break;
@@ -137,10 +145,10 @@ class DashboardStatsController extends Controller
                     if ($status === 'received') {
                         $receivedCount++;
                         
-                        // Count forwarded (has been inspected - either approved or rejected)
+                        // Count forwarded (has been inspected - either approved or for_return)
                         if ($inspectionStatus === 'inspected') {
                             $forwardedCount++;
-                        } elseif ($inspectionStatus === 'rejected') {
+                        } elseif ($inspectionStatus === 'for_return') {
                             $returnedCount++;
                         } else {
                             // Pending inspection
@@ -237,7 +245,7 @@ class DashboardStatsController extends Controller
                             break;
                         case 'received':
                             $deliveredCount++;
-                            if ($inspectionStatus === 'rejected') {
+                            if ($inspectionStatus === 'for_return') {
                                 $returnedCount++;
                             }
                             break;
@@ -309,7 +317,7 @@ class DashboardStatsController extends Controller
                         
                         if ($inspectionStatus === 'inspected') {
                             $inspectedCount++;
-                        } elseif ($inspectionStatus === 'rejected') {
+                        } elseif ($inspectionStatus === 'for_return') {
                             $returnedCount++;
                         } else {
                             $pendingCount++;
@@ -381,7 +389,7 @@ class DashboardStatsController extends Controller
                             if ($status === 'received') {
                                 $delivered++;
                                 if ($inspectionStatus === 'inspected') $inspected++;
-                                if ($inspectionStatus === 'rejected') $returned++;
+                                if ($inspectionStatus === 'for_return') $returned++;
                             }
                             if ($status === 'for_delivery') $forDelivery++;
                         }
@@ -399,8 +407,8 @@ class DashboardStatsController extends Controller
             ];
         }
 
-        // Pipeline data for pie chart
-        $pipelineData = $this->calculatePipelineTotals($subscriptions);
+        // Pipeline data for pie chart (filtered by date range)
+        $pipelineData = $this->calculatePipelineTotals($subscriptions, $startDate, $endDate);
 
         return [
             'monthly' => $monthlyData,
@@ -418,6 +426,9 @@ class DashboardStatsController extends Controller
 
         foreach ($months as $monthData) {
             $monthName = $monthData['name'];
+            $monthStart = $monthData['start'];
+            $monthEnd = $monthData['end'];
+            
             $received = 0;
             $forwarded = 0;
             $pending = 0;
@@ -427,28 +438,32 @@ class DashboardStatsController extends Controller
                 $serials = $subscription->serials ?? [];
                 
                 foreach ($serials as $serial) {
+                    // Filter serials by date
+                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $serial['receivedDate'] ?? $subscription->created_at;
+                    $serialCarbon = Carbon::parse($serialDate);
+                    
+                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
+                        continue;
+                    }
+                    
                     $status = $serial['status'] ?? 'pending';
                     $inspectionStatus = $serial['inspection_status'] ?? null;
                     
-                    // Simplified counting per month
                     if ($status === 'received' || $status === 'for_delivery') {
                         $received++;
                         if ($inspectionStatus === 'inspected') $forwarded++;
-                        elseif ($inspectionStatus === 'rejected') $returned++;
+                        elseif ($inspectionStatus === 'for_return') $returned++;
                         else $pending++;
                     }
                 }
             }
 
-            // Scale by number of months to distribute
-            $scale = 1 / max(count($months), 1);
-
             $monthlyData[] = [
                 'month' => $monthName,
-                'received' => max(1, round($received * $scale)),
-                'forwarded' => round($forwarded * $scale),
-                'pending' => round($pending * $scale),
-                'returned' => round($returned * $scale),
+                'received' => $received,
+                'forwarded' => $forwarded,
+                'pending' => $pending,
+                'returned' => $returned,
             ];
         }
 
@@ -467,6 +482,9 @@ class DashboardStatsController extends Controller
 
         foreach ($months as $monthData) {
             $monthName = $monthData['name'];
+            $monthStart = $monthData['start'];
+            $monthEnd = $monthData['end'];
+            
             $awarded = 0;
             $preparing = 0;
             $forDelivery = 0;
@@ -476,6 +494,14 @@ class DashboardStatsController extends Controller
                 $serials = $subscription->serials ?? [];
                 
                 foreach ($serials as $serial) {
+                    // Filter serials by date
+                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
+                    $serialCarbon = Carbon::parse($serialDate);
+                    
+                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
+                        continue;
+                    }
+                    
                     $status = $serial['status'] ?? 'pending';
                     $awarded++;
                     
@@ -485,14 +511,12 @@ class DashboardStatsController extends Controller
                 }
             }
 
-            $scale = 1 / max(count($months), 1);
-
             $monthlyData[] = [
                 'month' => $monthName,
-                'awarded' => max(1, round($awarded * $scale)),
-                'preparing' => round($preparing * $scale),
-                'forDelivery' => round($forDelivery * $scale),
-                'delivered' => round($delivered * $scale),
+                'awarded' => $awarded,
+                'preparing' => $preparing,
+                'forDelivery' => $forDelivery,
+                'delivered' => $delivered,
             ];
         }
 
@@ -511,6 +535,9 @@ class DashboardStatsController extends Controller
 
         foreach ($months as $monthData) {
             $monthName = $monthData['name'];
+            $monthStart = $monthData['start'];
+            $monthEnd = $monthData['end'];
+            
             $received = 0;
             $inspected = 0;
             $pending = 0;
@@ -520,26 +547,32 @@ class DashboardStatsController extends Controller
                 $serials = $subscription->serials ?? [];
                 
                 foreach ($serials as $serial) {
+                    // Filter by inspection date or delivery date
+                    $serialDate = $serial['inspection_date'] ?? $serial['receivedDate'] ?? $serial['deliveryDate'] ?? $subscription->created_at;
+                    $serialCarbon = Carbon::parse($serialDate);
+                    
+                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
+                        continue;
+                    }
+                    
                     $status = $serial['status'] ?? 'pending';
                     $inspectionStatus = $serial['inspection_status'] ?? null;
                     
                     if ($status === 'received') {
                         $received++;
                         if ($inspectionStatus === 'inspected') $inspected++;
-                        elseif ($inspectionStatus === 'rejected') $returned++;
+                        elseif ($inspectionStatus === 'for_return') $returned++;
                         else $pending++;
                     }
                 }
             }
 
-            $scale = 1 / max(count($months), 1);
-
             $monthlyData[] = [
                 'month' => $monthName,
-                'received' => max(1, round($received * $scale)),
-                'inspected' => round($inspected * $scale),
-                'pending' => round($pending * $scale),
-                'returned' => round($returned * $scale),
+                'received' => $received,
+                'inspected' => $inspected,
+                'pending' => $pending,
+                'returned' => $returned,
             ];
         }
 
@@ -549,9 +582,9 @@ class DashboardStatsController extends Controller
     }
 
     /**
-     * Calculate pipeline totals for pie chart
+     * Calculate pipeline totals for pie chart (filtered by date range)
      */
-    private function calculatePipelineTotals($subscriptions)
+    private function calculatePipelineTotals($subscriptions, $startDate, $endDate)
     {
         $awarded = 0;
         $delivered = 0;
@@ -563,6 +596,13 @@ class DashboardStatsController extends Controller
             $serials = $subscription->serials ?? [];
             
             foreach ($serials as $serial) {
+                // Filter by date range
+                $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
+                $serialCarbon = Carbon::parse($serialDate);
+                if ($serialCarbon < $startDate || $serialCarbon > $endDate) {
+                    continue;
+                }
+                
                 $status = $serial['status'] ?? 'pending';
                 $inspectionStatus = $serial['inspection_status'] ?? null;
 
@@ -572,7 +612,7 @@ class DashboardStatsController extends Controller
                 if ($status === 'received') {
                     $delivered++;
                     if ($inspectionStatus === 'inspected') $inspected++;
-                    if ($inspectionStatus === 'rejected') $returned++;
+                    if ($inspectionStatus === 'for_return') $returned++;
                 }
             }
         }

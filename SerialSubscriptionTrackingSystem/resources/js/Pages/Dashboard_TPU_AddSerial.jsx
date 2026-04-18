@@ -15,6 +15,8 @@ export default function AddSerial() {
     period: '',
     awardCost: '',
     frequency: 'Monthly',
+    totalIssues: '12',
+    startDate: new Date().toISOString().split('T')[0],
     authorPublisher: '',
     category: '',
     note: ''
@@ -56,6 +58,8 @@ export default function AddSerial() {
         period: formData.period,
         award_cost: parseFloat(formData.awardCost) || 0,
         frequency: formData.frequency,
+        total_issues: parseInt(formData.totalIssues) || 12,
+        start_date: formData.startDate || new Date().toISOString().split('T')[0],
         author_publisher: formData.authorPublisher,
         category: formData.category,
         note: formData.note
@@ -71,6 +75,8 @@ export default function AddSerial() {
           period: '',
           awardCost: '',
           frequency: 'Monthly',
+          totalIssues: '12',
+          startDate: new Date().toISOString().split('T')[0],
           authorPublisher: '',
           category: '',
           note: ''
@@ -229,12 +235,43 @@ export default function AddSerial() {
                   onChange={handleChange}
                   style={inputStyle}
                 >
+                  <option value="Weekly">Weekly</option>
+                  <option value="Biweekly">Biweekly</option>
                   <option value="Monthly">Monthly</option>
-                  <option value="Bi-Monthly">Bi-Monthly</option>
                   <option value="Quarterly">Quarterly</option>
-                  <option value="Semi-Annual">Semi-Annual</option>
-                  <option value="Annual">Annual</option>
+                  <option value="Annually">Annually</option>
                 </select>
+              </div>
+              
+              <div>
+                <label style={labelStyle}>Total Issues</label>
+                <input
+                  type="number"
+                  name="totalIssues"
+                  value={formData.totalIssues}
+                  onChange={handleChange}
+                  style={inputStyle}
+                  placeholder="12"
+                  min="1"
+                  max="52"
+                />
+                <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                  Number of serial issues to generate based on frequency
+                </span>
+              </div>
+              
+              <div>
+                <label style={labelStyle}>Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  value={formData.startDate}
+                  onChange={handleChange}
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                  When the first issue is expected
+                </span>
               </div>
               
               <div>

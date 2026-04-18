@@ -4,9 +4,13 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SupplierAccountController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SerialIssueController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardStatsController;
+use App\Http\Controllers\DashboardExportController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\LogsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -61,6 +65,10 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('/admin-add-account', function () {
         return Inertia::render('Dashboard_Admin_Addaccount');
     })->name('admin.addaccount');
+    
+    Route::get('/admin-logs', function () {
+        return Inertia::render('Admin_Logs');
+    })->name('admin.logs');
 });
 
 // ===================== TPU ROUTES =====================
@@ -152,6 +160,16 @@ Route::middleware(['auth', 'verified', 'role:inspection'])->group(function () {
 
 // ===================== AUTHENTICATED ROUTES (ALL ROLES) =====================
 Route::middleware(['auth'])->group(function () {
+    // Session check endpoint - used to verify session is still valid and extend it
+    Route::get('/api/session/check', function () {
+        return response()->json([
+            'success' => true,
+            'authenticated' => true,
+            'user' => auth()->user()?->only(['id', 'name', 'email', 'role']),
+            'session_extended' => true,
+        ]);
+    })->name('session.check');
+
     // Profile routes - available to all authenticated users
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -161,18 +179,32 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::get('/api/users/available', [ChatController::class, 'getAvailableUsers'])->name('users.available');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'getMessages'])->name('chats.messages');
+    Route::get('/api/chats/{chat}/files', [ChatController::class, 'getSharedFiles'])->name('chats.files');
     Route::post('/api/chats/get-or-create', [ChatController::class, 'getOrCreateChat'])->name('chats.getOrCreate');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'storeMessage'])->name('messages.store');
-    Route::get('/api/chats/{message}/download', [ChatController::class, 'downloadAttachment'])->name('file.download');
+    Route::get('/api/attachments/{messageId}/download', [ChatController::class, 'downloadAttachment'])->name('chat.attachment.download');
+    Route::delete('/api/attachments/{messageId}', [ChatController::class, 'deleteAttachment'])->name('chat.attachment.delete');
     Route::post('/api/chats/{chat}/read', [ChatController::class, 'markAsRead'])->name('chats.markAsRead');
     Route::put('/api/messages/{messageId}', [ChatController::class, 'updateMessage'])->name('messages.update');
     Route::delete('/api/messages/{messageId}', [ChatController::class, 'deleteMessage'])->name('messages.delete');
+
+    // Notification routes - available to all authenticated users
+    Route::get('/api/notifications/incoming-serials', [NotificationController::class, 'getIncomingSerials'])->name('notifications.incomingSerials');
+    Route::get('/api/notifications/upcoming-deliveries', [NotificationController::class, 'getUpcomingDeliveries'])->name('notifications.upcomingDeliveries');
+    Route::post('/api/notifications/mark-read', [NotificationController::class, 'markAsRead'])->name('notifications.markRead');
+    Route::post('/api/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllRead');
+
+    // Workflow history - available to all authenticated users to view process movement
+    Route::get('/api/workflow-history', [LogsController::class, 'getWorkflowHistory'])->name('workflow.history');
 });
 
 // ===================== ADMIN-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:admin'])->group(function () {
     // Admin Dashboard Statistics API
     Route::get('/api/admin/dashboard-stats', [AdminDashboardController::class, 'stats'])->name('admin.dashboard-stats');
+    
+    // Admin Dashboard Export
+    Route::get('/api/admin/export-report', [DashboardExportController::class, 'adminExport'])->name('admin.export-report');
     
     // User Management API Routes - Admin only
     Route::prefix('api/users')->group(function () {
@@ -182,11 +214,25 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
         Route::put('/{id}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
         Route::put('/{id}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggleDisable');
+        Route::post('/{id}/resend-credentials', [UserController::class, 'resendCredentials'])->name('users.resendCredentials');
+    });
+
+    // Audit Logs & Process Movement Logs - Admin only
+    Route::prefix('api/logs')->group(function () {
+        Route::get('/audit', [LogsController::class, 'getAuditLogs'])->name('logs.audit');
+        Route::get('/audit/stats', [LogsController::class, 'getAuditStats'])->name('logs.auditStats');
+        Route::get('/audit/download', [LogsController::class, 'downloadAuditLogs'])->name('logs.auditDownload');
+        Route::get('/audit/{id}', [LogsController::class, 'getAuditLog'])->name('logs.auditDetail');
+        Route::get('/movements', [LogsController::class, 'getProcessMovementLogs'])->name('logs.movements');
+        Route::get('/movements/stats', [LogsController::class, 'getMovementStats'])->name('logs.movementStats');
+        Route::get('/workflow-history', [LogsController::class, 'getWorkflowHistory'])->name('logs.workflowHistory');
     });
 
     // Supplier Account Approval - Admin only
     Route::post('/api/supplier-accounts/{id}/approve', [SupplierAccountController::class, 'approve'])->name('supplier-accounts.approve');
     Route::post('/api/supplier-accounts/{id}/reject', [SupplierAccountController::class, 'reject'])->name('supplier-accounts.reject');
+    Route::post('/api/supplier-accounts/{id}/resend-credentials', [SupplierAccountController::class, 'resendCredentials'])->name('supplier-accounts.resendCredentials');
+    Route::post('/api/supplier-accounts/notify-pending', [SupplierAccountController::class, 'notifyPendingSuppliers'])->name('supplier-accounts.notifyPending');
 });
 
 // ===================== ADMIN + TPU + GSPS API ROUTES =====================
@@ -214,6 +260,9 @@ Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(fu
         Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
         Route::get('/monitored-deliveries', [SubscriptionController::class, 'getMonitoredDeliveries'])->name('subscriptions.monitoredDeliveries');
         Route::get('/inspection-serials', [SubscriptionController::class, 'getSerialsForInspection'])->name('subscriptions.inspectionSerials');
+        Route::get('/gsps-delivery-tracking', [SubscriptionController::class, 'getGSPSDeliveryTracking'])->name('subscriptions.gspsDeliveryTracking');
+        Route::get('/inspection-tracking', [SubscriptionController::class, 'getInspectionTracking'])->name('subscriptions.inspectionTracking');
+        Route::get('/tpu-delivery-tracking', [SubscriptionController::class, 'getTPUDeliveryTracking'])->name('subscriptions.tpuDeliveryTracking');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
     });
 });
@@ -222,6 +271,8 @@ Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(fu
 Route::middleware(['auth', 'role:inspection'])->group(function () {
     // Inspection submit - only inspection role can submit inspections
     Route::post('/api/subscriptions/{id}/submit-inspection', [SubscriptionController::class, 'submitInspection'])->name('subscriptions.submitInspection');
+    // Update inspection attachment - only inspection role can update
+    Route::post('/api/subscriptions/{id}/update-inspection-attachment', [SubscriptionController::class, 'updateInspectionAttachment'])->name('subscriptions.updateInspectionAttachment');
 });
 
 // ===================== TPU-ONLY API ROUTES =====================
@@ -237,24 +288,36 @@ Route::middleware(['auth', 'role:tpu'])->group(function () {
     
     // TPU Dashboard Statistics API
     Route::get('/api/tpu/dashboard-stats', [DashboardStatsController::class, 'tpuStats'])->name('tpu.dashboard-stats');
+    
+    // TPU Dashboard Export
+    Route::get('/api/tpu/export-report', [DashboardExportController::class, 'tpuExport'])->name('tpu.export-report');
 });
 
 // ===================== GSPS-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:gsps'])->group(function () {
     // GSPS Dashboard Statistics API
     Route::get('/api/gsps/dashboard-stats', [DashboardStatsController::class, 'gspsStats'])->name('gsps.dashboard-stats');
+    
+    // GSPS Dashboard Export
+    Route::get('/api/gsps/export-report', [DashboardExportController::class, 'gspsExport'])->name('gsps.export-report');
 });
 
 // ===================== SUPPLIER-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:supplier'])->group(function () {
     // Supplier Dashboard Statistics API
     Route::get('/api/supplier/dashboard-stats', [DashboardStatsController::class, 'supplierStats'])->name('supplier.dashboard-stats');
+    
+    // Supplier Dashboard Export
+    Route::get('/api/supplier/export-report', [DashboardExportController::class, 'supplierExport'])->name('supplier.export-report');
 });
 
 // ===================== INSPECTION-ONLY DASHBOARD ROUTES =====================
 Route::middleware(['auth', 'role:inspection'])->group(function () {
     // Inspection Dashboard Statistics API
     Route::get('/api/inspection/dashboard-stats', [DashboardStatsController::class, 'inspectionStats'])->name('inspection.dashboard-stats');
+    
+    // Inspection Dashboard Export
+    Route::get('/api/inspection/export-report', [DashboardExportController::class, 'inspectionExport'])->name('inspection.export-report');
 });
 
 // ===================== TPU + GSPS + SUPPLIER UPDATE ROUTES =====================
@@ -262,6 +325,47 @@ Route::middleware(['auth', 'role:tpu,gsps,supplier'])->group(function () {
     // Serial status updates - TPU, GSPS, and Supplier can update
     Route::put('/api/subscriptions/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
     Route::post('/api/subscriptions/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
+    Route::post('/api/subscriptions/{id}/update-attachment', [SubscriptionController::class, 'updateSerialAttachment'])->name('subscriptions.updateSerialAttachment');
+});
+
+// ===================== SERIAL ISSUES API ROUTES =====================
+// Routes for all roles that can view serial issues
+Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(function () {
+    // Serial Issues - Global list (for GSPS delivery view)
+    Route::get('/api/serial-issues', [SerialIssueController::class, 'getAllIssues'])->name('serial-issues.all');
+    
+    // Serial Issues - View per subscription
+    Route::get('/api/subscriptions/{subscriptionId}/issues', [SerialIssueController::class, 'index'])->name('serial-issues.index');
+    Route::get('/api/subscriptions/{subscriptionId}/issues/{issueId}', [SerialIssueController::class, 'show'])->name('serial-issues.show');
+    
+    // Serial Issues - Statistics
+    Route::get('/api/serial-issues/stats', [SerialIssueController::class, 'getStats'])->name('serial-issues.stats');
+    Route::get('/api/serial-issues/upcoming', [SerialIssueController::class, 'getUpcomingDeliveries'])->name('serial-issues.upcoming');
+    Route::get('/api/serial-issues/overdue', [SerialIssueController::class, 'getOverdueIssues'])->name('serial-issues.overdue');
+});
+
+// Serial Issues - Supplier status updates
+Route::middleware(['auth', 'role:supplier'])->group(function () {
+    Route::post('/api/subscriptions/{id}/accept', [SubscriptionController::class, 'acceptSubscription'])->name('subscriptions.accept');
+    Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/status', [SerialIssueController::class, 'updateStatus'])->name('serial-issues.updateStatus');
+    Route::get('/api/serial-issues/supplier', [SerialIssueController::class, 'getSupplierIssues'])->name('serial-issues.supplier');
+});
+
+// Serial Issues - GSPS mark received
+Route::middleware(['auth', 'role:gsps'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/issues/{issueId}/received', [SerialIssueController::class, 'markReceived'])->name('serial-issues.markReceived');
+});
+
+// Serial Issues - Inspection submit
+Route::middleware(['auth', 'role:inspection'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/issues/{issueId}/inspection', [SerialIssueController::class, 'submitInspection'])->name('serial-issues.submitInspection');
+    Route::get('/api/serial-issues/for-inspection', [SerialIssueController::class, 'getIssuesForInspection'])->name('serial-issues.forInspection');
+});
+
+// Serial Issues - TPU management
+Route::middleware(['auth', 'role:tpu'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/generate-issues', [SerialIssueController::class, 'generateIssues'])->name('serial-issues.generate');
+    Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/notes', [SerialIssueController::class, 'updateNotes'])->name('serial-issues.updateNotes');
 });
 
 require __DIR__.'/auth.php';

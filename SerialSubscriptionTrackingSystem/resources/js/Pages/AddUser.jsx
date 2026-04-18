@@ -40,9 +40,10 @@ export default function AddUser() {
           />
 
           <input
-            type="email"
+            type="text"
             name="email"
             placeholder="Email Address"
+            autoComplete="email"
             className="w-full border rounded-md px-4 py-2"
             value={form.email}
             onChange={handleChange}
