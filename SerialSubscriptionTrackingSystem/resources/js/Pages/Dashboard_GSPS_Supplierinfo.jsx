@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import GSPSLayout from '@/Layouts/GSPSLayout';
+import GSPSLayout from '@/Layouts/GspsLayout';
 import { MdSearch, MdFilterList, MdEmail, MdPhone, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { FaMapMarkerAlt } from "react-icons/fa";
 import axios from 'axios';

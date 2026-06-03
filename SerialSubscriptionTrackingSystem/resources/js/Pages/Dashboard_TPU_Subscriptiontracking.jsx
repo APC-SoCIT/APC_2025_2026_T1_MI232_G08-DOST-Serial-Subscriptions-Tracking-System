@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdOutlineInfo, MdAddCircle, MdClose, MdDelete, MdEdit } from "react-icons/md";
 import { FiTrendingUp, FiTrendingDown } from "react-icons/fi";
 import { usePage } from '@inertiajs/react';

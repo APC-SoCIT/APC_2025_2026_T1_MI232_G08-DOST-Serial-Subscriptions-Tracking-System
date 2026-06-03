@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import GSPSLayout from '@/Layouts/GSPSLayout';
+import GSPSLayout from '@/Layouts/GspsLayout';
 import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage, MdVisibility, MdRefresh, MdExpandMore, MdExpandLess, MdCheckCircle } from "react-icons/md";
 import { FiPackage, FiCheckCircle, FiClock, FiAlertCircle } from "react-icons/fi";
 import { FaHistory } from "react-icons/fa";

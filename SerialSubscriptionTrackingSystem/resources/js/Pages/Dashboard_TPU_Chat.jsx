@@ -1,6 +1,6 @@
 // resources/js/Pages/Dashboard_TPU_Chat.jsx
 import React from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import ChatComponent from '@/Components/Chat/ChatComponent';
 
 export default function DashboardTPUChat() {

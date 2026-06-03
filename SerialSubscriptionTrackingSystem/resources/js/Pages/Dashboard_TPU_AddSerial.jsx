@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { MdAdd, MdClose, MdSearch } from "react-icons/md";
 import axios from 'axios';

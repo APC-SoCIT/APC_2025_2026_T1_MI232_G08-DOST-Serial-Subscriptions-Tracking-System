@@ -1,6 +1,6 @@
 // resources/js/Pages/Dashboard_TPU_Addaccount.jsx
 import React, { useState } from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import { HiUserAdd } from "react-icons/hi";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';

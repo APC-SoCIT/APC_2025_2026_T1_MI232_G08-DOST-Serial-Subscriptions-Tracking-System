@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import TPULayout from "@/Layouts/TPULayout";
+import TPULayout from "@/Layouts/TpuLayout";
 import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';

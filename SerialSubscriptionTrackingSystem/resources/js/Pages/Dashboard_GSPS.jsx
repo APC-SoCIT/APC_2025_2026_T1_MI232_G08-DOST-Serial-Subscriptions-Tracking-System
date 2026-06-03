@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import GSPSLayout from "@/Layouts/GSPSLayout";
+import GSPSLayout from "@/Layouts/GspsLayout";
 import { Head, router } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';

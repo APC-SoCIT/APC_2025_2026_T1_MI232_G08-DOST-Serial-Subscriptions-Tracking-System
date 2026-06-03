@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdRefresh, MdVisibility, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { FiPackage, FiCheckCircle, FiClock, FiAlertTriangle } from "react-icons/fi";
 import { FaHistory } from "react-icons/fa";

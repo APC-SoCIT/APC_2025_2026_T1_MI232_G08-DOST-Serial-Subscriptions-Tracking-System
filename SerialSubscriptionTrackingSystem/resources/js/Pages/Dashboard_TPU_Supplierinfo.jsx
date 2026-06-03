@@ -1,6 +1,6 @@
 // resources/js/Pages/Dashboard_TPU_Supplierinfo.jsx
 import React, { useState, useEffect } from 'react';
-import TPULayout from '@/Layouts/TPULayout';
+import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdAdd, MdClose, MdExpandMore } from "react-icons/md";
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
