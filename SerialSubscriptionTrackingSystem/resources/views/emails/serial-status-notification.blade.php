@@ -162,11 +162,39 @@
                         </span>
                     </span>
                 </div>
+
+                @if($issueNumber && $totalIssues)
+                <div class="detail-row">
+                    <span class="detail-label">Issue Number:</span>
+                    <span class="detail-value">{{ $issueNumber }} of {{ $totalIssues }}</span>
+                </div>
+                @endif
+
+                @if($frequency)
+                <div class="detail-row">
+                    <span class="detail-label">Frequency:</span>
+                    <span class="detail-value">{{ $frequency }}</span>
+                </div>
+                @endif
                 
                 @if($actorName && in_array(strtolower($currentStatus), ['received', 'inspected', 'for_return']))
                 <div class="detail-row">
                     <span class="detail-label">{{ strtolower($currentStatus) === 'received' ? 'Received By:' : 'Inspected By:' }}</span>
                     <span class="detail-value"><strong>{{ $actorName }}</strong></span>
+                </div>
+                @endif
+
+                @if($expectedDeliveryDate)
+                <div class="detail-row">
+                    <span class="detail-label">Expected Delivery:</span>
+                    <span class="detail-value">{{ $expectedDeliveryDate }}</span>
+                </div>
+                @endif
+
+                @if($nextIssueDate)
+                <div class="detail-row">
+                    <span class="detail-label">Next Issue Expected:</span>
+                    <span class="detail-value">{{ $nextIssueDate }}</span>
                 </div>
                 @endif
                 
@@ -177,7 +205,13 @@
             </div>
             
             <div class="description">
-                {{ $statusDescription }}
+                @if($action)
+                    {{-- Use confirmation message if available --}}
+                    {{ $action }}
+                @else
+                    {{-- Fall back to generic status description --}}
+                    {{ $statusDescription }}
+                @endif
             </div>
             
             <p>Please log in to the Serial Subscription Tracking System to view more details or take necessary actions.</p>

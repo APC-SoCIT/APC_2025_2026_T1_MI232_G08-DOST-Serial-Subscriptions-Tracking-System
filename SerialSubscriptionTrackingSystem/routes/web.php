@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SupplierAccountController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SerialIssueController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardStatsController;
@@ -259,6 +260,9 @@ Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(fu
         Route::get('/delivery-serials', [SubscriptionController::class, 'getDeliverySerials'])->name('subscriptions.deliverySerials');
         Route::get('/monitored-deliveries', [SubscriptionController::class, 'getMonitoredDeliveries'])->name('subscriptions.monitoredDeliveries');
         Route::get('/inspection-serials', [SubscriptionController::class, 'getSerialsForInspection'])->name('subscriptions.inspectionSerials');
+        Route::get('/gsps-delivery-tracking', [SubscriptionController::class, 'getGSPSDeliveryTracking'])->name('subscriptions.gspsDeliveryTracking');
+        Route::get('/inspection-tracking', [SubscriptionController::class, 'getInspectionTracking'])->name('subscriptions.inspectionTracking');
+        Route::get('/tpu-delivery-tracking', [SubscriptionController::class, 'getTPUDeliveryTracking'])->name('subscriptions.tpuDeliveryTracking');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
     });
 });
@@ -322,6 +326,46 @@ Route::middleware(['auth', 'role:tpu,gsps,supplier'])->group(function () {
     Route::put('/api/subscriptions/{id}/serial-status', [SubscriptionController::class, 'updateSerialStatus'])->name('subscriptions.updateSerialStatus');
     Route::post('/api/subscriptions/{id}/serial-received', [SubscriptionController::class, 'markSerialReceived'])->name('subscriptions.markSerialReceived');
     Route::post('/api/subscriptions/{id}/update-attachment', [SubscriptionController::class, 'updateSerialAttachment'])->name('subscriptions.updateSerialAttachment');
+});
+
+// ===================== SERIAL ISSUES API ROUTES =====================
+// Routes for all roles that can view serial issues
+Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(function () {
+    // Serial Issues - Global list (for GSPS delivery view)
+    Route::get('/api/serial-issues', [SerialIssueController::class, 'getAllIssues'])->name('serial-issues.all');
+    
+    // Serial Issues - View per subscription
+    Route::get('/api/subscriptions/{subscriptionId}/issues', [SerialIssueController::class, 'index'])->name('serial-issues.index');
+    Route::get('/api/subscriptions/{subscriptionId}/issues/{issueId}', [SerialIssueController::class, 'show'])->name('serial-issues.show');
+    
+    // Serial Issues - Statistics
+    Route::get('/api/serial-issues/stats', [SerialIssueController::class, 'getStats'])->name('serial-issues.stats');
+    Route::get('/api/serial-issues/upcoming', [SerialIssueController::class, 'getUpcomingDeliveries'])->name('serial-issues.upcoming');
+    Route::get('/api/serial-issues/overdue', [SerialIssueController::class, 'getOverdueIssues'])->name('serial-issues.overdue');
+});
+
+// Serial Issues - Supplier status updates
+Route::middleware(['auth', 'role:supplier'])->group(function () {
+    Route::post('/api/subscriptions/{id}/accept', [SubscriptionController::class, 'acceptSubscription'])->name('subscriptions.accept');
+    Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/status', [SerialIssueController::class, 'updateStatus'])->name('serial-issues.updateStatus');
+    Route::get('/api/serial-issues/supplier', [SerialIssueController::class, 'getSupplierIssues'])->name('serial-issues.supplier');
+});
+
+// Serial Issues - GSPS mark received
+Route::middleware(['auth', 'role:gsps'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/issues/{issueId}/received', [SerialIssueController::class, 'markReceived'])->name('serial-issues.markReceived');
+});
+
+// Serial Issues - Inspection submit
+Route::middleware(['auth', 'role:inspection'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/issues/{issueId}/inspection', [SerialIssueController::class, 'submitInspection'])->name('serial-issues.submitInspection');
+    Route::get('/api/serial-issues/for-inspection', [SerialIssueController::class, 'getIssuesForInspection'])->name('serial-issues.forInspection');
+});
+
+// Serial Issues - TPU management
+Route::middleware(['auth', 'role:tpu'])->group(function () {
+    Route::post('/api/subscriptions/{subscriptionId}/generate-issues', [SerialIssueController::class, 'generateIssues'])->name('serial-issues.generate');
+    Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/notes', [SerialIssueController::class, 'updateNotes'])->name('serial-issues.updateNotes');
 });
 
 require __DIR__.'/auth.php';

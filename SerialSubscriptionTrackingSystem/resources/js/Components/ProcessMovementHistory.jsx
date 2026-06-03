@@ -349,7 +349,7 @@ export default function ProcessMovementHistory({ isOpen, onClose, recordType, re
                     </div>
 
                     {/* Status change */}
-                    {(item.from_status || item.to_status) && (
+                    {(item.status_from || item.status_to) && (
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -359,11 +359,11 @@ export default function ProcessMovementHistory({ isOpen, onClose, recordType, re
                         background: '#fff',
                         borderRadius: 6,
                       }}>
-                        {item.from_status && getStatusBadge(item.from_status)}
-                        {item.from_status && item.to_status && (
+                        {item.status_from && getStatusBadge(item.status_from)}
+                        {item.status_from && item.status_to && (
                           <FaArrowRight size={12} color="#666" />
                         )}
-                        {item.to_status && getStatusBadge(item.to_status)}
+                        {item.status_to && getStatusBadge(item.status_to)}
                       </div>
                     )}
 

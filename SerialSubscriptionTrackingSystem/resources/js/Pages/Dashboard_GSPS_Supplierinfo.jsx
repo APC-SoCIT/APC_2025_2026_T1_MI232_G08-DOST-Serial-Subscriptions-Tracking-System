@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import GSPSLayout from '@/Layouts/GSPSLayout';
-import { MdSearch, MdFilterList, MdEmail, MdPhone } from "react-icons/md";
+import { MdSearch, MdFilterList, MdEmail, MdPhone, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { FaMapMarkerAlt } from "react-icons/fa";
 import axios from 'axios';
 
@@ -16,6 +16,7 @@ function SupplierInfoGSPS() {
   const [supplierData, setSupplierData] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedSerialId, setExpandedSerialId] = useState(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -25,10 +26,10 @@ function SupplierInfoGSPS() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch approved suppliers and subscriptions in parallel
+      // Fetch approved suppliers and subscription data with issues (same as TPU for consistency)
       const [suppliersRes, subscriptionsRes] = await Promise.all([
         axios.get('/api/supplier-accounts/approved'),
-        axios.get('/api/subscriptions')
+        axios.get('/api/subscriptions/tpu-delivery-tracking')
       ]);
 
       if (suppliersRes.data.success) {
@@ -63,7 +64,23 @@ function SupplierInfoGSPS() {
   };
 
   // Helper function to determine display status based on serial status and inspection status
-  const getDisplayStatus = (serial) => {
+  const getDisplayStatus = (serial, issues = []) => {
+    // For continuous subscriptions with issues, check if ALL issues are delivered
+    if (issues && issues.length > 0) {
+      const allDelivered = issues.every(issue => issue.status === 'delivered');
+      const hasForReturn = issues.some(issue => issue.status === 'for_return');
+      
+      if (hasForReturn) {
+        return 'For Return';
+      }
+      if (allDelivered) {
+        return 'Delivered';
+      }
+      // If not all delivered, it's ongoing
+      return 'Ongoing';
+    }
+    
+    // Fallback for serials without issues
     const status = serial.status || 'pending';
     const inspectionStatus = serial.inspection_status;
     
@@ -96,38 +113,25 @@ function SupplierInfoGSPS() {
   // Get serials for a specific supplier from subscriptions
   const getSerialsForSupplier = (supplierName) => {
     const supplierSubscriptions = subscriptions.filter(
-      sub => sub.supplier_name?.toLowerCase() === supplierName?.toLowerCase()
+      sub => sub.supplierName?.toLowerCase() === supplierName?.toLowerCase()
     );
     
-    // Flatten all serials from subscriptions
-    const serials = [];
-    supplierSubscriptions.forEach(sub => {
-      if (sub.serials && sub.serials.length > 0) {
-        sub.serials.forEach(serial => {
-          serials.push({
-            id: serial.id,
-            title: serial.title || sub.serial_title,
-            issn: serial.issn || 'N/A',
-            frequency: serial.frequency || 'N/A',
-            status: getDisplayStatus(serial),
-            nextIssue: serial.deliveryDate || null,
-            subscriptionPeriod: sub.period,
-            awardCost: sub.award_cost,
-          });
-        });
-      } else {
-        // If no serials array, create one from the subscription itself
-        serials.push({
-          id: sub._id || sub.id,
-          title: sub.serial_title,
-          issn: 'N/A',
-          frequency: 'N/A',
-          status: sub.status || 'Active',
-          nextIssue: null,
-          subscriptionPeriod: sub.period,
-          awardCost: sub.award_cost,
-        });
-      }
+    // Map subscriptions to serials with their issues
+    const serials = supplierSubscriptions.map(sub => {
+      const issues = sub.issues || [];
+      
+      return {
+        id: sub.id || sub.subscription_id,
+        title: sub.serialTitle || 'N/A',
+        issn: sub.issn || 'N/A',
+        frequency: 'N/A', // Not in TPU endpoint
+        status: sub.aggregatedStatus || 'Ongoing',
+        issues: issues,
+        totalIssues: sub.totalIssues || 0,
+        deliveredIssues: sub.deliveredIssues || 0,
+        forReturnIssues: sub.forReturnCount || 0,
+        awardCost: sub.award_cost || 0,
+      };
     });
     
     return serials;
@@ -136,12 +140,30 @@ function SupplierInfoGSPS() {
   // Get subscription stats for a supplier
   const getSupplierStats = (supplierName) => {
     const supplierSubscriptions = subscriptions.filter(
-      sub => sub.supplier_name?.toLowerCase() === supplierName?.toLowerCase()
+      sub => sub.supplierName?.toLowerCase() === supplierName?.toLowerCase()
     );
+    
+    // Calculate total award cost from all issues assigned to this supplier
+    let totalAwardCost = 0;
+    let totalDeliveredCost = 0;
+    
+    supplierSubscriptions.forEach(sub => {
+      const issues = sub.issues || [];
+      issues.forEach(issue => {
+        const issueCost = parseFloat(issue.cost) || 0;
+        totalAwardCost += issueCost;
+        
+        // Only add to delivered cost if the issue is delivered
+        if (issue.status === 'delivered') {
+          totalDeliveredCost += issueCost;
+        }
+      });
+    });
     
     return {
       totalOrders: supplierSubscriptions.length,
-      totalValue: supplierSubscriptions.reduce((sum, sub) => sum + (parseFloat(sub.award_cost) || 0), 0),
+      totalAwardCost: totalAwardCost,
+      totalDeliveredCost: totalDeliveredCost,
     };
   };
 
@@ -165,6 +187,23 @@ function SupplierInfoGSPS() {
     } else {
       setSelectedSupplier(supplier);
     }
+  };
+
+  const handleToggleSerialRow = (serialId) => {
+    setExpandedSerialId(expandedSerialId === serialId ? null : serialId);
+  };
+
+  // Helper function to get status color for issues
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: { bg: '#fff3cd', text: '#856404' },
+      prepare: { bg: '#d1ecf1', text: '#0c5460' },
+      for_delivery: { bg: '#e2d4f0', text: '#6f42c1' },
+      received: { bg: '#cce5ff', text: '#004085' },
+      delivered: { bg: '#d4edda', text: '#155724' },
+      for_return: { bg: '#f8d7da', text: '#721c24' },
+    };
+    return colors[status] || { bg: '#e2e3e5', text: '#383d41' };
   };
 
   // Supplier Details Panel Component
@@ -240,16 +279,16 @@ function SupplierInfoGSPS() {
               </span>
             </div>
             <div>
-              <strong style={{ color: '#666', fontSize: 14 }}>Total Subscriptions:</strong>
+              <strong style={{ color: '#666', fontSize: 14 }}>Total Serial Subscriptions:</strong>
               <p style={{ margin: '4px 0 0 0', fontSize: 16 }}>{stats.totalOrders}</p>
             </div>
             <div>
-              <strong style={{ color: '#666', fontSize: 14 }}>Total Value:</strong>
-              <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#004A98', fontWeight: 600 }}>P{stats.totalValue.toLocaleString()}</p>
+              <strong style={{ color: '#666', fontSize: 14 }}>Total Award Cost:</strong>
+              <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#004A98', fontWeight: 600 }}>₱{stats.totalAwardCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
             <div>
-              <strong style={{ color: '#666', fontSize: 14 }}>Total Serials:</strong>
-              <p style={{ margin: '4px 0 0 0', fontSize: 16 }}>{supplierSerials.length}</p>
+              <strong style={{ color: '#666', fontSize: 14 }}>Total Delivered Cost:</strong>
+              <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#065f46', fontWeight: 600 }}>₱{stats.totalDeliveredCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
         </div>
@@ -293,57 +332,126 @@ function SupplierInfoGSPS() {
                 <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151', fontSize: 13 }}>Title</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151', fontSize: 13 }}>ISSN</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151', fontSize: 13 }}>Frequency</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151', fontSize: 13 }}>Period</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: '#374151', fontSize: 13 }}>Issues</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151', fontSize: 13 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {supplierSerials.map((serial, index) => (
-                  <tr 
-                    key={serial.id || index} 
-                    style={{ 
-                      borderBottom: index !== supplierSerials.length - 1 ? '1px solid #e5e7eb' : 'none',
-                    }}
-                  >
-                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#1f2937', fontWeight: 500 }}>
-                      {serial.title}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#6b7280', fontFamily: 'monospace' }}>
-                      {serial.issn}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#4b5563' }}>
-                      {serial.frequency}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#4b5563' }}>
-                      {serial.subscriptionPeriod || 'N/A'}
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: 16,
-                        background: 
-                          serial.status === 'Delivered' ? '#d1fae5' : 
-                          serial.status === 'For Return' ? '#fee2e2' :
-                          serial.status === 'Pending Inspection' ? '#fef3c7' :
-                          serial.status === 'For Delivery' ? '#dbeafe' :
-                          serial.status === 'Received' ? '#e0e7ff' :
-                          '#f3f4f6',
-                        color: 
-                          serial.status === 'Delivered' ? '#065f46' : 
-                          serial.status === 'For Return' ? '#dc2626' :
-                          serial.status === 'Pending Inspection' ? '#92400e' :
-                          serial.status === 'For Delivery' ? '#1e40af' :
-                          serial.status === 'Received' ? '#3730a3' :
-                          '#374151',
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}>
-                        {serial.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {supplierSerials.map((serial, index) => {
+                  const isExpanded = expandedSerialId === serial.id;
+                  return (
+                    <React.Fragment key={serial.id || index}>
+                      <tr 
+                        style={{ 
+                          borderBottom: isExpanded ? 'none' : '1px solid #e5e7eb',
+                          background: isExpanded ? '#f0f7ff' : 'transparent',
+                          cursor: serial.issues.length > 0 ? 'pointer' : 'default',
+                        }}
+                        onClick={() => serial.issues.length > 0 && handleToggleSerialRow(serial.id)}
+                      >
+                        <td style={{ padding: '12px 16px', fontSize: 14, color: '#1f2937', fontWeight: 500 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {serial.issues.length > 0 ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 4px', color: '#004A98' }}>
+                                {isExpanded ? <MdExpandLess size={18} /> : <MdExpandMore size={18} />}
+                              </span>
+                            ) : (
+                              <span style={{ width: 26 }}></span>
+                            )}
+                            <span>{serial.title}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, color: '#6b7280', fontFamily: 'monospace' }}>
+                          {serial.issn}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#004A98' }}>
+                          {serial.deliveredIssues} / {serial.totalIssues}
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: 16,
+                            background: 
+                              serial.status === 'Delivered' ? '#d1fae5' : 
+                              serial.status === 'For Return' ? '#fee2e2' :
+                              serial.status === 'Ongoing' ? '#fef3c7' :
+                              serial.status === 'For Delivery' ? '#dbeafe' :
+                              serial.status === 'Received' ? '#e0e7ff' :
+                              '#f3f4f6',
+                            color: 
+                              serial.status === 'Delivered' ? '#065f46' : 
+                              serial.status === 'For Return' ? '#dc2626' :
+                              serial.status === 'Ongoing' ? '#92400e' :
+                              serial.status === 'For Delivery' ? '#1e40af' :
+                              serial.status === 'Received' ? '#3730a3' :
+                              '#374151',
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}>
+                            {serial.status}
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Issues Row */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan="4" style={{ padding: 0 }}>
+                            <div style={{ background: '#f8f9fa', padding: '16px 24px', borderBottom: '2px solid #004A98' }}>
+                              <h4 style={{ margin: '0 0 12px', color: '#004A98', fontSize: 14, fontWeight: 600 }}>
+                                Serial Issues for {serial.title}
+                              </h4>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>
+                                <thead>
+                                  <tr style={{ background: '#e9ecef' }}>
+                                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Issue #</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Supplier</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Expected Delivery</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Status</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {serial.issues.map((issue, issueIndex) => {
+                                    const statusColor = getStatusColor(issue.status);
+                                    return (
+                                      <tr key={issue.id || issueIndex} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#004A98' }}>
+                                          #{issue.issue_number}
+                                        </td>
+                                        <td style={{ padding: '10px 12px', fontSize: 13 }}>
+                                          {issue.supplier_name || supplier.supplierName || 'N/A'}
+                                        </td>
+                                        <td style={{ padding: '10px 12px', fontSize: 13 }}>
+                                          {issue.expected_delivery_date ? new Date(issue.expected_delivery_date).toLocaleDateString() : 'N/A'}
+                                        </td>
+                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                          <span style={{ 
+                                            padding: '4px 10px', 
+                                            borderRadius: 20, 
+                                            background: statusColor.bg, 
+                                            color: statusColor.text, 
+                                            fontSize: 11, 
+                                            fontWeight: 500 
+                                          }}>
+                                            {issue.status.charAt(0).toUpperCase() + issue.status.slice(1).replace('_', ' ')}
+                                          </span>
+                                        </td>
+                                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#004A98', fontSize: 13 }}>
+                                          ₱{parseFloat(issue.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

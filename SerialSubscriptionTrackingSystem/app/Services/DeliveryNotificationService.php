@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Mail\DeliveryReminderNotification;
 use App\Models\DeliveryNotification;
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class DeliveryNotificationService
 {
@@ -100,8 +102,8 @@ class DeliveryNotificationService
 
                     $results['generated']++;
 
-                    // Optionally send email notification
-                    // self::sendEmailNotification($notification);
+                    // Send email notification to supplier
+                    self::sendEmailNotification($notification);
 
                 } // end foreach serial
             } // end foreach subscription
@@ -253,12 +255,33 @@ class DeliveryNotificationService
      */
     private static function sendEmailNotification(DeliveryNotification $notification): void
     {
-        // TODO: Implement email sending logic
-        // Mail::to($notification->supplier_email)->send(new DeliveryReminderMail($notification));
-        
-        $notification->is_email_sent = true;
-        $notification->save();
-        
-        Log::info("Delivery notification email would be sent to {$notification->supplier_email} for {$notification->serial_title}");
+        try {
+            // Verify email address exists
+            if (empty($notification->supplier_email)) {
+                Log::warning("Cannot send delivery notification: no supplier email for {$notification->serial_title}");
+                return;
+            }
+
+            // Send email to supplier
+            Mail::to($notification->supplier_email)
+                ->send(new DeliveryReminderNotification($notification));
+
+            // Mark as sent
+            $notification->is_email_sent = true;
+            $notification->save();
+
+            Log::info("Delivery reminder email sent", [
+                'to' => $notification->supplier_email,
+                'serial_title' => $notification->serial_title,
+                'notification_type' => $notification->notification_type,
+                'days_until_delivery' => $notification->days_until_delivery,
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to send delivery notification email", [
+                'error' => $e->getMessage(),
+                'supplier_email' => $notification->supplier_email,
+                'serial_title' => $notification->serial_title,
+            ]);
+        }
     }
 }

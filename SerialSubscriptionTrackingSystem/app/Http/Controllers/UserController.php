@@ -267,10 +267,35 @@ class UserController extends Controller
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
-                'role' => $request->role,
+                'role' => strtolower($request->role),
                 'password' => Hash::make($request->password),
                 'email_verified_at' => now(), // Auto-verify admin-created accounts
+                'is_disabled' => false, // Explicitly enable new accounts for notifications
             ]);
+
+            // Send welcome email with credentials to the new user
+            try {
+                $roleDisplay = match(strtolower($user->role)) {
+                    'tpu' => 'TPU Officer',
+                    'gsps' => 'GSPS Officer',
+                    'inspection' => 'Inspection Officer',
+                    'admin' => 'Administrator',
+                    default => ucfirst($user->role),
+                };
+
+                Mail::to($user->email)->send(new \App\Mail\AccountCredentialsNotification(
+                    $user->name,
+                    $user->email,
+                    $plainPassword,
+                    $roleDisplay,
+                    url('/login')
+                ));
+
+                Log::info("Account credentials email sent to new user {$user->email} with role {$user->role}");
+            } catch (\Exception $emailError) {
+                Log::error("Failed to send account credentials email to {$user->email}: " . $emailError->getMessage());
+                // Don't fail the account creation if email fails
+            }
 
             // Log user creation
             AuditLogService::logCreate($user, "User '{$user->name}' created by admin with role '{$user->role}'");

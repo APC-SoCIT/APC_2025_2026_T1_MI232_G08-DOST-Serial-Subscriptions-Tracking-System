@@ -6,6 +6,7 @@ import { usePage } from '@inertiajs/react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
+import SerialIssuesTable from '@/Components/SerialIssuesTable';
 
 // Subscription Tracking Component
 function SubscriptionTracking() {
@@ -139,9 +140,10 @@ function SubscriptionTracking() {
           category: sub.category,
           serials: sub.serials || [],
           transactions: sub.transactions || [],
+          created_at: sub.created_at, // Keep created_at for sorting
         }));
-        // Reverse to show newest subscriptions first
-        setSubscriptions(apiSubscriptions.reverse());
+        // API already returns newest first via orderBy('created_at', 'desc')
+        setSubscriptions(apiSubscriptions);
       }
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
@@ -150,11 +152,9 @@ function SubscriptionTracking() {
     }
   };
   
-  // Get supplier options - prioritize approved suppliers from backend, fallback to localStorage
-  // This ensures any newly approved supplier is immediately available
-  const supplierOptions = approvedSuppliers.length > 0 
-    ? approvedSuppliers.map(s => s.company_name)
-    : addedSuppliers.map(s => s.supplierName);
+  // Get supplier options - only from Active Suppliers (manually added in Supplier Info)
+  // Suppliers must be explicitly added to Active Suppliers before they can be used here
+  const supplierOptions = addedSuppliers.map(s => s.supplierName);
 
   // Use subscriptions from API
   const allSubscriptions = subscriptions;
@@ -292,13 +292,23 @@ function SubscriptionTracking() {
     },
   ];
 
-  const getPaymentStatusColor = (status) => {
+  const getStatusColor = (status) => {
     switch(status) {
-      case 'Fully Paid': return '#d4edda';
-      case 'Partially Paid': return '#fff3cd';
-      case 'Overpaid': return '#cce5ff';
-      default: return '#e2e3e5';
+      case 'Active': return { bg: '#fff3cd', text: '#856404' };
+      case 'Delivered': return { bg: '#d4edda', text: '#155724' };
+      default: return { bg: '#e2e3e5', text: '#383d41' };
     }
+  };
+
+  // Helper to get display status based on database status
+  const getDisplayStatus = (subscription) => {
+    // 'Delivered' status means all issues have been delivered
+    // 'delivered' (lowercase) for backward compatibility
+    if (subscription.status === 'Delivered' || subscription.status === 'delivered') {
+      return 'Delivered';
+    }
+    // 'accepted' or 'Active' or any other status that's not delivered = Active/Ongoing
+    return 'Active';
   };
 
   const getPaymentStatusTextColor = (status) => {
@@ -627,6 +637,10 @@ function SubscriptionTracking() {
           period: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
           award_cost: totalCost,
           delivered_cost: 0,
+          // Add frequency and total_issues for serial issue generation
+          frequency: firstItem.frequency || 'monthly',
+          total_issues: parseInt(firstItem.amount) || 12,
+          start_date: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
           serials: items.map(item => ({
             id: item.id,
             serialTitle: item.serialTitle,
@@ -927,12 +941,12 @@ function SubscriptionTracking() {
                     <span style={{
                       padding: '6px 16px',
                       borderRadius: 20,
-                      background: '#d4edda',
-                      color: '#155724',
+                      background: getStatusColor(getDisplayStatus(subscription)).bg,
+                      color: getStatusColor(getDisplayStatus(subscription)).text,
                       fontSize: 12,
                       fontWeight: 500,
                     }}>
-                      {subscription.status}
+                      {getDisplayStatus(subscription)}
                     </span>
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -1674,12 +1688,12 @@ function SubscriptionTracking() {
                 <span style={{
                   padding: '6px 16px',
                   borderRadius: 20,
-                  background: '#d4edda',
-                  color: '#155724',
+                  background: getStatusColor(getDisplayStatus(viewDetailsSubscription)).bg,
+                  color: getStatusColor(getDisplayStatus(viewDetailsSubscription)).text,
                   fontSize: 13,
                   fontWeight: 500,
                 }}>
-                  {viewDetailsSubscription.status}
+                  {getDisplayStatus(viewDetailsSubscription)}
                 </span>
                 <button
                   onClick={handleCloseViewDetailsModal}
@@ -1766,50 +1780,16 @@ function SubscriptionTracking() {
               </div>
             </div>
 
-            {/*  History Section */}
+            {/* Serial Issues Section - Recurring Deliveries */}
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#004A98' }}>
-                 History
+                Serial Issues (Recurring Deliveries)
               </h3>
-              {viewDetailsSubscription.transactions && viewDetailsSubscription.transactions.length > 0 ? (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f5f5f5' }}>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Date</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Type</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Amount</th>
-                        <th style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #ddd', color: '#333' }}>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewDetailsSubscription.transactions.map((transaction) => (
-                        <tr key={transaction.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', color: '#666' }}>{transaction.date}</td>
-                          <td style={{ padding: '14px 16px' }}>
-                            <span style={{
-                              padding: '5px 14px',
-                              borderRadius: 20,
-                              background: '#cce5ff',
-                              color: '#004085',
-                              fontSize: 12,
-                              fontWeight: 500,
-                            }}>
-                              {transaction.type === 'Payment' ? 'Subscription Created' : transaction.type}
-                            </span>
-                          </td>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: '600', color: '#004A98' }}>{transaction.amount}</td>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', color: '#666' }}>
-                            {transaction.description || transaction.note || 'Initial subscription'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p style={{ color: '#666', fontSize: '14px' }}>No transactions available for this subscription.</p>
-              )}
+              <SerialIssuesTable 
+                subscriptionId={viewDetailsSubscription.id}
+                userRole="tpu"
+                onCostUpdate={fetchSubscriptions}
+              />
             </div>
 
             {/* Modal Footer */}

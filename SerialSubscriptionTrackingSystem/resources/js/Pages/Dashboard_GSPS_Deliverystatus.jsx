@@ -1,81 +1,167 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import GSPSLayout from '@/Layouts/GSPSLayout';
-import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage, MdVisibility } from "react-icons/md";
+import { MdSearch, MdFilterList, MdCloudUpload, MdClose, MdImage, MdVisibility, MdRefresh, MdExpandMore, MdExpandLess, MdCheckCircle } from "react-icons/md";
+import { FiPackage, FiCheckCircle, FiClock, FiAlertCircle } from "react-icons/fi";
 import { FaHistory } from "react-icons/fa";
 import Swal from 'sweetalert2';
 import 'animate.css';
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 
-// Delivery Status Component - MATCHING YOUR IMAGE EXACTLY
+// GSPS Delivery Status Component - With clickable dropdown and serial issues
 function DeliveryStatus() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('All');
-  const [showFilter, setShowFilter] = useState(false);
-  const [confirmModal, setConfirmModal] = useState({ show: false, item: null });
+  const [statusFilter, setStatusFilter] = useState('All');
   
-  // Attachment state for image upload
+  // API data state
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [stats, setStats] = useState({ total: 0, delivered: 0, ongoing: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Expanded row state for showing serial issues
+  const [expandedRow, setExpandedRow] = useState(null);
+  
+  // Confirm receipt modal
+  const [confirmModal, setConfirmModal] = useState({ show: false, issue: null, subscription: null });
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   
-  // Re-upload state for view modal
-  const [reuploadFile, setReuploadFile] = useState(null);
-  const [reuploadPreview, setReuploadPreview] = useState(null);
-  const [reuploadIsPdf, setReuploadIsPdf] = useState(false);
-  const [reuploadUploading, setReuploadUploading] = useState(false);
-  const reuploadFileInputRef = useRef(null);
+  // View modal - shows compiled issues with attachments
+  const [viewModal, setViewModal] = useState({ show: false, subscription: null });
+  const [selectedIssueView, setSelectedIssueView] = useState(null);
   
-  // API data state
-  const [deliveryData, setDeliveryData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Process movement history modal
-  const [historyModal, setHistoryModal] = useState({ open: false, serial: null });
-  // View modal state
-  const [viewModal, setViewModal] = useState({ show: false, item: null });
+  // History modal with tabs
+  const [historyModal, setHistoryModal] = useState({ show: false, subscription: null });
 
-  // Fetch delivery serials from API
+  // Fetch delivery tracking data
   useEffect(() => {
-    fetchDeliverySerials();
+    fetchDeliveryData();
   }, []);
 
-  const fetchDeliverySerials = async () => {
+  // Fetch delivery tracking data with loading state
+  const fetchDeliveryData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await axios.get('/api/subscriptions/delivery-serials');
+      const response = await axios.get('/api/subscriptions/gsps-delivery-tracking');
       
       if (response.data.success) {
-        setDeliveryData(response.data.serials || []);
+        setSubscriptions(response.data.subscriptions || []);
+        setStats(response.data.stats || { total: 0, delivered: 0, ongoing: 0 });
       }
     } catch (err) {
-      console.error('Error fetching delivery serials:', err);
+      console.error('Error fetching delivery data:', err);
       setError('Failed to load delivery data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle file selection
+  // Filter subscriptions
+  const filteredSubscriptions = subscriptions.filter(sub => {
+    const matchesSearch = 
+      (sub.serialTitle && sub.serialTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (sub.supplierName && sub.supplierName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (sub.issn && sub.issn.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = statusFilter === 'All' || sub.aggregatedStatus === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Toggle row expansion
+  const handleToggleRow = (subscriptionId) => {
+    setExpandedRow(expandedRow === subscriptionId ? null : subscriptionId);
+  };
+
+  // Issue status helpers
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: { bg: '#fff3cd', text: '#856404' },
+      prepare: { bg: '#d1ecf1', text: '#0c5460' },
+      for_delivery: { bg: '#e2d4f0', text: '#6f42c1' },
+      received: { bg: '#d4edda', text: '#155724' },
+      delivered: { bg: '#28a745', text: '#ffffff' },
+      for_return: { bg: '#f8d7da', text: '#721c24' },
+    };
+    return colors[status] || { bg: '#e2e3e5', text: '#383d41' };
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      pending: 'Pending',
+      prepare: 'Preparing',
+      for_delivery: 'For Delivery',
+      received: 'Received',
+      delivered: 'Delivered',
+      for_return: 'For Return',
+    };
+    return labels[status] || status;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const formatCurrency = (amount) => {
+    return `₱${parseFloat(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  };
+
+  // Enhanced resolveFileUrl with better path handling and caching
+  const urlCache = useRef({});
+  const resolveFileUrl = (rawUrl) => {
+    if (!rawUrl) return null;
+    if (urlCache.current[rawUrl]) return urlCache.current[rawUrl];
+    
+    const normalized = String(rawUrl).trim().replace(/\\/g, '/');
+    let resolved;
+    
+    // Handle various URL formats
+    if (/^https?:\/\//i.test(normalized) || normalized.startsWith('data:')) {
+      resolved = encodeURI(normalized);
+    } else if (normalized.startsWith('/uploads/') || normalized.startsWith('/storage/')) {
+      resolved = encodeURI(normalized);
+    } else if (normalized.startsWith('uploads/') || normalized.startsWith('storage/')) {
+      resolved = encodeURI(`/${normalized}`);
+    } else if (normalized.startsWith('public/uploads/') || normalized.startsWith('public/storage/')) {
+      resolved = encodeURI(normalized.replace(/^public/, ''));
+    } else if (normalized.startsWith('public/')) {
+      resolved = encodeURI(normalized.replace(/^public\//, '/storage/'));
+    } else {
+      resolved = encodeURI(normalized.startsWith('/') ? normalized : `/${normalized}`);
+    }
+    
+    urlCache.current[rawUrl] = resolved;
+    return resolved;
+  };
+
+  const isImageFile = (rawUrl) => {
+    if (!rawUrl) return false;
+    const clean = String(rawUrl).split('?')[0].toLowerCase();
+    return /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(clean);
+  };
+
+  // Handle file selection for confirm receipt
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check if it's an image or PDF
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
       if (!allowedTypes.includes(file.type)) {
-        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        Swal.fire({ title: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4' });
         return;
       }
-      // Check file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        Swal.fire({ title: 'File size must be less than 10MB', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        Swal.fire({ title: 'Maximum 10 MB file size', icon: 'warning', confirmButtonColor: '#0062f4' });
+        e.target.value = '';
         return;
       }
       setAttachmentFile(file);
-      // Create preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
         setAttachmentPreview(reader.result);
@@ -84,7 +170,6 @@ function DeliveryStatus() {
     }
   };
 
-  // Remove attachment
   const handleRemoveAttachment = () => {
     setAttachmentFile(null);
     setAttachmentPreview(null);
@@ -93,231 +178,105 @@ function DeliveryStatus() {
     }
   };
 
-  // Close modal and reset attachment
   const handleCloseConfirmModal = () => {
-    setConfirmModal({ show: false, item: null });
+    setConfirmModal({ show: false, issue: null, subscription: null });
     setAttachmentFile(null);
     setAttachmentPreview(null);
   };
 
-  // Handle confirm receipt
+  // Handle confirm receipt with upload progress
   const handleConfirmReceipt = async () => {
-    if (!confirmModal.item) return;
+    if (!confirmModal.issue || !confirmModal.subscription) return;
     
-    // Require attachment
     if (!attachmentFile) {
-      Swal.fire({ title: 'Please upload an image of the received serial before confirming.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      Swal.fire({ title: 'Please upload an image before confirming receipt.', icon: 'warning', confirmButtonColor: '#0062f4', zIndex: 10001 });
       return;
     }
     
     setUploading(true);
     
     try {
-      // Create FormData for file upload
       const formData = new FormData();
-      formData.append('serial_issn', confirmModal.item.issn);
       formData.append('attachment', attachmentFile);
       
       const response = await axios.post(
-        `/api/subscriptions/${confirmModal.item.subscription_id}/serial-received`,
+        `/api/subscriptions/${confirmModal.subscription.subscription_id}/issues/${confirmModal.issue.id}/received`,
         formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
       
       if (response.data.success) {
-        // Update local state with received date and attachment
-        setDeliveryData(prev => prev.map(item => 
-          item.id === confirmModal.item.id 
-            ? { 
-                ...item, 
-                status: 'received', 
-                receivedDate: response.data.receivedDate,
-                attachmentUrl: response.data.attachmentUrl 
-              }
-            : item
-        ));
+        await fetchDeliveryData();
         handleCloseConfirmModal();
+        Swal.fire({
+          title: 'Receipt Confirmed!',
+          text: `Issue #${confirmModal.issue.issue_number} marked as received.`,
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          zIndex: 10001,
+        });
       } else {
-        Swal.fire({ title: 'Failed to confirm receipt. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        Swal.fire({ title: 'Failed to confirm receipt', icon: 'error', confirmButtonColor: '#0062f4', zIndex: 10001 });
       }
     } catch (err) {
       console.error('Error confirming receipt:', err);
-      Swal.fire({ title: 'Failed to confirm receipt. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      Swal.fire({ title: 'Failed to confirm receipt', icon: 'error', confirmButtonColor: '#0062f4', zIndex: 10001 });
     } finally {
       setUploading(false);
     }
   };
 
-  // Handle re-upload file selection in view modal
-  const handleReuploadFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-      const isPdf = file.type === 'application/pdf';
-      
-      // Set preview first so user can see what they selected
-      setReuploadIsPdf(isPdf);
-      setReuploadFile(file);
-      
-      if (!isPdf) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setReuploadPreview(reader.result);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setReuploadPreview(file.name); // Store filename for PDF
-      }
-      
-      // Validate after setting preview
-      if (!allowedTypes.includes(file.type)) {
-        Swal.fire({ title: 'Invalid File Type', text: 'Please select an image (JPG, PNG) or PDF file', icon: 'warning', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-        setReuploadFile(null);
-        setReuploadPreview(null);
-        setReuploadIsPdf(false);
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'warning', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-        // Clear file to prevent upload attempt, keep preview to show what was rejected
-        setReuploadFile(null);
-        return;
-      }
-    }
+  // Get received issues for view modal
+  const getReceivedIssues = (subscription) => {
+    return (subscription.issues || []).filter(i => 
+      ['received', 'delivered', 'for_return'].includes(i.status)
+    );
   };
 
-  // Handle re-upload submission
-  const handleReuploadSubmit = async () => {
-    if (!reuploadFile || !viewModal.item) return;
-    
-    // Double-check file size before upload
-    if (reuploadFile.size > 10 * 1024 * 1024) {
-      Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-      setReuploadFile(null);
-      return;
-    }
-
-    setReuploadUploading(true);
-    
-    try {
-      const formData = new FormData();
-      formData.append('serial_issn', viewModal.item.issn);
-      formData.append('attachment', reuploadFile);
-      
-      const response = await axios.post(
-        `/api/subscriptions/${viewModal.item.subscription_id}/update-attachment`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
-      
-      if (response.data.success) {
-        // Update local state with new attachment URL
-        setDeliveryData(prev => prev.map(item => 
-          item.id === viewModal.item.id 
-            ? { ...item, attachmentUrl: response.data.attachmentUrl }
-            : item
-        ));
-        // Update view modal with new attachment
-        setViewModal(prev => ({
-          ...prev,
-          item: { ...prev.item, attachmentUrl: response.data.attachmentUrl }
-        }));
-        // Reset re-upload state
-        setReuploadFile(null);
-        setReuploadPreview(null);
-        setReuploadIsPdf(false);
-        Swal.fire({ title: 'Updated Successfully!', text: 'The attachment has been updated.', icon: 'success', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-      } else {
-        // Check for file size error message from server
-        const errorMsg = response.data.message || '';
-        if (errorMsg.toLowerCase().includes('size') || errorMsg.toLowerCase().includes('large')) {
-          Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-        } else {
-          Swal.fire({ title: 'Failed to update', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-        }
-      }
-    } catch (err) {
-      console.error('Error updating attachment:', err);
-      // Check if error response contains file size related message or 413 status (Payload Too Large)
-      const errorMessage = err.response?.data?.message || err.message || '';
-      const isFileSizeError = errorMessage.toLowerCase().includes('size') || 
-                              errorMessage.toLowerCase().includes('large') || 
-                              errorMessage.toLowerCase().includes('too big') ||
-                              errorMessage.toLowerCase().includes('exceeded') ||
-                              err.response?.status === 413;
-      
-      if (isFileSizeError) {
-        Swal.fire({ title: 'File Too Large', text: 'Maximum of 10MB. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-      } else {
-        Swal.fire({ title: 'Failed to Update', text: 'Please try again.', icon: 'error', confirmButtonColor: '#0062f4', customClass: { container: 'swal-high-zindex' }, showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
-      }
-    } finally {
-      setReuploadUploading(false);
-    }
-  };
-
-  // Close view modal and reset re-upload state
-  const handleCloseViewModal = () => {
-    setViewModal({ show: false, item: null });
-    setReuploadFile(null);
-    setReuploadPreview(null);
-    setReuploadIsPdf(false);
-  };
-
-  // Filter data
-  const filteredData = deliveryData.filter(item => {
-    const matchesSearch = 
-      (item.serialTitle && item.serialTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (item.supplierName && item.supplierName.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesFilter = 
-      filter === 'All' || 
-      (filter === 'Received' && item.status === 'received') ||
-      (filter === 'For Delivery' && item.status === 'for_delivery');
-    
-    return matchesSearch && matchesFilter;
-  });
-
-  // Calculate totals
-  const totalForDelivery = deliveryData.filter(item => item.status === 'for_delivery').length;
-  const totalReceived = deliveryData.filter(item => item.status === 'received').length;
-  const totalItems = deliveryData.length;
+  // Stats cards data
+  const statsCards = [
+    { title: 'Total Subscriptions', value: stats.total, icon: <FiPackage />, color: '#004A98', bgColor: '#E8F1FA' },
+    { title: 'Ongoing', value: stats.ongoing, icon: <FiClock />, color: '#D97706', bgColor: '#FEF3C7' },
+    { title: 'Delivered', value: stats.delivered, icon: <FiCheckCircle />, color: '#0D9488', bgColor: '#E6F7F5' },
+  ];
 
   return (
-    <div style={{ background: '#f0f4f8', minHeight: 'calc(100vh - 120px)' }}>
+    <div style={{ background: '#f5f7fa', minHeight: 'calc(100vh - 73px)', padding: '24px 32px' }}>
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 }}>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Total Deliveries</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#004A98' }}>{totalItems}</p>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>For Delivery</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#17a2b8' }}>{totalForDelivery}</p>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0' }}>Received</h3>
-          <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: '#28a745' }}>{totalReceived}</p>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
+        {statsCards.map((stat, index) => (
+          <div
+            key={index}
+            style={{
+              background: stat.bgColor,
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              borderLeft: `4px solid ${stat.color}`,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: 14, color: '#666', margin: '0 0 10px 0', fontWeight: 500 }}>{stat.title}</h3>
+                <p style={{ fontSize: 28, fontWeight: 'bold', margin: 0, color: stat.color }}>{stat.value}</p>
+              </div>
+              <div style={{ color: stat.color, fontSize: 24, opacity: 0.8 }}>{stat.icon}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Main Table Card */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      {/* Main Content Card */}
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Delivery Tracking</h2>
-            <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Current status of all serial deliveries</p>
+            <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Click serial title to view and manage issues</p>
           </div>
           <button
-            onClick={fetchDeliverySerials}
+            onClick={fetchDeliveryData}
             disabled={loading}
             style={{
               background: '#004A98',
@@ -329,10 +288,12 @@ function DeliveryStatus() {
               fontSize: 14,
               fontWeight: 500,
               opacity: loading ? 0.7 : 1,
-              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
             }}
           >
-            {loading ? 'Loading...' : 'Refresh'}
+            <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
           </button>
         </div>
 
@@ -342,7 +303,7 @@ function DeliveryStatus() {
             <MdSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
             <input
               type="text"
-              placeholder="Search serial title or supplier..."
+              placeholder="Search serial title, supplier, or ISSN..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -354,209 +315,218 @@ function DeliveryStatus() {
               }}
             />
           </div>
-
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 20px',
-                background: '#f8f9fa',
-                border: '1px solid #ddd',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 14,
-              }}
-            >
-              <MdFilterList /> Filter
-            </button>
-            
-            {showFilter && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                background: '#fff',
-                borderRadius: 6,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                padding: 16,
-                width: 180,
-                zIndex: 10,
-                marginTop: 8,
-              }}>
-                <p style={{ margin: '0 0 12px 0', fontWeight: 500, fontSize: 14 }}>Filter Status</p>
-                {['All', 'For Delivery', 'Received'].map(option => (
-                  <label key={option} style={{ display: 'block', marginBottom: 10, cursor: 'pointer', fontSize: 14 }}>
-                    <input
-                      type="radio"
-                      checked={filter === option}
-                      onChange={() => {
-                        setFilter(option);
-                        setShowFilter(false);
-                      }}
-                      style={{ marginRight: 8 }}
-                    />
-                    {option}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              padding: '12px 16px',
+              borderRadius: 6,
+              border: '1px solid #ddd',
+              fontSize: 14,
+              background: '#fff',
+              minWidth: 150,
+            }}
+          >
+            <option value="All">All Status</option>
+            <option value="Ongoing">Ongoing</option>
+            <option value="Delivered">Delivered</option>
+          </select>
         </div>
 
-        {/* Table - EXACTLY LIKE YOUR IMAGE */}
+        {/* Delivery Tracking Table */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ 
-                background: 'linear-gradient(90deg, #004A98, #0062f4)',
-                color: '#fff'
-              }}>
+              <tr style={{ background: 'linear-gradient(90deg, #004A98, #0062f4)', color: '#fff' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Delivery Date</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Confirmation</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Received Date</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Issues</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Status</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
                     Loading delivery data...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>
                     {error}
-                    <button 
-                      onClick={fetchDeliverySerials}
-                      style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-                    >
+                    <button onClick={fetchDeliveryData} style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                       Retry
                     </button>
                   </td>
                 </tr>
-              ) : filteredData.length > 0 ? (
-                filteredData.map((item, index) => (
-                  <tr 
-                    key={item.id} 
-                    style={{ 
-                      borderBottom: '1px solid #eee',
-                      background: index % 2 === 0 ? '#fff' : '#f9f9f9'
-                    }}
-                  >
-                    <td style={{ padding: '16px', fontWeight: 500 }}>{item.serialTitle}</td>
-                    <td style={{ padding: '16px' }}>{item.supplierName}</td>
-                    <td style={{ 
-                      padding: '16px', 
-                      textAlign: 'center',
-                      color: '#555'
-                    }}>
-                      {item.deliveryDate 
-                        ? new Date(item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                        : '-'
-                      }
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      {item.status === 'received' ? (
-                        <span
-                          style={{
-                            padding: '8px 20px',
+              ) : filteredSubscriptions.length > 0 ? (
+                filteredSubscriptions.map((sub, index) => {
+                  const isExpanded = expandedRow === sub.id;
+                  
+                  return (
+                    <React.Fragment key={sub.id}>
+                      <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid #eee', background: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                        <td
+                          style={{ padding: '16px', cursor: 'pointer', color: '#004A98' }}
+                          onClick={() => handleToggleRow(sub.id)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', background: '#E8F1FA', borderRadius: 4 }}>
+                              {isExpanded ? <MdExpandLess size={18} /> : <MdExpandMore size={18} />}
+                            </span>
+                            <span style={{ fontWeight: 600 }}>{sub.serialTitle}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '16px' }}>{sub.supplierName}</td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <span style={{ fontWeight: 600, color: '#004A98' }}>{sub.deliveredIssues}</span>
+                          <span style={{ color: '#666' }}> / {sub.totalIssues}</span>
+                        </td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <span style={{
+                            padding: '6px 16px',
                             borderRadius: 20,
-                            background: '#28a745',
-                            color: '#fff',
-                            fontSize: 13,
-                            fontWeight: 600,
-                          }}
-                        >
-                          Received
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmModal({ show: true, item: item })}
-                          style={{
-                            padding: '8px 20px',
-                            borderRadius: 6,
-                            border: 'none',
-                            background: '#004A98',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            transition: 'all 0.2s',
-                          }}
-                          onMouseOver={(e) => e.target.style.background = '#003875'}
-                          onMouseOut={(e) => e.target.style.background = '#004A98'}
-                        >
-                          Confirm
-                        </button>
+                            background: sub.aggregatedStatus === 'Delivered' ? '#d4edda' : '#fff3cd',
+                            color: sub.aggregatedStatus === 'Delivered' ? '#155724' : '#856404',
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}>
+                            {sub.aggregatedStatus}
+                          </span>
+                        </td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                            <button
+                              onClick={() => { setViewModal({ show: true, subscription: sub }); setSelectedIssueView(null); }}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: 6,
+                                border: '1px solid #17a2b8',
+                                background: '#f8f9fa',
+                                color: '#17a2b8',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontWeight: 500,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <MdVisibility size={14} /> View
+                            </button>
+                            <button
+                              onClick={() => setHistoryModal({ show: true, subscription: sub })}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #004A98',
+                                background: '#f8f9fa',
+                                color: '#004A98',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontWeight: 500,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <FaHistory size={10} /> History
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      
+                      {/* Expanded Serial Issues Row */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan="5" style={{ padding: 0 }}>
+                            <div style={{ background: '#f8f9fa', padding: '16px 24px', borderBottom: '2px solid #004A98' }}>
+                              <h4 style={{ margin: '0 0 12px', color: '#004A98', fontSize: 14, fontWeight: 600 }}>
+                                Serial Issues for {sub.serialTitle}
+                              </h4>
+                              <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>
+                                  <thead>
+                                    <tr style={{ background: '#e9ecef' }}>
+                                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Issue</th>
+                                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Supplier</th>
+                                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Expected Delivery</th>
+                                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Status</th>
+                                      <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
+                                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(sub.issues || []).map((issue) => {
+                                      const statusColor = getStatusColor(issue.status);
+                                      return (
+                                        <tr key={issue.id} style={{ borderBottom: '1px solid #eee' }}>
+                                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#004A98' }}>
+                                            #{issue.issue_number}
+                                          </td>
+                                          <td style={{ padding: '10px 12px', fontSize: 13 }}>{sub.supplierName}</td>
+                                          <td style={{ padding: '10px 12px', fontSize: 13 }}>{formatDate(issue.expected_delivery_date)}</td>
+                                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                            <span style={{
+                                              padding: '4px 10px',
+                                              borderRadius: 20,
+                                              background: statusColor.bg,
+                                              color: statusColor.text,
+                                              fontSize: 11,
+                                              fontWeight: 500,
+                                            }}>
+                                              {getStatusLabel(issue.status)}
+                                            </span>
+                                          </td>
+                                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#004A98', fontSize: 13 }}>
+                                            {formatCurrency(issue.cost)}
+                                          </td>
+                                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                            {issue.status === 'for_delivery' ? (
+                                              <button
+                                                onClick={() => setConfirmModal({ show: true, issue, subscription: sub })}
+                                                style={{
+                                                  padding: '6px 12px',
+                                                  border: 'none',
+                                                  borderRadius: 4,
+                                                  background: '#28a745',
+                                                  color: '#fff',
+                                                  fontSize: 11,
+                                                  cursor: 'pointer',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: 4,
+                                                }}
+                                              >
+                                                <MdCheckCircle size={14} /> Confirm Receipt
+                                              </button>
+                                            ) : (
+                                              <span style={{ color: '#999', fontSize: 11 }}>
+                                                {issue.status === 'received' ? 'Awaiting Inspection' : 
+                                                 issue.status === 'delivered' ? '✓ Delivered' : 
+                                                 issue.status === 'for_return' ? '⚠ For Return' : '-'}
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'center', color: '#555' }}>
-                      {item.receivedDate 
-                        ? new Date(item.receivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                        : '-'
-                      }
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                        <button
-                          onClick={() => setViewModal({ show: true, item: item })}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid #17a2b8',
-                            background: '#f8f9fa',
-                            color: '#17a2b8',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 500,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            transition: 'all 0.2s',
-                          }}
-                          onMouseOver={(e) => { e.currentTarget.style.background = '#17a2b8'; e.currentTarget.style.color = '#fff'; }}
-                          onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#17a2b8'; }}
-                          title="View Serial Details"
-                        >
-                          <MdVisibility size={14} /> View
-                        </button>
-                        <button
-                          onClick={() => setHistoryModal({ open: true, serial: item })}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid #004A98',
-                            background: '#f8f9fa',
-                            color: '#004A98',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 500,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            transition: 'all 0.2s',
-                          }}
-                          onMouseOver={(e) => { e.currentTarget.style.background = '#004A98'; e.currentTarget.style.color = '#fff'; }}
-                          onMouseOut={(e) => { e.currentTarget.style.background = '#f8f9fa'; e.currentTarget.style.color = '#004A98'; }}
-                          title="View Process Movement History"
-                        >
-                          <FaHistory size={12} /> History
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                    </React.Fragment>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
-                    {searchTerm ? `No deliveries found matching "${searchTerm}"` : 'No deliveries awaiting confirmation yet.'}
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                    {searchTerm || statusFilter !== 'All' ? 'No subscriptions match your search/filter.' : 'No subscriptions with serial issues yet.'}
                   </td>
                 </tr>
               )}
@@ -564,26 +534,14 @@ function DeliveryStatus() {
           </table>
         </div>
 
-        {/* Summary Footer */}
-        <div style={{ 
-          marginTop: 30,
-          paddingTop: 20,
-          borderTop: '1px solid #eee',
-          display: 'flex',
-          justifyContent: 'flex-start',
-          alignItems: 'center',
-          color: '#666',
-          fontSize: 14
-        }}>
-          <div>
-            Showing {filteredData.length} of {deliveryData.length} deliveries
-            {filter !== 'All' && ` (${filter} only)`}
-          </div>
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, color: '#666', fontSize: 14 }}>
+          <div>Showing {filteredSubscriptions.length} of {subscriptions.length} subscriptions</div>
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {confirmModal.show && (
+      {/* Confirm Receipt Modal */}
+      {confirmModal.show && confirmModal.issue && (
         <div
           style={{
             position: 'fixed',
@@ -591,184 +549,106 @@ function DeliveryStatus() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
+            background: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
-            animation: 'fadeIn 0.2s ease-out',
           }}
           onClick={handleCloseConfirmModal}
         >
-          <style>{`
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-          `}</style>
           <div
             style={{
               background: '#fff',
-              borderRadius: 12,
-              padding: '32px 40px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-              textAlign: 'center',
+              borderRadius: 16,
+              padding: '32px',
               maxWidth: 500,
               width: '90%',
-              animation: 'slideIn 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: '0 0 16px', fontSize: 20, color: '#222' }}>
-              Confirm Receipt
-            </h3>
-            <p style={{ margin: '0 0 8px', fontSize: 15, color: '#666' }}>
-              Upload an image of the received serial to confirm delivery.
+            <h3 style={{ margin: '0 0 16px', color: '#004A98' }}>Confirm Receipt</h3>
+            <p style={{ color: '#666', marginBottom: 24 }}>
+              {confirmModal.subscription?.serialTitle} - Issue #{confirmModal.issue?.issue_number}
             </p>
-            {confirmModal.item && (
-              <p style={{ margin: '0 0 20px', fontSize: 14, color: '#004A98', fontWeight: 600 }}>
-                "{confirmModal.item.serialTitle}" from {confirmModal.item.supplierName}
-              </p>
-            )}
             
-            {/* Image Upload Section */}
             <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Upload Attachment <span style={{ color: '#dc3545' }}>*</span>
+              </label>
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                accept="image/*,.pdf"
                 style={{ display: 'none' }}
               />
-              
-              {!attachmentPreview ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    border: '2px dashed #ddd',
-                    borderRadius: 8,
-                    padding: '30px 20px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    background: '#f9f9f9',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = '#004A98';
-                    e.currentTarget.style.background = '#f0f4f8';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = '#ddd';
-                    e.currentTarget.style.background = '#f9f9f9';
-                  }}
-                >
-                  <MdCloudUpload size={40} color="#004A98" />
-                  <p style={{ margin: '10px 0 5px', fontSize: 14, color: '#333', fontWeight: 500 }}>
-                    Click to upload image or PDF
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#888' }}>
-                    JPG, PNG, PDF (max 10MB)
-                  </p>
-                </div>
-              ) : (
-                <div style={{ position: 'relative' }}>
-                  <img
-                    src={attachmentPreview}
-                    alt="Preview"
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: 200,
-                      borderRadius: 8,
-                      border: '1px solid #ddd',
-                    }}
-                  />
+              {attachmentPreview ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  {attachmentFile?.type?.includes('image') ? (
+                    <img src={attachmentPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '1px solid #ddd' }} />
+                  ) : (
+                    <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: 8, border: '1px solid #ddd' }}>
+                      {attachmentFile?.name}
+                    </div>
+                  )}
                   <button
                     onClick={handleRemoveAttachment}
-                    style={{
-                      position: 'absolute',
-                      top: -10,
-                      right: -10,
-                      background: '#dc3545',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: 28,
-                      height: 28,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                    style={{ position: 'absolute', top: -8, right: -8, background: '#dc3545', color: '#fff', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
-                    <MdClose size={18} />
+                    <MdClose size={14} />
                   </button>
-                  <p style={{ margin: '10px 0 0', fontSize: 12, color: '#28a745', fontWeight: 500 }}>
-                    <MdImage style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                    {attachmentFile?.name}
-                  </p>
                 </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    width: '100%',
+                    padding: '40px 20px',
+                    border: '2px dashed #ddd',
+                    borderRadius: 8,
+                    background: '#f8f9fa',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <MdCloudUpload size={32} color="#666" />
+                  <span style={{ color: '#666' }}>Click to upload image or PDF (Max 10MB)</span>
+                </button>
               )}
             </div>
             
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleCloseConfirmModal}
+                style={{ padding: '10px 20px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleConfirmReceipt}
                 disabled={uploading || !attachmentFile}
                 style={{
-                  padding: '10px 32px',
-                  borderRadius: 6,
+                  padding: '10px 20px',
                   border: 'none',
-                  background: uploading || !attachmentFile ? '#ccc' : '#28a745',
+                  borderRadius: 6,
+                  background: !attachmentFile ? '#ccc' : '#28a745',
                   color: '#fff',
-                  cursor: uploading || !attachmentFile ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-                onMouseOver={(e) => {
-                  if (!uploading && attachmentFile) e.target.style.background = '#218838';
-                }}
-                onMouseOut={(e) => {
-                  if (!uploading && attachmentFile) e.target.style.background = '#28a745';
+                  cursor: !attachmentFile || uploading ? 'not-allowed' : 'pointer',
                 }}
               >
                 {uploading ? 'Uploading...' : 'Confirm Receipt'}
-              </button>
-              <button
-                onClick={handleCloseConfirmModal}
-                disabled={uploading}
-                style={{
-                  padding: '10px 32px',
-                  borderRadius: 6,
-                  border: '1px solid #dc3545',
-                  background: '#fff',
-                  color: '#dc3545',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  opacity: uploading ? 0.6 : 1,
-                }}
-                onMouseOver={(e) => { 
-                  if (!uploading) {
-                    e.target.style.background = '#dc3545'; 
-                    e.target.style.color = '#fff'; 
-                  }
-                }}
-                onMouseOut={(e) => { 
-                  e.target.style.background = '#fff'; 
-                  e.target.style.color = '#dc3545'; 
-                }}
-              >
-                Cancel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* View Serial Details Modal */}
-      {viewModal.show && viewModal.item && (
+      {/* View Modal - Compilation of Issues */}
+      {viewModal.show && viewModal.subscription && (
         <div
           style={{
             position: 'fixed',
@@ -776,291 +656,324 @@ function DeliveryStatus() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
+            background: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
-            animation: 'fadeIn 0.2s ease-out',
           }}
-          onClick={() => setViewModal({ show: false, item: null })}
+          onClick={() => setViewModal({ show: false, subscription: null })}
         >
-          <style>{`
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-            @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-          `}</style>
           <div
             style={{
               background: '#fff',
-              borderRadius: 12,
-              padding: '32px 40px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-              maxWidth: 600,
+              borderRadius: 16,
+              padding: '32px',
+              maxWidth: 700,
               width: '90%',
               maxHeight: '85vh',
-              overflow: 'auto',
-              animation: 'slideIn 0.25s ease-out',
+              overflowY: 'auto',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 20, color: '#004A98' }}>Serial Details</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px', color: '#004A98' }}>Serial Issues Compilation</h3>
+                <p style={{ margin: 0, color: '#666', fontSize: 14 }}>{viewModal.subscription.serialTitle}</p>
+              </div>
               <button
-                onClick={() => setViewModal({ show: false, item: null })}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 4,
-                }}
+                onClick={() => setViewModal({ show: false, subscription: null })}
+                style={{ background: 'transparent', border: 'none', fontSize: 24, color: '#999', cursor: 'pointer' }}
               >
-                <MdClose size={24} color="#666" />
+                ×
               </button>
             </div>
 
-            {/* Serial Information */}
+            {/* Issue Selection List */}
             <div style={{ marginBottom: 24 }}>
-              <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
-                {viewModal.item.serialTitle}
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>ISSN</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.issn || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Supplier</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.supplierName || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Issue No.</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.issuesNo || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Vol No.</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.volumeNumber || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Frequency</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.frequency || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Quantity</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.quantity || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Delivery Date</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
-                    {viewModal.item.deliveryDate 
-                      ? new Date(viewModal.item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-                      : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Received Date</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
-                    {viewModal.item.receivedDate 
-                      ? new Date(viewModal.item.receivedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-                      : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Category</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{viewModal.item.category || '-'}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Status</p>
-                  <span style={{
-                    padding: '4px 12px',
-                    borderRadius: 12,
-                    background: viewModal.item.status === 'received' ? '#28a745' : '#17a2b8',
-                    color: '#fff',
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}>
-                    {viewModal.item.status === 'received' ? 'Received' : 'For Delivery'}
-                  </span>
-                </div>
+              <h4 style={{ margin: '0 0 12px', fontSize: 14, color: '#333' }}>Received Issues ({getReceivedIssues(viewModal.subscription).length})</h4>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {getReceivedIssues(viewModal.subscription).length === 0 ? (
+                  <p style={{ color: '#888', fontSize: 14 }}>No issues received yet.</p>
+                ) : (
+                  getReceivedIssues(viewModal.subscription).map((issue) => (
+                    <button
+                      key={issue.id}
+                      onClick={() => setSelectedIssueView(issue)}
+                      style={{
+                        padding: '8px 16px',
+                        border: selectedIssueView?.id === issue.id ? '2px solid #004A98' : '1px solid #ddd',
+                        borderRadius: 6,
+                        background: selectedIssueView?.id === issue.id ? '#E8F1FA' : '#fff',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: selectedIssueView?.id === issue.id ? 600 : 400,
+                      }}
+                    >
+                      Issue #{issue.issue_number}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
-            {/* Attachment Section */}
-            <div>
-              <h4 style={{ margin: '0 0 16px', fontSize: 16, color: '#333', borderBottom: '2px solid #004A98', paddingBottom: 8 }}>
-                Attachment
-              </h4>
-              {viewModal.item.attachmentUrl && !reuploadPreview ? (
-                <div style={{ textAlign: 'center' }}>
-                  <img
-                    src={viewModal.item.attachmentUrl}
-                    alt="Serial Attachment"
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: 300,
-                      borderRadius: 8,
-                      border: '1px solid #ddd',
-                      cursor: 'pointer',
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(viewModal.item.attachmentUrl, '_blank');
-                    }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'block';
-                      if (e.target.nextSibling.nextSibling) e.target.nextSibling.nextSibling.style.display = 'none';
-                    }}
-                  />
-                  <div style={{ display: 'none', padding: 20, background: '#f8f9fa', borderRadius: 8 }}>
-                    <p style={{ margin: 0, color: '#dc3545', fontSize: 14 }}>Failed to load image</p>
+            {/* Selected Issue Details */}
+            {selectedIssueView && (
+              <div style={{ background: '#f8f9fa', borderRadius: 12, padding: 20 }}>
+                <h4 style={{ margin: '0 0 16px', color: '#004A98' }}>Issue #{selectedIssueView.issue_number} Details</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 16 }}>
+                  <div><span style={{ color: '#666' }}>Expected Delivery:</span> <strong>{formatDate(selectedIssueView.expected_delivery_date)}</strong></div>
+                  <div><span style={{ color: '#666' }}>Received Date:</span> <strong>{formatDate(selectedIssueView.received_at)}</strong></div>
+                  <div><span style={{ color: '#666' }}>Cost:</span> <strong>{formatCurrency(selectedIssueView.cost)}</strong></div>
+                  <div>
+                    <span style={{ color: '#666' }}>Status:</span>{' '}
+                    <span style={{ padding: '4px 10px', borderRadius: 20, background: getStatusColor(selectedIssueView.status).bg, color: getStatusColor(selectedIssueView.status).text, fontSize: 12, fontWeight: 500 }}>
+                      {getStatusLabel(selectedIssueView.status)}
+                    </span>
                   </div>
-                  <p style={{ margin: '12px 0 0', fontSize: 12, color: '#666' }}>
-                    Click image to view full size in new tab
-                  </p>
                 </div>
-              ) : !reuploadPreview ? (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: 40, 
-                  background: '#f8f9fa', 
-                  borderRadius: 8,
-                  color: '#666',
-                }}>
-                  <MdImage size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
-                  <p style={{ margin: 0, fontSize: 14 }}>No attachment uploaded yet</p>
+                
+                {/* GSPS can view receipt attachment only */}
+                <div>
+                  <h5 style={{ margin: '0 0 8px', color: '#333', fontSize: 14 }}>Receipt Attachment</h5>
+                  {(() => {
+                    const fileUrl = resolveFileUrl(selectedIssueView.attachment_url || selectedIssueView.receipt_attachment);
+                    const isImage = fileUrl && isImageFile(fileUrl);
+                    
+                    if (!fileUrl) {
+                      return <div style={{ padding: 20, textAlign: 'center', background: '#fff', borderRadius: 8, color: '#999', fontSize: 12 }}>No receipt attachment</div>;
+                    }
+                    
+                    return isImage ? (
+                      <img 
+                        src={fileUrl} 
+                        alt="GSPS Attachment" 
+                        loading="lazy"
+                        style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer', backgroundColor: '#f0f0f0' }} 
+                        onClick={() => window.open(fileUrl, '_blank')}
+                      />
+                    ) : (
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 16px', background: '#004A98', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 14 }}>
+                        Open Document
+                      </a>
+                    );
+                  })()}
                 </div>
-              ) : null}
-
-              {/* Re-upload Preview */}
-              {reuploadPreview && (
-                <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <p style={{ fontSize: 13, color: '#28a745', marginBottom: 8, fontWeight: 500 }}>
-                    {reuploadIsPdf ? 'New PDF selected:' : 'New image preview:'}
-                  </p>
-                  {reuploadIsPdf ? (
-                    <div style={{ 
-                      padding: 20, 
-                      background: '#f8f9fa', 
-                      borderRadius: 8, 
-                      border: '2px solid #28a745',
-                      display: 'inline-block'
-                    }}>
-                      <MdImage size={40} style={{ color: '#dc3545', marginBottom: 8 }} />
-                      <p style={{ margin: 0, fontSize: 13, color: '#333', fontWeight: 500 }}>{reuploadPreview}</p>
-                      <p style={{ margin: '4px 0 0', fontSize: 11, color: '#666' }}>PDF Document</p>
-                    </div>
-                  ) : (
-                    <img
-                      src={reuploadPreview}
-                      alt="New attachment preview"
-                      style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '2px solid #28a745' }}
-                    />
-                  )}
-                  <button
-                    onClick={() => { setReuploadFile(null); setReuploadPreview(null); setReuploadIsPdf(false); }}
-                    style={{
-                      display: 'block',
-                      margin: '8px auto 0',
-                      padding: '4px 12px',
-                      fontSize: 12,
-                      background: '#dc3545',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <MdClose style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                    Remove
-                  </button>
-                </div>
-              )}
-
-              {/* Re-upload Button */}
-              {viewModal.item.status === 'received' && (
-                <div style={{ marginTop: 16, textAlign: 'center' }}>
-                  <input
-                    type="file"
-                    ref={reuploadFileInputRef}
-                    onChange={handleReuploadFileSelect}
-                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-                    style={{ display: 'none' }}
-                  />
-                  {!reuploadPreview ? (
-                    <button
-                      onClick={() => reuploadFileInputRef.current?.click()}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: 6,
-                        border: '1px dashed #004A98',
-                        background: 'transparent',
-                        color: '#004A98',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                    >
-                      <MdCloudUpload size={18} />
-                      {viewModal.item.attachmentUrl ? 'Re-upload' : 'Upload'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleReuploadSubmit}
-                      disabled={reuploadUploading}
-                      style={{
-                        padding: '8px 20px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: reuploadUploading ? '#6c757d' : '#28a745',
-                        color: '#fff',
-                        cursor: reuploadUploading ? 'not-allowed' : 'pointer',
-                        fontSize: 13,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {reuploadUploading ? 'Uploading...' : 'Save New Image'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginTop: 24, textAlign: 'right' }}>
-              <button
-                onClick={handleCloseViewModal}
-                style={{
-                  padding: '10px 32px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: '#004A98',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Close
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Process Movement History Modal */}
-      <ProcessMovementHistory
-        isOpen={historyModal.open}
-        onClose={() => setHistoryModal({ open: false, serial: null })}
-        recordType="subscription"
-        recordId={historyModal.serial?.subscription_id}
-        title={historyModal.serial?.serialTitle}
-      />
+      {/* History Modal with Tabs */}
+      {historyModal.show && historyModal.subscription && (
+        <HistoryModalWithTabs
+          subscription={historyModal.subscription}
+          onClose={() => setHistoryModal({ show: false, subscription: null })}
+        />
+      )}
     </div>
   );
 }
 
-export default function DashboardGSPSDeliveryStatus() {
+// History Modal with Tabs Component
+function HistoryModalWithTabs({ subscription, onClose }) {
+  const [activeTab, setActiveTab] = useState('subscription');
+  const [selectedIssueTab, setSelectedIssueTab] = useState(null);
+
+  const issues = subscription.issues || [];
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#fff',
+          borderRadius: 16,
+          padding: '32px',
+          maxWidth: 800,
+          width: '90%',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+          <div>
+            <h3 style={{ margin: '0 0 4px', color: '#004A98' }}>History</h3>
+            <p style={{ margin: 0, color: '#666', fontSize: 14 }}>{subscription.serialTitle}</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', fontSize: 24, color: '#999', cursor: 'pointer' }}>×</button>
+        </div>
+
+        {/* Main Tabs: Subscription / Serial Issues */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+          <button
+            onClick={() => { setActiveTab('subscription'); setSelectedIssueTab(null); }}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '8px 8px 0 0',
+              background: activeTab === 'subscription' ? '#004A98' : '#e9ecef',
+              color: activeTab === 'subscription' ? '#fff' : '#495057',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            Subscription Flow
+          </button>
+          <button
+            onClick={() => setActiveTab('issues')}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '8px 8px 0 0',
+              background: activeTab === 'issues' ? '#004A98' : '#e9ecef',
+              color: activeTab === 'issues' ? '#fff' : '#495057',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            Serial Issues Flow
+          </button>
+        </div>
+
+        {/* Subscription Flow Tab */}
+        {activeTab === 'subscription' && (
+          <div style={{ background: '#f8f9fa', borderRadius: 12, padding: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <HistoryStep title="Created" description="Subscription created by TPU" done timestamp={subscription.created_at} />
+              <HistoryStep title="Pending" description="Sent to supplier for acceptance" done timestamp={subscription.pending_at} />
+              <HistoryStep title="Accepted" description="Accepted by supplier" done timestamp={subscription.accepted_at || subscription.issues?.[0]?.prepared_at || subscription.issues?.[0]?.for_delivery_at || subscription.issues?.[0]?.received_at || subscription.issues?.[0]?.inspected_at} />
+              {subscription.aggregatedStatus === 'Delivered' && (
+                <HistoryStep title="Delivered" description="All issues delivered" done />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Serial Issues Flow Tab */}
+        {activeTab === 'issues' && (
+          <div>
+            {/* Issue Selection Sub-tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              {issues.map((issue) => (
+                <button
+                  key={issue.id}
+                  onClick={() => setSelectedIssueTab(issue)}
+                  style={{
+                    padding: '8px 16px',
+                    border: selectedIssueTab?.id === issue.id ? '2px solid #004A98' : '1px solid #ddd',
+                    borderRadius: 6,
+                    background: selectedIssueTab?.id === issue.id ? '#E8F1FA' : '#fff',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: selectedIssueTab?.id === issue.id ? 600 : 400,
+                  }}
+                >
+                  Issue #{issue.issue_number}
+                </button>
+              ))}
+            </div>
+
+            {/* Selected Issue History */}
+            {selectedIssueTab ? (
+              <div style={{ background: '#f8f9fa', borderRadius: 12, padding: 20 }}>
+                <h4 style={{ margin: '0 0 16px', color: '#004A98' }}>Issue #{selectedIssueTab.issue_number} Timeline</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <HistoryStep title="Pending" description="Issue created, awaiting preparation" done timestamp={selectedIssueTab.created_at || selectedIssueTab.expected_delivery_date} />
+                  {['prepare', 'for_delivery', 'received', 'delivered', 'for_return'].includes(selectedIssueTab.status) && (
+                    <HistoryStep title="Preparing" description="Supplier is preparing the issue" done timestamp={selectedIssueTab.prepared_at || selectedIssueTab.for_delivery_at || selectedIssueTab.received_at || selectedIssueTab.inspected_at} />
+                  )}
+                  {['for_delivery', 'received', 'delivered', 'for_return'].includes(selectedIssueTab.status) && (
+                    <HistoryStep title="For Delivery" description="Issue ready for delivery" done timestamp={selectedIssueTab.for_delivery_at || selectedIssueTab.received_at || selectedIssueTab.inspected_at} />
+                  )}
+                  {['received', 'delivered', 'for_return'].includes(selectedIssueTab.status) && (
+                    <HistoryStep title="Received" description="Received by GSPS" done timestamp={selectedIssueTab.received_at} />
+                  )}
+                  {selectedIssueTab.status === 'delivered' && (
+                    <HistoryStep title="Delivered" description="Inspected and delivered successfully" done timestamp={selectedIssueTab.inspected_at} />
+                  )}
+                  {selectedIssueTab.status === 'for_return' && (
+                    <HistoryStep title="For Return" description="Marked for return by inspection" done isReturn timestamp={selectedIssueTab.inspected_at} />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 40, textAlign: 'center', color: '#666', background: '#f8f9fa', borderRadius: 12 }}>
+                Select an issue above to view its timeline
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper function to format datetime with time
+function formatDateTime(dateString) {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// History Step Component
+function HistoryStep({ title, description, done = false, isReturn = false, timestamp = null }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div style={{
+        width: 24,
+        height: 24,
+        borderRadius: '50%',
+        background: done ? (isReturn ? '#dc3545' : '#28a745') : '#e9ecef',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {done && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontWeight: 600, color: done ? '#333' : '#999' }}>{title}</div>
+          {timestamp && done && (
+            <div style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>
+              {formatDateTime(timestamp)}
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 13, color: '#666' }}>{description}</div>
+      </div>
+    </div>
+  );
+}
+
+// Main Component
+export default function Dashboard_GSPS_Deliverystatus() {
   return (
     <GSPSLayout title="Delivery Status">
       <DeliveryStatus />
