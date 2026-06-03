@@ -270,7 +270,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
   );
 }
 
-export default function GSPSLayout({ children, title, hideTitle = false }) {
+export default function GspsLayout({ children, title, hideTitle = false }) {
   const { isGsps, user } = useRole();
   const currentUrl = usePage().url;
   const [sidebarOpen, setSidebarOpen] = useState(false);
