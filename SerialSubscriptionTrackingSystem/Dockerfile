@@ -35,8 +35,16 @@ RUN composer install --no-dev --optimize-autoloader
 RUN npm install --legacy-peer-deps
 RUN NODE_OPTIONS="--max-old-space-size=1024" npm run build
 
+# Ensure required storage directories exist
+RUN mkdir -p /app/storage/framework/views \
+    /app/storage/framework/cache \
+    /app/storage/framework/sessions \
+    /app/storage/logs \
+    /app/bootstrap/cache
+
 # Set permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
+RUN chmod -R 775 /app/storage /app/bootstrap/cache
 
 EXPOSE 8000
 
