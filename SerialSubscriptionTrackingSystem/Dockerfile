@@ -46,6 +46,9 @@ RUN mkdir -p /app/storage/framework/views \
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 RUN chmod -R 775 /app/storage /app/bootstrap/cache
 
+# Create storage symlink for file accessibility
+RUN mkdir -p /app/storage/app/public && php artisan storage:link
+
 EXPOSE 8000
 
-CMD php artisan config:clear && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+CMD php artisan config:clear && php artisan storage:link && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000

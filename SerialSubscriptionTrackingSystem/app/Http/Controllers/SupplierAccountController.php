@@ -130,13 +130,18 @@ class SupplierAccountController extends Controller
             'password.regex' => 'Password must contain both letters and numbers',
         ]);
 
-        // Check for duplicate company name manually (MongoDB compatible)
-        $existingCompanyName = SupplierAccount::where('company_name', $validated['company_name'])->first();
-        if ($existingCompanyName) {
+        $companyName = trim($validated['company_name']);
+        $contactPerson = trim($validated['contact_person']);
+
+        // Allow the same supplier name as long as the contact person is different.
+        $existingSupplier = SupplierAccount::where('company_name', $companyName)
+            ->where('contact_person', $contactPerson)
+            ->first();
+        if ($existingSupplier) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => ['company_name' => ['This supplier name already exists.']],
+                'errors' => ['company_name' => ['This supplier name and contact person combination already exists.']],
             ], 422);
         }
 
@@ -162,8 +167,8 @@ class SupplierAccountController extends Controller
 
         try {
             $supplierAccount = SupplierAccount::create([
-                'company_name' => $validated['company_name'],
-                'contact_person' => $validated['contact_person'],
+                'company_name' => $companyName,
+                'contact_person' => $contactPerson,
                 'email' => $validated['email'],
                 'phone' => $validated['phone'],
                 'address' => $validated['address'],

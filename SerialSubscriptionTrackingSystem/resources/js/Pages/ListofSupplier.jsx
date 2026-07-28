@@ -6,6 +6,8 @@ export default function SupplierList() {
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const perPage = 10;
 
   // Fetch approved supplier accounts on mount
@@ -41,8 +43,27 @@ export default function SupplierList() {
     }
   };
 
-  const totalPages = Math.ceil(allSuppliers.length / perPage) || 1;
-  const paginated = allSuppliers.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const filteredSuppliers = allSuppliers.filter((supplier) => {
+    const matchesSearch = [supplier.name, supplier.contactPerson, supplier.email]
+      .join(' ')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? !supplier.is_disabled : supplier.is_disabled);
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalPages = Math.ceil(filteredSuppliers.length / perPage) || 1;
+  const paginated = filteredSuppliers.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <AdminLayout header="Serial Subscription Tracking System">
@@ -55,17 +76,47 @@ export default function SupplierList() {
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200 w-full">
   
         {/* Filters and Count */}
-        <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100">
-            <button
-              onClick={fetchApprovedSuppliers}
-              className="border rounded-lg px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
-            >
-              Refresh
-            </button>
+        <div className="flex flex-col gap-4 px-8 py-4 border-b border-gray-100 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search supplier, contact person, or email"
+                className="border rounded-lg px-4 py-2 text-sm w-full sm:w-80"
+              />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border rounded-lg px-4 py-2 text-sm bg-white"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="disabled">Disabled</option>
+              </select>
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                }}
+                className="border rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-700 hover:bg-gray-100"
+              >
+                Clear
+              </button>
+            </div>
 
-            <span className="text-sm text-gray-600">
-              {loading ? 'Loading...' : `Showing ${paginated.length} of ${allSuppliers.length}`}
-            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchApprovedSuppliers}
+                className="border rounded-lg px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
+              >
+                Refresh
+              </button>
+
+              <span className="text-sm text-gray-600">
+                {loading ? 'Loading...' : `Showing ${paginated.length} of ${filteredSuppliers.length}`}
+              </span>
+            </div>
         </div>
 
         {/* Scrollable Table */}

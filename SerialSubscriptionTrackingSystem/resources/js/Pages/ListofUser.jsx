@@ -14,6 +14,8 @@ export default function UserList() {
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [disableModal, setDisableModal] = useState({ open: false, user: null });
   const perPage = 10;
 
@@ -65,9 +67,6 @@ export default function UserList() {
     }
   };
 
-  const totalPages = Math.ceil(allUsers.length / perPage) || 1;
-  const paginated = allUsers.slice((currentPage - 1) * perPage, currentPage * perPage);
-
   const getRoleBadgeColor = (role) => {
     const colors = {
       admin: 'bg-purple-100 text-purple-600',
@@ -78,6 +77,28 @@ export default function UserList() {
     };
     return colors[role?.toLowerCase()] || 'bg-gray-100 text-gray-600';
   };
+
+  const filteredUsers = allUsers.filter((user) => {
+    const matchesSearch = [user.name, user.email, user.role]
+      .join(' ')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === 'all' || user.role.toLowerCase() === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  const totalPages = Math.ceil(filteredUsers.length / perPage) || 1;
+  const paginated = filteredUsers.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <AdminLayout header="Serial Subscription Tracking System">
@@ -90,17 +111,50 @@ export default function UserList() {
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200 w-full">
   
           {/* Filters and Count */}
-          <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100">
-            <button
-              onClick={fetchUsers}
-              className="border rounded-lg px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
-            >
-              Refresh
-            </button>
+          <div className="flex flex-col gap-4 px-8 py-4 border-b border-gray-100 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search name, email, or role"
+                className="border rounded-lg px-4 py-2 text-sm w-full sm:w-80"
+              />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="border rounded-lg px-4 py-2 text-sm bg-white"
+              >
+                <option value="all">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="tpu">TPU</option>
+                <option value="gsps">GSPS</option>
+                <option value="supplier">Supplier</option>
+                <option value="inspection">Inspection</option>
+              </select>
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setRoleFilter('all');
+                }}
+                className="border rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-700 hover:bg-gray-100"
+              >
+                Clear
+              </button>
+            </div>
 
-            <span className="text-sm text-gray-600">
-              {loading ? 'Loading...' : `Showing ${paginated.length} of ${allUsers.length}`}
-            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchUsers}
+                className="border rounded-lg px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
+              >
+                Refresh
+              </button>
+
+              <span className="text-sm text-gray-600">
+                {loading ? 'Loading...' : `Showing ${paginated.length} of ${filteredUsers.length}`}
+              </span>
+            </div>
           </div>
 
           {/* Scrollable Table */}

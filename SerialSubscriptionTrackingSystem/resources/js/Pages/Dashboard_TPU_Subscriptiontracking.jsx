@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import TPULayout from '@/Layouts/TpuLayout';
-import { MdSearch, MdFilterList, MdOutlineInfo, MdAddCircle, MdClose, MdDelete, MdEdit } from "react-icons/md";
+import { MdSearch, MdFilterList, MdOutlineInfo, MdAddCircle, MdClose, MdDelete, MdEdit, MdCalendarToday } from "react-icons/md";
 import { FiTrendingUp, FiTrendingDown } from "react-icons/fi";
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -11,6 +11,101 @@ import SerialIssuesTable from '@/Components/SerialIssuesTable';
 // Subscription Tracking Component
 function SubscriptionTracking() {
   const { approvedSuppliers = [] } = usePage().props;
+
+  const formatDisplayDate = (dateValue) => {
+    if (!dateValue) return '-';
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const year = date.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  };
+
+  const DatePickerField = ({ label, name, value, onChange, min, required = false }) => {
+    const hiddenInputRef = useRef(null);
+
+    const openCalendar = () => {
+      const input = hiddenInputRef.current;
+      if (!input) return;
+
+      if (typeof input.showPicker === 'function') {
+        input.showPicker();
+        return;
+      }
+
+      input.click();
+    };
+
+    return (
+      <div>
+        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>
+          {label}{required ? ' *' : ''}
+        </label>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            readOnly
+            value={value ? formatDisplayDate(value) : ''}
+            onClick={openCalendar}
+            placeholder="DD/MMM/YYYY"
+            style={{
+              width: '100%',
+              padding: '12px 42px 12px 14px',
+              borderRadius: '6px',
+              border: '1px solid #ddd',
+              fontSize: '14px',
+              background: '#fff',
+              cursor: 'pointer'
+            }}
+          />
+          <button
+            type="button"
+            onClick={openCalendar}
+            style={{
+              position: 'absolute',
+              right: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              border: 'none',
+              background: 'transparent',
+              color: '#666',
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            aria-label={`Open calendar for ${label}`}
+          >
+            <MdCalendarToday size={18} />
+          </button>
+          <input
+            ref={hiddenInputRef}
+            type="date"
+            name={name}
+            value={value}
+            onChange={onChange}
+            min={min}
+            required={required}
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              border: 0,
+              opacity: 0,
+              pointerEvents: 'none'
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
   
   const [searchTerm, setSearchTerm] = useState('');
   const [periodFilter, setPeriodFilter] = useState('All');
@@ -526,7 +621,7 @@ function SubscriptionTracking() {
         return '';
     }
     
-    // Format as YYYY-MM-DD for date input
+    // Keep the ISO value for the date input control
     return nextDate.toISOString().split('T')[0];
   };
 
@@ -935,7 +1030,7 @@ function SubscriptionTracking() {
                 <tr key={subscription.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '16px', fontWeight: 500 }}>{subscription.serialTitle}</td>
                   <td style={{ padding: '16px' }}>{subscription.supplierName}</td>
-                  <td style={{ padding: '16px', color: '#666' }}>{subscription.period ? new Date(subscription.period).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
+                  <td style={{ padding: '16px', color: '#666' }}>{formatDisplayDate(subscription.period)}</td>
                   <td style={{ padding: '16px', fontWeight: 'bold', color: '#004A98' }}>{subscription.awardCost}</td>
                   <td style={{ padding: '16px' }}>
                     <span style={{
@@ -1312,24 +1407,14 @@ function SubscriptionTracking() {
                     </p>
                   )}
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Delivery Date *</label>
-                  <input
-                    type="date"
-                    name="deliveryDate"
-                    value={serialFormData.deliveryDate}
-                    onChange={handleSerialInputChange}
-                    min={new Date().toISOString().split('T')[0]}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '6px',
-                      border: '1px solid #ddd',
-                      fontSize: '14px',
-                      background: '#fff'
-                    }}
-                  />
-                </div>
+                <DatePickerField
+                  label="Delivery Date"
+                  name="deliveryDate"
+                  value={serialFormData.deliveryDate}
+                  onChange={handleSerialInputChange}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Frequency</label>
                   <select
@@ -1499,23 +1584,12 @@ function SubscriptionTracking() {
                     }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Date of Publication</label>
-                  <input
-                    type="date"
-                    name="dateOfPublication"
-                    value={serialFormData.dateOfPublication}
-                    onChange={handleSerialInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '6px',
-                      border: '1px solid #ddd',
-                      fontSize: '14px',
-                      background: '#fff'
-                    }}
-                  />
-                </div>
+                <DatePickerField
+                  label="Date of Publication"
+                  name="dateOfPublication"
+                  value={serialFormData.dateOfPublication}
+                  onChange={handleSerialInputChange}
+                />
               </div>
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
@@ -1564,7 +1638,7 @@ function SubscriptionTracking() {
                           <td style={{ padding: '12px', fontSize: '13px' }}>{item.serialTitle}</td>
                           <td style={{ padding: '12px', fontSize: '13px', color: '#666' }}>{item.issn}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>{item.supplierName}</td>
-                          <td style={{ padding: '12px', fontSize: '13px' }}>{item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
+                          <td style={{ padding: '12px', fontSize: '13px' }}>{formatDisplayDate(item.deliveryDate)}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>{item.amount}</td>
                           <td style={{ padding: '12px', fontSize: '13px' }}>₱{parseFloat(item.unitPrice || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -1762,7 +1836,7 @@ function SubscriptionTracking() {
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Delivery Date</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.period ? new Date(viewDetailsSubscription.period).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                    {formatDisplayDate(viewDetailsSubscription.period)}
                   </p>
                 </div>
                 <div>
@@ -2034,23 +2108,12 @@ function SubscriptionTracking() {
                     />
                   )}
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Delivery Date</label>
-                  <input
-                    type="date"
-                    name="period"
-                    value={editFormData.period}
-                    onChange={handleEditInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '6px',
-                      border: '1px solid #ddd',
-                      fontSize: '14px',
-                      background: '#fff'
-                    }}
-                  />
-                </div>
+                <DatePickerField
+                  label="Delivery Date"
+                  name="period"
+                  value={editFormData.period}
+                  onChange={handleEditInputChange}
+                />
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Award Cost (₱)</label>
                   <input
