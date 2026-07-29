@@ -272,11 +272,9 @@ class ProcessMovementService
         if ($config) {
             // Send notifications to target roles
             foreach ($config['target_roles'] as $role) {
-                // Don't notify the user who triggered the action UNLESS they must be kept informed
-                // (Supplier always needs to be informed of status updates, even ones they trigger)
-                // Only skip actor if there's a separate confirmation email coming
-                if ($role === $currentRole && isset($config['send_actor_copy']) && $config['send_actor_copy']) {
-                    // Skip - they'll get a confirmation email instead
+                // Supplier should still receive the external status email even when they triggered
+                // the update themselves. Other actors can receive the confirmation copy only.
+                if ($role === $currentRole && $currentRole !== 'supplier' && isset($config['send_actor_copy']) && $config['send_actor_copy']) {
                     continue;
                 }
                 
