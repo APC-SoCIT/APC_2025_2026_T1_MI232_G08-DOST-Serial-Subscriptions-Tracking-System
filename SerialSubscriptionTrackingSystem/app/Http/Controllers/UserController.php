@@ -258,6 +258,7 @@ class UserController extends Controller
                 'role' => 'required|string|in:tpu,gsps,inspection,admin',
                 'password' => 'required|confirmed|min:8|regex:/^(?=.*[a-zA-Z])(?=.*[0-9])/',
             ], [
+                'email.unique' => 'This email is already used.',
                 'password.regex' => 'Password must contain both letters and numbers',
             ]);
 

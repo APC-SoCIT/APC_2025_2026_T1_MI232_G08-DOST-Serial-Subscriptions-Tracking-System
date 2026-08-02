@@ -11,6 +11,8 @@ export default function AddUser() {
     password_confirmation: "",
   });
 
+  const [errors, setErrors] = useState({});
+
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -20,7 +22,11 @@ export default function AddUser() {
 
   const submit = (e) => {
     e.preventDefault();
-    router.post("/users", form);
+    router.post("/users", form, {
+      preserveScroll: true,
+      onSuccess: () => setErrors({}),
+      onError: (validationErrors) => setErrors(validationErrors),
+    });
   };
 
   return (
@@ -38,6 +44,7 @@ export default function AddUser() {
             onChange={handleChange}
             required
           />
+          {errors.name && <p className="text-sm text-red-600">{errors.name}</p>}
 
           <input
             type="text"
@@ -49,6 +56,7 @@ export default function AddUser() {
             onChange={handleChange}
             required
           />
+          {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
 
           <select
             name="role"
@@ -62,6 +70,7 @@ export default function AddUser() {
             <option value="librarian">Librarian</option>
             <option value="supplier">Supplier</option>
           </select>
+          {errors.role && <p className="text-sm text-red-600">{errors.role}</p>}
 
           <input
             type="password"
@@ -72,6 +81,7 @@ export default function AddUser() {
             onChange={handleChange}
             required
           />
+          {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
 
           <input
             type="password"
@@ -82,6 +92,7 @@ export default function AddUser() {
             onChange={handleChange}
             required
           />
+          {errors.password_confirmation && <p className="text-sm text-red-600">{errors.password_confirmation}</p>}
 
           <button
             type="submit"

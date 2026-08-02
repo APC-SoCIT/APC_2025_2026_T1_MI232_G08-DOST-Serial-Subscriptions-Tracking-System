@@ -151,7 +151,7 @@ class SupplierAccountController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => ['email' => ['This email is already registered.']],
+                'errors' => ['email' => ['This email is already used.']],
             ], 422);
         }
 
@@ -257,8 +257,9 @@ class SupplierAccountController extends Controller
         if ($existingUser) {
             return response()->json([
                 'success' => false,
-                'message' => 'A user with this email already exists.',
-            ], 400);
+                'message' => 'This email is already used.',
+                'errors' => ['email' => ['This email is already used.']],
+            ], 422);
         }
 
         // Get the raw password before creating user (for email)

@@ -65,7 +65,7 @@ export default function AccountApproval() {
     } catch (error) {
       console.error('Error approving account:', error);
       Swal.fire({
-        title: 'Failed to approve account. Please try again.',
+        title: error.response?.data?.message || 'Failed to approve account. Please try again.',
         icon: 'error',
         confirmButtonColor: '#0062f4',
         showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' },

@@ -106,6 +106,11 @@ export default function Register() {
                                 className="w-full border border-gray-400 px-3 py-2 rounded-md focus:ring focus:ring-blue-500 focus:outline-none"
                                 required
                             />
+                            {errors.email && (
+                                <p className="mt-1 text-sm text-red-600">
+                                    {errors.email}
+                                </p>
+                            )}
                         </div>
 
                         {/* Company */}
