@@ -134,8 +134,8 @@ class SupplierAccountController extends Controller
         $contactPerson = trim($validated['contact_person']);
 
         // Allow the same supplier name as long as the contact person is different.
-        $existingSupplier = SupplierAccount::where('company_name', $companyName)
-            ->where('contact_person', $contactPerson)
+        $existingSupplier = SupplierAccount::where('company_name', 'regex', '/^' . preg_quote($companyName, '/') . '$/i')
+            ->where('contact_person', 'regex', '/^' . preg_quote($contactPerson, '/') . '$/i')
             ->first();
         if ($existingSupplier) {
             return response()->json([

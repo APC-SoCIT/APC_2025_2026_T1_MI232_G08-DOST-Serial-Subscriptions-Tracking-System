@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdOutlineInfo, MdAddCircle, MdClose, MdDelete, MdEdit, MdCalendarToday } from "react-icons/md";
 import { FiTrendingUp, FiTrendingDown } from "react-icons/fi";
@@ -152,6 +152,7 @@ function SubscriptionTracking() {
     issn: '',
     language: '',
     authorPublisher: '',
+    supplierId: '',
     supplierName: '',
     deliveryDate: '',
     frequency: '',
@@ -247,9 +248,38 @@ function SubscriptionTracking() {
     }
   };
   
-  // Get supplier options - only from Active Suppliers (manually added in Supplier Info)
-  // Suppliers must be explicitly added to Active Suppliers before they can be used here
-  const supplierOptions = addedSuppliers.map(s => s.supplierName);
+  // Build supplier options from approved accounts, constrained to active suppliers from localStorage.
+  const supplierOptions = useMemo(() => {
+    if (!Array.isArray(approvedSuppliers) || approvedSuppliers.length === 0) {
+      return [];
+    }
+
+    const activeEmails = new Set(
+      (addedSuppliers || [])
+        .map((s) => (s.email || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+
+    return approvedSuppliers
+      .filter((supplier) => {
+        if (activeEmails.size === 0) return true;
+        return activeEmails.has((supplier.email || '').toLowerCase().trim());
+      })
+      .map((supplier) => {
+        const id = String(supplier._id || supplier.id || '');
+        const companyName = supplier.company_name || supplier.supplierName || '';
+        const contactPerson = supplier.contact_person || '';
+        return {
+          id,
+          name: companyName,
+          contact: contactPerson,
+          label: contactPerson ? `${companyName} - ${contactPerson}` : companyName,
+        };
+      })
+      .filter((supplier) => supplier.id && supplier.name);
+  }, [approvedSuppliers, addedSuppliers]);
+
+  const supplierOptionNames = supplierOptions.map((supplier) => supplier.name);
 
   // Use subscriptions from API
   const allSubscriptions = subscriptions;
@@ -650,6 +680,13 @@ function SubscriptionTracking() {
         deliveryDate: newDeliveryDate,
         amount: newQuantity // Auto-set quantity based on frequency
       });
+    } else if (name === 'supplierId') {
+      const selectedSupplier = supplierOptions.find((supplier) => supplier.id === value);
+      setSerialFormData({
+        ...serialFormData,
+        supplierId: value,
+        supplierName: selectedSupplier ? selectedSupplier.name : '',
+      });
     } else if (name === 'category' && value !== 'Others') {
       // If category is changed and it's not "Others", clear customCategory
       setSerialFormData({ ...serialFormData, [name]: value, customCategory: '' });
@@ -659,8 +696,14 @@ function SubscriptionTracking() {
   };
 
   const handleAddSerialItem = () => {
-    if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierName || !serialFormData.deliveryDate) {
-      Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Name, Delivery Date). Volume and Issues fields are optional.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+    if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierId || !serialFormData.deliveryDate) {
+      Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Account, Delivery Date). Volume and Issues fields are optional.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      return;
+    }
+
+    const selectedSupplier = supplierOptions.find((supplier) => supplier.id === serialFormData.supplierId);
+    if (!selectedSupplier) {
+      Swal.fire({ title: 'Selected supplier account is invalid or no longer active.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
 
@@ -672,6 +715,8 @@ function SubscriptionTracking() {
     const newItem = {
       id: Date.now(),
       ...serialFormData,
+      supplierName: selectedSupplier.name,
+      supplierId: selectedSupplier.id,
       category: finalCategory,
       totalPrice: (serialFormData.amount * (parseFloat(serialFormData.unitPrice) || 0)).toFixed(2)
     };
@@ -682,6 +727,7 @@ function SubscriptionTracking() {
       issn: '',
       language: '',
       authorPublisher: '',
+      supplierId: '',
       supplierName: '',
       deliveryDate: '',
       frequency: '',
@@ -709,26 +755,28 @@ function SubscriptionTracking() {
     
     setSubmitting(true);
     
-    // Group serial items by supplier to create subscriptions
+    // Group serial items by supplier account ID to avoid merging same-company contacts.
     const supplierGroups = {};
     serialItems.forEach(item => {
-      if (!supplierGroups[item.supplierName]) {
-        supplierGroups[item.supplierName] = [];
+      const supplierKey = item.supplierId || `name:${item.supplierName}`;
+      if (!supplierGroups[supplierKey]) {
+        supplierGroups[supplierKey] = [];
       }
-      supplierGroups[item.supplierName].push(item);
+      supplierGroups[supplierKey].push(item);
     });
     
     try {
       // Create subscription entries for each supplier group via API
       const createdSubscriptions = [];
       
-      for (const [supplierName, items] of Object.entries(supplierGroups)) {
+      for (const [, items] of Object.entries(supplierGroups)) {
         const totalCost = items.reduce((sum, item) => sum + (item.amount * parseFloat(item.unitPrice || 0)), 0);
         const firstItem = items[0];
         
         const subscriptionData = {
           serial_title: items.length === 1 ? firstItem.serialTitle : `${items.length} Serials`,
-          supplier_name: supplierName,
+          supplier_id: firstItem.supplierId || null,
+          supplier_name: firstItem.supplierName,
           period: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
           award_cost: totalCost,
           delivered_cost: 0,
@@ -1378,8 +1426,8 @@ function SubscriptionTracking() {
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Supplier Name *</label>
                   <select
-                    name="supplierName"
-                    value={serialFormData.supplierName}
+                    name="supplierId"
+                    value={serialFormData.supplierId}
                     onChange={handleSerialInputChange}
                     style={{
                       width: '100%',
@@ -1396,7 +1444,7 @@ function SubscriptionTracking() {
                       <>
                         <option value="">Select Supplier</option>
                         {supplierOptions.map(supplier => (
-                          <option key={supplier} value={supplier}>{supplier}</option>
+                          <option key={supplier.id} value={supplier.id}>{supplier.label}</option>
                         ))}
                       </>
                     )}
@@ -2023,10 +2071,10 @@ function SubscriptionTracking() {
                   >
                     <option value="">Select Supplier</option>
                     {supplierOptions.map(supplier => (
-                      <option key={supplier} value={supplier}>{supplier}</option>
+                      <option key={`${supplier.id}-edit`} value={supplier.name}>{supplier.label}</option>
                     ))}
                     {/* Keep current supplier if not in list */}
-                    {editFormData.supplierName && !supplierOptions.includes(editFormData.supplierName) && (
+                    {editFormData.supplierName && !supplierOptionNames.includes(editFormData.supplierName) && (
                       <option value={editFormData.supplierName}>{editFormData.supplierName}</option>
                     )}
                   </select>

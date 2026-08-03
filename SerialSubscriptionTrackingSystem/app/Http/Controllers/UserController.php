@@ -100,6 +100,9 @@ class UserController extends Controller
     {
         try {
             $user = User::find($id);
+            $userId = $user?->_id ?? $user?->id;
+            $userEmail = $user?->email;
+            $userName = $user?->name;
             
             if (!$user) {
                 return response()->json([
@@ -109,14 +112,15 @@ class UserController extends Controller
             }
 
             if (($user->role ?? null) === 'supplier') {
-                $userId = $user->_id ?? $user->id;
-                $userEmail = $user->email;
-                $userName = $user->name;
+                $supplierAccount = SupplierAccount::where('user_id', $userId)
+                    ->orWhere('email', $userEmail)
+                    ->first();
                 
-                // Delete all subscriptions/serials assigned to this supplier
-                Subscription::where('supplier_id', $userId)
-                    ->orWhere('supplier_name', $userName)
-                    ->delete();
+                // Delete only records linked to this specific supplier account.
+                if ($supplierAccount) {
+                    $supplierAccountId = (string)($supplierAccount->_id ?? $supplierAccount->id);
+                    Subscription::where('supplier_id', $supplierAccountId)->delete();
+                }
                 
                 // Delete supplier account
                 SupplierAccount::where('user_id', $userId)

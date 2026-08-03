@@ -195,7 +195,8 @@ export default function AddSerial() {
                   <option value="">Select a supplier</option>
                   {approvedSuppliers.map(supplier => (
                     <option key={supplier._id || supplier.id} value={supplier._id || supplier.id}>
-                      {supplier.company_name || supplier.supplierName}
+                      {(supplier.company_name || supplier.supplierName)}
+                      {supplier.contact_person ? ` - ${supplier.contact_person}` : ''}
                     </option>
                   ))}
                 </select>

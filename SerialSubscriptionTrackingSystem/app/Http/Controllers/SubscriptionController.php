@@ -190,6 +190,42 @@ class SubscriptionController extends Controller
         $deliveredCost = $validated['delivered_cost'] ?? 0;
         $remainingCost = max(0, $validated['award_cost'] - $deliveredCost);
 
+        $supplierName = trim($validated['supplier_name']);
+        $supplierId = !empty($validated['supplier_id']) ? trim((string) $validated['supplier_id']) : null;
+
+        if ($supplierId) {
+            $supplierAccount = SupplierAccount::where('_id', $supplierId)
+                ->orWhere('id', $supplierId)
+                ->first();
+
+            if (!$supplierAccount) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['supplier_id' => ['Selected supplier account was not found.']],
+                ], 422);
+            }
+
+            $supplierId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+            $supplierName = $supplierAccount->company_name ?? $supplierName;
+        } else {
+            $matchingSuppliers = SupplierAccount::approved()
+                ->where('company_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i')
+                ->get();
+
+            if ($matchingSuppliers->count() === 1) {
+                $supplierAccount = $matchingSuppliers->first();
+                $supplierId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                $supplierName = $supplierAccount->company_name ?? $supplierName;
+            } else if ($matchingSuppliers->count() > 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => ['supplier_id' => ['Multiple supplier accounts share this supplier name. Please select the exact supplier contact account.']],
+                ], 422);
+            }
+        }
+
         // Extract ISSN from first serial if not provided at subscription level
         $issn = $validated['issn'] ?? null;
         if (!$issn && !empty($validated['serials'])) {
@@ -199,8 +235,8 @@ class SubscriptionController extends Controller
         $subscription = Subscription::create([
             'serial_title' => $validated['serial_title'],
             'issn' => $issn,
-            'supplier_id' => $validated['supplier_id'] ?? null,
-            'supplier_name' => $validated['supplier_name'],
+            'supplier_id' => $supplierId,
+            'supplier_name' => $supplierName,
             'period' => $validated['period'] ?? null,
             'award_cost' => $validated['award_cost'],
             'delivered_cost' => $deliveredCost,
@@ -230,7 +266,8 @@ class SubscriptionController extends Controller
                 $serialTitle,
                 $subscription->supplier_name,
                 (string)($subscription->_id ?? $subscription->id),
-                $serialIssn
+                $serialIssn,
+                (string)($subscription->supplier_id ?? '')
             );
         }
 
@@ -562,11 +599,25 @@ class SubscriptionController extends Controller
     public function getSupplierSerials(Request $request)
     {
         $supplierName = $request->get('supplier_name');
+        $user = Auth::user();
         
         // Get subscriptions for this supplier
         $query = Subscription::query();
-        
-        if ($supplierName) {
+
+        // For supplier role, always scope by linked supplier account ID.
+        if ($user && strtolower($user->role ?? '') === 'supplier') {
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
+
+            if ($supplierAccount) {
+                $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                $query->where('supplier_id', $supplierAccountId);
+            } else if ($supplierName) {
+                // Legacy fallback if account linkage is missing.
+                $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
+            }
+        } else if ($supplierName) {
             // Use case-insensitive regex matching for MongoDB
             $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
         }

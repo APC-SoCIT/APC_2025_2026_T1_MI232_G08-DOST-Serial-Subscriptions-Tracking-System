@@ -206,13 +206,18 @@ class DashboardStatsController extends Controller
 
             // Get supplier's subscriptions
             $query = Subscription::query();
-            
-            // Filter by supplier name if user is a supplier
-            if ($user && $user->role === 'supplier') {
-                $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)->first();
+
+            // Scope by supplier account ID to prevent same-company accounts from sharing data.
+            if ($user && strtolower($user->role ?? '') === 'supplier') {
+                $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                    ->orWhere('email', $user->email)
+                    ->first();
+
                 if ($supplierAccount) {
-                    $query->where('supplier_name', $supplierAccount->company_name);
+                    $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                    $query->where('supplier_id', $supplierAccountId);
                 } else {
+                    // Legacy fallback if supplier account link is missing.
                     $query->where('supplier_name', $user->name);
                 }
             }

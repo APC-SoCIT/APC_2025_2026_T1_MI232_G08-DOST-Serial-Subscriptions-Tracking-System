@@ -350,7 +350,8 @@ class ProcessMovementService
         string $serialTitle,
         string $supplierName,
         ?string $subscriptionId = null,
-        ?string $serialIssn = null
+        ?string $serialIssn = null,
+        ?string $supplierId = null
     ): void {
         $currentUser = Auth::user();
         $currentRole = strtolower($currentUser?->role ?? 'tpu');
@@ -363,6 +364,7 @@ class ProcessMovementService
                 'serial_title' => $serialTitle,
                 'new_status' => 'created',
                 'supplier_name' => $supplierName,
+                'supplier_id' => $supplierId,
                 'subscription_id' => $subscriptionId,
                 'serial_issn' => $serialIssn,
             ],

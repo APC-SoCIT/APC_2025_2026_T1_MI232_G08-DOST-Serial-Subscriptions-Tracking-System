@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SerialIssue;
 use App\Models\Subscription;
+use App\Models\SupplierAccount;
 use App\Services\AuditLogService;
 use App\Services\ProcessMovementService;
 use Illuminate\Http\Request;
@@ -589,19 +590,39 @@ class SerialIssueController extends Controller
     public function getSupplierIssues(Request $request)
     {
         $supplierName = $request->get('supplier_name');
-        
-        if (!$supplierName) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Supplier name is required',
-            ], 400);
-        }
+        $user = Auth::user();
 
         // Find subscriptions for this supplier that are ACCEPTED (not pending)
         // Only show issues from accepted subscriptions
-        $subscriptions = Subscription::where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i')
-            ->whereIn('status', ['Active', 'accepted', 'Delivered', 'delivered']) // Only accepted or delivered subscriptions
-            ->get();
+        $subscriptionQuery = Subscription::whereIn('status', ['Active', 'accepted', 'Delivered', 'delivered']);
+
+        if ($user && strtolower($user->role ?? '') === 'supplier') {
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
+
+            if ($supplierAccount) {
+                $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                $subscriptionQuery->where('supplier_id', $supplierAccountId);
+            } else if ($supplierName) {
+                $subscriptionQuery->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Supplier account not linked to this user',
+                ], 422);
+            }
+        } else {
+            if (!$supplierName) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Supplier name is required',
+                ], 400);
+            }
+            $subscriptionQuery->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
+        }
+
+        $subscriptions = $subscriptionQuery->get();
 
         $subscriptionIds = $subscriptions->pluck('_id')->map(fn($id) => (string) $id)->toArray();
 

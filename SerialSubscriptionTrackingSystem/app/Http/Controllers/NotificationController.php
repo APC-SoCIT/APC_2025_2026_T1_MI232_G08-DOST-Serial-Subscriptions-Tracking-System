@@ -21,6 +21,13 @@ class NotificationController extends Controller
     {
         $user = Auth::user();
         $userRole = strtolower($user->role ?? 'user');
+        $supplierAccount = null;
+
+        if ($userRole === 'supplier') {
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
+        }
         
         $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
         
@@ -57,8 +64,10 @@ class NotificationController extends Controller
                         $isRelevant = $isPendingInspection || $isRecentlyReceived;
                         break;
                     case 'supplier':
-                        // Supplier sees their own serials status
-                        $isSupplierOwned = strtolower($subscription->supplier_name ?? '') === strtolower($user->name ?? '');
+                        // Supplier sees only subscriptions tied to their own supplier account ID.
+                        $currentSupplierId = $supplierAccount ? (string)($supplierAccount->_id ?? $supplierAccount->id) : null;
+                        $subscriptionSupplierId = (string)($subscription->supplier_id ?? '');
+                        $isSupplierOwned = $currentSupplierId && $subscriptionSupplierId === $currentSupplierId;
                         $isRelevant = $isSupplierOwned && ($isForDelivery || $status === 'prepare');
                         break;
                 }
@@ -129,7 +138,9 @@ class NotificationController extends Controller
         // Add delivery reminder notifications for suppliers
         if ($userRole === 'supplier') {
             // Get supplier account ID from user
-            $supplierAccount = SupplierAccount::where('email', $user->email)->first();
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
             
             if ($supplierAccount) {
                 $supplierId = (string)($supplierAccount->_id ?? $supplierAccount->id);
@@ -210,14 +221,16 @@ class NotificationController extends Controller
         
         // For suppliers, filter notifications by supplier_name to show only their notifications
         if ($userRole === 'supplier') {
-            $userName = strtolower(trim($user->name ?? ''));
-            // Get supplier account if exists
-            $supplierAccount = SupplierAccount::where('email', $user->email)->first();
-            $companyName = $supplierAccount ? strtolower(trim($supplierAccount->company_name ?? '')) : '';
-            
-            $userNotifications = $userNotifications->filter(function ($notification) use ($userName, $companyName) {
-                $supplierName = strtolower(trim($notification->data['supplier_name'] ?? ''));
-                return $supplierName === $userName || ($companyName && $supplierName === $companyName);
+            // Filter supplier notifications by explicit supplier_id when present.
+            $currentSupplierId = $supplierAccount ? (string)($supplierAccount->_id ?? $supplierAccount->id) : '';
+
+            $userNotifications = $userNotifications->filter(function ($notification) use ($currentSupplierId) {
+                $notificationSupplierId = (string)($notification->data['supplier_id'] ?? '');
+                if ($currentSupplierId && $notificationSupplierId) {
+                    return $notificationSupplierId === $currentSupplierId;
+                }
+
+                return (string)($notification->user_id ?? '') === (string)Auth::id();
             })->take(30);
         } else {
             $userNotifications = $userNotifications->take(30);
@@ -317,7 +330,9 @@ class NotificationController extends Controller
         // Mark all delivery notifications as read for suppliers
         $deliveryCount = 0;
         if ($userRole === 'supplier') {
-            $supplierAccount = SupplierAccount::where('email', $user->email)->first();
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
             if ($supplierAccount) {
                 $supplierId = (string)($supplierAccount->_id ?? $supplierAccount->id);
                 $deliveryCount = DeliveryNotificationService::markAllAsReadForSupplier($supplierId);
@@ -344,7 +359,9 @@ class NotificationController extends Controller
         
         // For suppliers, filter by their supplier ID
         if ($userRole === 'supplier') {
-            $supplierAccount = SupplierAccount::where('email', $user->email)->first();
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
             if ($supplierAccount) {
                 $supplierId = (string)($supplierAccount->_id ?? $supplierAccount->id);
             }
