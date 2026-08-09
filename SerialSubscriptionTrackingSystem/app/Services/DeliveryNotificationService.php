@@ -6,6 +6,7 @@ use App\Mail\DeliveryReminderNotification;
 use App\Models\DeliveryNotification;
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -128,7 +129,37 @@ class DeliveryNotificationService
         if ($supplierId) {
             $supplier = SupplierAccount::find($supplierId);
             if ($supplier) {
-                $supplierEmail = $supplier->email;
+                if (!empty($supplier->user_id)) {
+                    $supplierUser = User::find($supplier->user_id);
+                    if ($supplierUser && !empty($supplierUser->email)) {
+                        $supplierEmail = $supplierUser->email;
+                    }
+                }
+
+                if (empty($supplierEmail) && !empty($supplier->email)) {
+                    $supplierEmail = $supplier->email;
+                }
+            }
+        }
+
+        if (empty($supplierEmail) && $supplierName) {
+            $supplier = SupplierAccount::where('company_name', 'like', "%{$supplierName}%")->first();
+
+            if ($supplier) {
+                if (!empty($supplier->user_id)) {
+                    $supplierUser = User::find($supplier->user_id);
+                    if ($supplierUser && !empty($supplierUser->email)) {
+                        $supplierEmail = $supplierUser->email;
+                    }
+                }
+
+                if (empty($supplierEmail) && !empty($supplier->email)) {
+                    $supplierEmail = $supplier->email;
+                }
+
+                if (empty($supplierId)) {
+                    $supplierId = (string) ($supplier->_id ?? $supplier->id);
+                }
             }
         }
 

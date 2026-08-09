@@ -73,7 +73,8 @@ class EmailNotificationService
         ?string $subscriptionId = null,
         ?string $serialIssn = null,
         ?string $actorName = null,
-        ?string $issueId = null
+        ?string $issueId = null,
+        ?string $supplierId = null
     ): bool {
         // Check if this status should trigger a notification
         if (!isset(self::$notifiableStatuses[strtolower($newStatus)])) {
@@ -93,8 +94,10 @@ class EmailNotificationService
                 );
             }
 
+            $resolvedSupplierId = $supplierId ?? self::getSupplierIdForSubscription($subscriptionId);
+
             // Get recipients based on role
-            $recipients = self::getRecipientsForRole($targetRole, $supplierName);
+            $recipients = self::getRecipientsForRole($targetRole, $supplierName, $resolvedSupplierId);
 
             if (empty($recipients)) {
                 Log::info("No email recipients found for role: {$targetRole}");
@@ -397,7 +400,7 @@ class EmailNotificationService
      * Get email recipients based on role
      * Uses raw MongoDB queries because Eloquent queries don't work reliably in service context
      */
-    private static function getRecipientsForRole(string $role, ?string $supplierName = null): array
+    private static function getRecipientsForRole(string $role, ?string $supplierName = null, ?string $supplierId = null): array
     {
         $recipients = [];
 
@@ -410,9 +413,43 @@ class EmailNotificationService
 
             switch (strtolower($role)) {
                 case 'supplier':
-                    // Get supplier email by company name
-                    if ($supplierName) {
-                        // First try SupplierAccount collection
+                    if ($supplierId) {
+                        $supplier = SupplierAccount::find($supplierId);
+
+                        if ($supplier) {
+                            if (!empty($supplier->user_id)) {
+                                $supplierUser = User::find($supplier->user_id);
+
+                                if ($supplierUser && !empty($supplierUser->email)) {
+                                    $recipients[] = [
+                                        'email' => $supplierUser->email,
+                                        'name' => $supplierUser->name ?? $supplier->contact_person ?? $supplier->company_name,
+                                    ];
+                                    Log::info("Found supplier by supplier_id user account", [
+                                        'supplier_id' => $supplierId,
+                                        'email' => $supplierUser->email,
+                                    ]);
+                                }
+                            }
+
+                            if (!empty($supplier->email)) {
+                                $exists = collect($recipients)->contains('email', $supplier->email);
+                                if (!$exists) {
+                                    $recipients[] = [
+                                        'email' => $supplier->email,
+                                        'name' => $supplier->contact_person ?? $supplier->company_name,
+                                    ];
+                                    Log::info("Found supplier by supplier_id account email", [
+                                        'supplier_id' => $supplierId,
+                                        'email' => $supplier->email,
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+
+                    if (empty($recipients) && $supplierName) {
+                        // Legacy fallback for older records without supplier_id.
                         $supplier = $suppliersCollection->findOne([
                             'company_name' => new \MongoDB\BSON\Regex($supplierName, 'i'),
                             'status' => 'approved',
@@ -424,13 +461,12 @@ class EmailNotificationService
                                 'email' => $supplier['email'],
                                 'name' => $supplier['contact_person'] ?? $supplier['company_name'],
                             ];
-                            Log::info("Found supplier in SupplierAccount", [
+                            Log::info("Found supplier in SupplierAccount by name fallback", [
                                 'supplier_name' => $supplierName,
                                 'email' => $supplier['email'],
                             ]);
                         }
 
-                        // Also check users collection for supplier role
                         $supplierUser = $usersCollection->findOne([
                             'role' => 'supplier',
                             'is_disabled' => false,
@@ -447,7 +483,7 @@ class EmailNotificationService
                                     'email' => $supplierUser['email'],
                                     'name' => $supplierUser['name'],
                                 ];
-                                Log::info("Found supplier in User table", [
+                                Log::info("Found supplier in User table by name fallback", [
                                     'supplier_name' => $supplierName,
                                     'email' => $supplierUser['email'],
                                 ]);
@@ -460,10 +496,14 @@ class EmailNotificationService
                 case 'gsps':
                 case 'inspection':
                 case 'admin':
-                    // Get all users with this role and is_disabled = false
+                    // Get all users with this role and allow missing is_disabled on legacy accounts.
                     $users = $usersCollection->find([
-                        'role' => $role,
-                        'is_disabled' => false
+                        'role' => new \MongoDB\BSON\Regex('^' . preg_quote($role, '/') . '$', 'i'),
+                        '$or' => [
+                            ['is_disabled' => false],
+                            ['is_disabled' => null],
+                            ['is_disabled' => ['$exists' => false]],
+                        ],
                     ]);
 
                     foreach ($users as $user) {
@@ -498,10 +538,12 @@ class EmailNotificationService
     public static function notifyNewSerialAssigned(
         string $serialTitle,
         string $supplierName,
-        ?string $subscriptionId = null
+        ?string $subscriptionId = null,
+        ?string $supplierId = null
     ): bool {
         $success = true;
         $notifyRoles = ['supplier', 'gsps', 'admin'];
+        $resolvedSupplierId = $supplierId ?? self::getSupplierIdForSubscription($subscriptionId);
         
         foreach ($notifyRoles as $role) {
             $result = self::sendStatusNotification(
@@ -510,6 +552,10 @@ class EmailNotificationService
                 $role,
                 $supplierName,
                 $subscriptionId
+                ,null
+                ,null
+                ,null
+                ,$resolvedSupplierId
             );
             $success = $success && $result;
         }
@@ -555,6 +601,33 @@ class EmailNotificationService
             }
         }
         return $sentCount;
+    }
+
+    /**
+     * Resolve the supplier account ID for a subscription.
+     */
+    private static function getSupplierIdForSubscription(?string $subscriptionId): ?string
+    {
+        if (!$subscriptionId) {
+            return null;
+        }
+
+        try {
+            $subscription = Subscription::find($subscriptionId);
+
+            if (!$subscription || empty($subscription->supplier_id)) {
+                return null;
+            }
+
+            return (string) $subscription->supplier_id;
+        } catch (\Exception $e) {
+            Log::warning('Failed to resolve supplier ID for subscription', [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
@@ -624,12 +697,22 @@ class EmailNotificationService
                     $usersCollection = $db->selectCollection('users');
                     
                     $user = $usersCollection->findOne([
-                        'role' => $actorRole,
-                        'is_disabled' => false,
-                        '$or' => [
-                            ['name' => $actorName],
-                            ['email' => new \MongoDB\BSON\Regex($actorName, 'i')]
-                        ]
+                        'role' => new \MongoDB\BSON\Regex('^' . preg_quote($actorRole, '/') . '$', 'i'),
+                        '$and' => [
+                            [
+                                '$or' => [
+                                    ['is_disabled' => false],
+                                    ['is_disabled' => null],
+                                    ['is_disabled' => ['$exists' => false]],
+                                ],
+                            ],
+                            [
+                                '$or' => [
+                                    ['name' => $actorName],
+                                    ['email' => new \MongoDB\BSON\Regex($actorName, 'i')],
+                                ],
+                            ],
+                        ],
                     ]);
                     
                     Log::info("User search result", [

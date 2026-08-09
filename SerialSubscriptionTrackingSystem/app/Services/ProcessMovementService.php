@@ -375,7 +375,8 @@ class ProcessMovementService
         EmailNotificationService::notifyNewSerialAssigned(
             $serialTitle,
             $supplierName,
-            $subscriptionId
+            $subscriptionId,
+            $supplierId
         );
     }
 

@@ -18,6 +18,11 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    'mailjet' => [
+        'key' => env('MAILJET_API_KEY'),
+        'secret' => env('MAILJET_API_SECRET'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],
