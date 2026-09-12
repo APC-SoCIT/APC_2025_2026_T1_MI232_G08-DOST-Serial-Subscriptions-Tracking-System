@@ -418,7 +418,7 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `Admin_Dashboard_Report_${startDate}_to_${endDate}.csv`;
+                    link.download = `Admin_Dashboard_Report_${startDate}_to_${endDate}.xlsx`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);

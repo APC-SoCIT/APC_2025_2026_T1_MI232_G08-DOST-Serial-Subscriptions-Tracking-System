@@ -494,6 +494,7 @@ class DashboardStatsController extends Controller
             $preparing = 0;
             $forDelivery = 0;
             $delivered = 0;
+            $returned = 0;
 
             foreach ($subscriptions as $subscription) {
                 $serials = $subscription->serials ?? [];
@@ -512,7 +513,12 @@ class DashboardStatsController extends Controller
                     
                     if (in_array($status, ['pending', 'prepare'])) $preparing++;
                     if ($status === 'for_delivery') $forDelivery++;
-                    if ($status === 'received') $delivered++;
+                    if ($status === 'received') {
+                        $delivered++;
+                        if (($serial['inspection_status'] ?? null) === 'for_return') {
+                            $returned++;
+                        }
+                    }
                 }
             }
 
@@ -522,6 +528,7 @@ class DashboardStatsController extends Controller
                 'preparing' => $preparing,
                 'forDelivery' => $forDelivery,
                 'delivered' => $delivered,
+                'returned' => $returned,
             ];
         }
 
