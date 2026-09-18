@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { FaUserCircle, FaEye, FaEyeSlash, FaArrowLeft } from "react-icons/fa";
-import { MdEmail, MdLock, MdWarning } from "react-icons/md";
+import { MdEmail, MdLock } from "react-icons/md";
 
 export default function ProfilePage({ mustVerifyEmail, status }) {
   const user = usePage().props.auth.user;
@@ -9,8 +9,6 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
   // Profile form
@@ -24,11 +22,6 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
     current_password: '',
     password: '',
     password_confirmation: '',
-  });
-
-  // Delete form
-  const deleteForm = useForm({
-    password: '',
   });
 
   const handleProfileSubmit = (e) => {
@@ -46,14 +39,6 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
         passwordForm.reset();
         setSuccessMessage('Password updated successfully!');
       },
-    });
-  };
-
-  const handleDeleteAccount = (e) => {
-    e.preventDefault();
-    deleteForm.delete(route('profile.destroy'), {
-      preserveScroll: true,
-      onSuccess: () => setShowDeleteModal(false),
     });
   };
 
@@ -177,9 +162,6 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
           </button>
           <button style={tabStyle(activeTab === 'password')} onClick={() => setActiveTab('password')}>
             Change Password
-          </button>
-          <button style={tabStyle(activeTab === 'danger')} onClick={() => setActiveTab('danger')}>
-            Delete Account
           </button>
         </div>
 
@@ -422,154 +404,7 @@ export default function ProfilePage({ mustVerifyEmail, status }) {
           </div>
         )}
 
-        {/* Delete Account Tab */}
-        {activeTab === 'danger' && (
-          <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 32,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid #f5c6cb',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-              <MdWarning size={24} color="#dc3545" />
-              <h3 style={{ margin: 0, color: '#dc3545', fontSize: 20 }}>Delete Account</h3>
-            </div>
-            <p style={{ color: '#666', fontSize: 14, marginBottom: 24 }}>
-              Once your account is deleted, all of its resources and data will be permanently deleted. 
-              Before deleting your account, please download any data or information that you wish to retain.
-            </p>
-
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              style={{
-                background: '#dc3545',
-                color: '#fff',
-                border: 'none',
-                padding: '12px 32px',
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: 500,
-                transition: 'all 0.2s',
-              }}
-              onMouseOver={(e) => e.target.style.background = '#c82333'}
-              onMouseOut={(e) => e.target.style.background = '#dc3545'}
-            >
-              Delete Account
-            </button>
-          </div>
-        )}
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 32,
-            maxWidth: 480,
-            width: '90%',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <MdWarning size={28} color="#dc3545" />
-              <h3 style={{ margin: 0, color: '#dc3545', fontSize: 20 }}>Delete Account</h3>
-            </div>
-            
-            <p style={{ color: '#666', fontSize: 14, marginBottom: 24 }}>
-              Are you sure you want to delete your account? This action cannot be undone. 
-              Please enter your password to confirm.
-            </p>
-
-            <form onSubmit={handleDeleteAccount}>
-              <div style={{ marginBottom: 24 }}>
-                <label style={labelStyle}>
-                  Password <span style={{ color: '#dc3545' }}>*</span>
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showDeletePassword ? 'text' : 'password'}
-                    value={deleteForm.data.password}
-                    onChange={(e) => deleteForm.setData('password', e.target.value)}
-                    style={{
-                      ...inputStyle,
-                      paddingRight: 40,
-                      borderColor: deleteForm.errors.password ? '#dc3545' : '#ddd',
-                    }}
-                    placeholder="Enter your password to confirm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowDeletePassword(!showDeletePassword)}
-                    style={{
-                      position: 'absolute',
-                      right: 12,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#999',
-                    }}
-                  >
-                    {showDeletePassword ? <FaEyeSlash /> : <FaEye />}
-                  </button>
-                </div>
-                {deleteForm.errors.password && <p style={errorStyle}>{deleteForm.errors.password}</p>}
-              </div>
-
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    deleteForm.reset();
-                  }}
-                  style={{
-                    background: 'transparent',
-                    color: '#666',
-                    border: '1px solid #ddd',
-                    padding: '10px 24px',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    fontWeight: 500,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={deleteForm.processing}
-                  style={{
-                    background: '#dc3545',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '10px 24px',
-                    borderRadius: 8,
-                    cursor: deleteForm.processing ? 'not-allowed' : 'pointer',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    opacity: deleteForm.processing ? 0.7 : 1,
-                  }}
-                >
-                  {deleteForm.processing ? 'Deleting...' : 'Delete Account'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
