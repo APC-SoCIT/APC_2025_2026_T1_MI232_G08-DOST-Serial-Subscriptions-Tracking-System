@@ -16,15 +16,28 @@ class CheckSessionExpiration
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // For API requests, check if session is valid
-        if ($request->expectsJson() || $request->is('api/*')) {
-            if (!Auth::check()) {
+        $user = Auth::user();
+        $lifetimeSeconds = (int) config('session.lifetime', 120) * 60;
+        $lastActivity = $request->session()->get('_last_activity');
+
+        if ($user && $lastActivity && (time() - (int) $lastActivity) >= $lifetimeSeconds) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Session expired. Please log in again.',
                     'session_expired' => true,
                 ], 401);
             }
+
+            return redirect()->route('login')->with('reason', 'inactivity');
+        }
+
+        if ($user) {
+            $request->session()->put('_last_activity', time());
         }
 
         return $next($request);

@@ -15,13 +15,13 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 4, CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
-
 const COLORS = ["#2563eb", "#22c55e", "#facc15", "#ef4444"];
 
 /* ================= HELPERS ================= */
@@ -125,11 +125,11 @@ export default function Dashboard() {
   // FILTER MODE: year | month | week | custom
 const [filterMode, setFilterMode] = useState("year");
 
-const [year, setYear] = useState(2026);
+const [year, setYear] = useState(CURRENT_YEAR);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2026, "January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2026, "December"));
+const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR, "January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR, "December"));
 const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilterModal, setShowFilterModal] = useState(false);
@@ -249,12 +249,11 @@ const approvalTrend = useMemo(() => {
   }
   
   // Filter chart data by selected months
-  return chartData.monthly
-    .filter(item => months.includes(item.month))
-    .map(item => ({
-      month: item.month,
-      approved: item.approved || 0,
-    }));
+  const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+  return months.map(month => ({
+    month,
+    approved: monthlyByMonth.get(month)?.approved || 0,
+  }));
 }, [chartData.monthly, months]);
 
 
@@ -264,13 +263,12 @@ const approvalVsPending = useMemo(() => {
     return months.map(m => ({ month: m, approved: 0, pending: 0 }));
   }
   
-  return chartData.monthly
-    .filter(item => months.includes(item.month))
-    .map(item => ({
-      month: item.month,
-      approved: item.approved || 0,
-      pending: item.pending || 0,
-    }));
+  const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+  return months.map(month => ({
+    month,
+    approved: monthlyByMonth.get(month)?.approved || 0,
+    pending: monthlyByMonth.get(month)?.pending || 0,
+  }));
 }, [chartData.monthly, months]);
 
 
@@ -280,12 +278,11 @@ const supplierCreation = useMemo(() => {
     return months.map(m => ({ month: m, created: 0 }));
   }
   
-  return chartData.monthly
-    .filter(item => months.includes(item.month))
-    .map(item => ({
-      month: item.month,
-      created: item.created || 0,
-    }));
+  const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+  return months.map(month => ({
+    month,
+    created: monthlyByMonth.get(month)?.created || 0,
+  }));
 }, [chartData.monthly, months]);
 
 
@@ -396,7 +393,7 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               >
                 <FaFilter size={14} />
                 Filters
-                {(filterMode !== 'year' || year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(filterMode !== 'year' || year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -540,16 +537,16 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                   onClick={() => {
                     // Clear/Reset filters to defaults
                     setFilterMode('year');
-                    setTempYear(2026);
+                    setTempYear(CURRENT_YEAR);
                     setTempStartMonth('January');
                     setTempEndMonth('December');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
-                    setYear(2026);
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -595,7 +592,7 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
       sourceLabel={card.sourceLabel}
       isActive={card.id === activeKpi}
       onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
-      onSeeMore={() => router.visit(card.sourcePath)}
+      onSeeMore={() => router.visit(`${card.sourcePath}?month=${encodeURIComponent(startMonth === endMonth ? String(monthIndex(startMonth) + 1).padStart(2, "0") : '')}&year=${year}&start_date=${startDate}&end_date=${endDate}`)}
     />
   ))}
 </div>
@@ -610,7 +607,11 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               <LineChart data={approvalTrend}>
                <XAxis
   dataKey="month"
-  tick={{ fontSize: 20, fontWeight: 600 }}
+  interval={0}
+  angle={-35}
+  textAnchor="end"
+  height={50}
+  tick={{ fontSize: 12, fontWeight: 600 }}
 />
                 <YAxis
   tick={{ fontSize: 20, fontWeight: 600 }}
@@ -635,7 +636,11 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
     <AreaChart data={approvalVsPending}>
       <XAxis
   dataKey="month"
-  tick={{ fontSize: 20, fontWeight: 600 }}
+  interval={0}
+  angle={-35}
+  textAnchor="end"
+  height={50}
+  tick={{ fontSize: 12, fontWeight: 600 }}
 />
                 <YAxis
   tick={{ fontSize: 20, fontWeight: 600 }}
@@ -667,7 +672,11 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               <BarChart data={supplierCreation}>
                 <XAxis
   dataKey="month"
-  tick={{ fontSize: 20, fontWeight: 600 }}
+  interval={0}
+  angle={-35}
+  textAnchor="end"
+  height={50}
+  tick={{ fontSize: 12, fontWeight: 600 }}
 />
                 <YAxis
   tick={{ fontSize: 20, fontWeight: 600 }}

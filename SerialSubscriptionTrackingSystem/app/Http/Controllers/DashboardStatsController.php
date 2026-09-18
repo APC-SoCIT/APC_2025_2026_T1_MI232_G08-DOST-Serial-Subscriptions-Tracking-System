@@ -104,7 +104,7 @@ class DashboardStatsController extends Controller
                     'total_delivered_cost' => $subscriptions->sum('delivered_cost') ?? 0,
                 ],
                 'charts' => $chartData,
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -181,7 +181,7 @@ class DashboardStatsController extends Controller
                     'success_rate' => $successRate,
                 ],
                 'charts' => $chartData,
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -279,7 +279,7 @@ class DashboardStatsController extends Controller
                     'total_award_cost' => $subscriptions->sum('award_cost') ?? 0,
                 ],
                 'charts' => $chartData,
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -349,7 +349,7 @@ class DashboardStatsController extends Controller
                     'success_rate' => $successRate,
                 ],
                 'charts' => $chartData,
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
