@@ -7,6 +7,7 @@ import { FiPackage, FiCheckCircle, FiClock, FiAlertTriangle } from "react-icons/
 import { FaHistory } from "react-icons/fa";
 import Swal from 'sweetalert2';
 import 'animate.css';
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 // Inspection Serials for Inspection Page
 function SerialsForInspection() {
@@ -66,7 +67,9 @@ function SerialsForInspection() {
       setLoading(true);
       setError(null);
       
-      const response = await axios.get('/api/subscriptions/inspection-tracking');
+      const response = await axios.get('/api/subscriptions/inspection-tracking', {
+        params: getDateRangeParams(),
+      });
       
       if (response.data.success) {
         setSubscriptions(response.data.subscriptions || []);

@@ -7,6 +7,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
 import SerialIssuesTable from '@/Components/SerialIssuesTable';
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 // Subscription Tracking Component
 function SubscriptionTracking() {
@@ -214,7 +215,9 @@ function SubscriptionTracking() {
   const fetchSubscriptions = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/subscriptions');
+      const response = await axios.get('/api/subscriptions', {
+        params: getDateRangeParams(),
+      });
       if (response.data.success) {
         // Transform API data to match the component's expected format
         const apiSubscriptions = response.data.subscriptions.map(sub => ({

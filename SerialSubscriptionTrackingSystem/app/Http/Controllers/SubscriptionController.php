@@ -622,7 +622,8 @@ class SubscriptionController extends Controller
             $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
         }
         
-        $subscriptions = $query->orderBy('created_at', 'desc')->get();
+        $subscriptions = $query->orderBy('created_at', 'desc')->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         // Extract all serials from subscriptions and flatten them
         $serials = [];
@@ -819,7 +820,8 @@ class SubscriptionController extends Controller
      */
     public function getDeliverySerials(Request $request)
     {
-        $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
+        $subscriptions = Subscription::orderBy('created_at', 'desc')->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         // Extract all serials with "for_delivery" or "received" status
         $deliverySerials = [];
@@ -876,7 +878,8 @@ class SubscriptionController extends Controller
         // Get subscriptions that are at least accepted (not pending)
         $subscriptions = Subscription::whereIn('status', ['Active', 'accepted', 'Delivered', 'delivered'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         $deliveryData = [];
         $totalDelivered = 0;
@@ -1274,7 +1277,8 @@ class SubscriptionController extends Controller
      */
     public function getSerialsForInspection(Request $request)
     {
-        $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
+        $subscriptions = Subscription::orderBy('created_at', 'desc')->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         // Extract all serials that are received and need inspection
         $inspectionSerials = [];
@@ -1341,7 +1345,8 @@ class SubscriptionController extends Controller
         // Get subscriptions that are at least accepted
         $subscriptions = Subscription::whereIn('status', ['Active', 'accepted', 'Delivered', 'delivered'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         $inspectionData = [];
         $totalDelivered = 0;
@@ -1693,7 +1698,8 @@ class SubscriptionController extends Controller
         // Get accepted subscriptions that have serial issues
         $subscriptions = Subscription::whereIn('status', ['Active', 'accepted', 'Delivered', 'delivered'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         $result = [];
         $totalSubs = 0;
@@ -1806,7 +1812,8 @@ class SubscriptionController extends Controller
      */
     public function getMonitoredDeliveries(Request $request)
     {
-        $subscriptions = Subscription::orderBy('created_at', 'desc')->get();
+        $subscriptions = Subscription::orderBy('created_at', 'desc')->get()
+            ->filter(fn ($subscription) => $this->subscriptionMatchesDateRange($subscription, $request));
         
         // Extract all serials - show all serials from creation
         $monitoredSerials = [];
@@ -1900,5 +1907,28 @@ class SubscriptionController extends Controller
                 'pending' => $totalPending,
             ],
         ]);
+    }
+
+    private function subscriptionMatchesDateRange(Subscription $subscription, Request $request): bool
+    {
+        $start = Carbon::parse($request->input('start_date', Carbon::now()->startOfMonth()->toDateString()))->startOfDay();
+        $end = Carbon::parse($request->input('end_date', Carbon::now()->endOfMonth()->toDateString()))->endOfDay();
+        $dates = [$subscription->created_at];
+
+        foreach ($subscription->serials ?? [] as $serial) {
+            foreach (['deliveryDate', 'dateDelivered', 'receivedDate', 'inspection_date'] as $field) {
+                if (!empty($serial[$field])) {
+                    $dates[] = $serial[$field];
+                }
+            }
+        }
+
+        foreach ($dates as $date) {
+            if ($date && Carbon::parse($date)->betweenIncluded($start, $end)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
