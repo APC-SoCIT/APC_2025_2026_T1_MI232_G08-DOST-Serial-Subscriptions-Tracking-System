@@ -518,6 +518,9 @@ class DashboardStatsController extends Controller
             'preparing' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
             'for_delivery' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
             'delivered' => $issues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
+            // "Completed" = issues whose final inspected outcome was Delivered
+            // (i.e. successfully passed inspection) — the same population the
+            // List of Serials page shows as "Delivered".
             'delivered_only' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
             'returned' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
         ];
@@ -529,6 +532,10 @@ class DashboardStatsController extends Controller
             'preparing' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
             'forDelivery' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
             'delivered' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
+            // "completed" bucket kept separate from "delivered" (which includes
+            // Received too) so the Completed Issues chart line matches the KPI
+            // card and the export exactly — only true STATUS_DELIVERED counts.
+            'completed' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
             'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
         ]);
 
@@ -537,6 +544,7 @@ class DashboardStatsController extends Controller
             'preparing' => $counts['preparing'],
             'for_delivery' => $counts['for_delivery'],
             'delivered' => $counts['delivered'],
+            'completed' => $counts['delivered_only'],
             'returned' => $counts['returned'],
             'success_rate' => $successBase ? round(($counts['delivered_only'] / $successBase) * 100) : 0,
             'total_subscriptions' => $subscriptions->count(),

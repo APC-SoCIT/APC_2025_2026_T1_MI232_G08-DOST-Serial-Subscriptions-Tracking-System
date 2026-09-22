@@ -379,10 +379,12 @@ const factor = useMemo(() => {
               <button
                 onClick={async () => {
                   try {
-                    const response = await axios.get('/api/inspection/export-report', {
+                                        const response = await axios.get('/api/inspection/export-report', {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_name: supplierName || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Inspection Dashboard',
                       },
                       responseType: 'blob',

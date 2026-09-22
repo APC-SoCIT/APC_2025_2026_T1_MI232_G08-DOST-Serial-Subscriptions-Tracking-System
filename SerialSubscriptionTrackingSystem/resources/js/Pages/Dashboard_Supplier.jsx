@@ -28,6 +28,7 @@ const COLORS = {
   forDelivery: "#22c55e",
   delivered: "#16a34a",
   returned: "#ef4444",
+  completed: "#0d9488",
 };
 
 /* ================= HELPERS ================= */
@@ -84,6 +85,7 @@ export default function SupplierDashboard() {
     preparing: 0,
     for_delivery: 0,
     delivered: 0,
+    completed: 0,
     returned: 0,
     success_rate: 0,
   });
@@ -220,6 +222,7 @@ export default function SupplierDashboard() {
           preparing: item.preparing || 0,
           forDelivery: item.forDelivery || 0,
           delivered: item.delivered || 0,
+          completed: item.completed || 0,
           returned: item.returned || 0,
         }));
     }
@@ -229,41 +232,44 @@ export default function SupplierDashboard() {
       preparing: 0,
       forDelivery: 0,
       delivered: 0,
+      completed: 0,
       returned: 0,
     }));
   }, [chartData.monthly, months]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  // Read success_rate and completed directly from dashboardStats — the real
+  // backend totals — instead of recomputing a different formula locally from
+  // the monthly chart buckets, which previously produced a mismatched number
+  // ((Delivered - Returned) / Awarded) versus the backend's and export's
+  // Delivered / (Delivered + Returned) formula.
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      awarded: acc.awarded + (month.awarded || 0),
-      preparing: acc.preparing + (month.preparing || 0),
-      forDelivery: acc.forDelivery + (month.forDelivery || 0),
-      delivered: acc.delivered + (month.delivered || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { awarded: 0, preparing: 0, forDelivery: 0, delivered: 0, returned: 0 });
-    
-    const successRate = totals.awarded > 0 
-      ? Math.round(((totals.delivered - totals.returned) / totals.awarded) * 100) 
-      : 0;
-    
     return {
-      awarded: totals.awarded,
-      preparing: totals.preparing,
-      forDelivery: totals.forDelivery,
-      delivered: totals.delivered,
-      returned: totals.returned,
-      success: Math.max(0, successRate),
+      awarded: dashboardStats.awarded || 0,
+      preparing: dashboardStats.preparing || 0,
+      forDelivery: dashboardStats.for_delivery || 0,
+      delivered: dashboardStats.delivered || 0,
+      completed: dashboardStats.completed || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
-  // Derive deliveryTrend from pipelineData to ensure consistency
+  // Derive deliveryTrend from pipelineData for consistency
   const deliveryTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
       delivered: item.delivered || 0,
+    }));
+  }, [pipelineData]);
+
+  // Completed Issues trend — same "completed" field the KPI card and the
+  // export's "Completed Issues" line read, so chart/KPI/export always agree.
+  const completedTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      completed: item.completed || 0,
     }));
   }, [pipelineData]);
 
@@ -275,7 +281,7 @@ export default function SupplierDashboard() {
   }, [pipelineData]);
 
   const pieData = [
-    { name: "Delivered (Passed)", value: kpis.delivered },
+    { name: "Delivered (Passed)", value: kpis.completed },
     { name: "Returned", value: kpis.returned }
   ];
 
@@ -313,6 +319,14 @@ export default function SupplierDashboard() {
       chartIds: ["pipeline", "deliveredTrend", "outcome"],
     },
     {
+      id: "completed",
+      title: "Completed Issues",
+      value: kpis.completed,
+      sourceLabel: "List of Serials",
+      sourcePath: "/dashboard-supplier-listofserial",
+      chartIds: ["completedTrend", "outcome"],
+    },
+    {
       id: "returned",
       title: "Returned",
       value: kpis.returned,
@@ -326,7 +340,7 @@ export default function SupplierDashboard() {
       value: `${kpis.success}%`,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
-      chartIds: ["deliveredTrend", "outcome"],
+      chartIds: ["deliveredTrend", "completedTrend", "outcome"],
     },
   ]), [kpis]);
 
@@ -383,6 +397,7 @@ export default function SupplierDashboard() {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Supplier Dashboard',
                       },
                       responseType: 'blob',
@@ -580,7 +595,7 @@ export default function SupplierDashboard() {
           </div>
         )}
 
-        <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-6"}`}>
+        <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-7"}`}>
           {visibleKpiCards.map((card) => (
             <KPI
               key={card.id}
@@ -677,6 +692,19 @@ export default function SupplierDashboard() {
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </Chart>
+          )}
+
+          {shouldShowChart("completedTrend") && (
+          <Chart title="Completed Issues Trend">
+            <ResponsiveContainer height={300}>
+              <LineChart data={completedTrend}>
+                <XAxis dataKey="month"/>
+                <YAxis/>
+                <Tooltip/>
+                <Line dataKey="completed" stroke={COLORS.completed} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>

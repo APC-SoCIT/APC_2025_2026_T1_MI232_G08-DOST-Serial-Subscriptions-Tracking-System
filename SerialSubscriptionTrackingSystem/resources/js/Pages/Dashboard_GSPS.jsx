@@ -421,6 +421,8 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_name: supplierName || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'GSPS Dashboard',
                       },
                       responseType: 'blob',

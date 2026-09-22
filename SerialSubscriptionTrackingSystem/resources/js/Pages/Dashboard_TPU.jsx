@@ -455,6 +455,8 @@ useEffect(() => {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_name: supplierName || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'TPU Dashboard',
                       },
                       responseType: 'blob',
