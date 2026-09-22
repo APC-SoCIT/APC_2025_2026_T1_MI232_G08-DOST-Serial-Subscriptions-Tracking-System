@@ -50,7 +50,7 @@ class DashboardExportController extends Controller
         $pendingCount = 0;
 
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
             foreach ($serials as $serial) {
                 $totalSerials++;
                 $status = $serial['status'] ?? 'pending';
@@ -89,7 +89,7 @@ class DashboardExportController extends Controller
         ];
 
         foreach ($subscriptions as $subscription) {
-            $serialCount = count($subscription->serials ?? []);
+            $serialCount = count($subscription->activeSerials());
             $data[] = [
                 (string)$subscription->_id ?? $subscription->id ?? 'N/A',
                 $subscription->serial_title ?? 'N/A',
@@ -131,7 +131,7 @@ class DashboardExportController extends Controller
         $serialDetails = [];
 
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             foreach ($serials as $serial) {
                 $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
@@ -231,7 +231,7 @@ class DashboardExportController extends Controller
         $deliveryDetails = [];
 
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             foreach ($serials as $serial) {
                 $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
@@ -316,7 +316,7 @@ class DashboardExportController extends Controller
         $orderDetails = [];
 
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             foreach ($serials as $serial) {
                 $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
@@ -408,7 +408,7 @@ class DashboardExportController extends Controller
         $inspectionDetails = [];
 
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             foreach ($serials as $serial) {
                 $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;

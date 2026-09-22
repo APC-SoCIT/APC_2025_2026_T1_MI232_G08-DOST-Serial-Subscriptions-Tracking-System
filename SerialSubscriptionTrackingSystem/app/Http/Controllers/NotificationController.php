@@ -36,7 +36,7 @@ class NotificationController extends Controller
         $sevenDaysAgo = Carbon::now()->subDays(7);
         
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
             
             foreach ($serials as $serial) {
                 $status = $serial['status'] ?? 'pending';

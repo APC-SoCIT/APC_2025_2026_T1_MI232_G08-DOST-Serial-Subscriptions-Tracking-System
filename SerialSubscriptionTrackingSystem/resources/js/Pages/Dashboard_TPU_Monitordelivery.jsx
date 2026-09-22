@@ -28,6 +28,7 @@ function MonitorDelivery() {
   
   // History modal
   const [historyModal, setHistoryModal] = useState({ show: false, subscription: null });
+  const [selectedIssues, setSelectedIssues] = useState({});
 
   useEffect(() => {
     fetchTPUData();
@@ -66,6 +67,24 @@ function MonitorDelivery() {
 
   const handleToggleRow = (subscriptionId) => {
     setExpandedRow(expandedRow === subscriptionId ? null : subscriptionId);
+  };
+
+  const toggleIssueSelection = (subscriptionId, issueNumber) => {
+    const key = `${subscriptionId}-${issueNumber}`;
+    setSelectedIssues((current) => ({ ...current, [key]: current[key] ? undefined : { subscription_id: subscriptionId, issue_number: issueNumber } }));
+  };
+
+  const handleArchive = async (subscription, issue) => {
+    await axios.post(`/api/archive/${subscription.subscription_id}/${issue.issue_number}`);
+    await fetchTPUData();
+  };
+
+  const handleBulkArchive = async () => {
+    const records = Object.values(selectedIssues).filter(Boolean);
+    if (!records.length) return;
+    await axios.post('/api/archive/bulk', { records });
+    setSelectedIssues({});
+    await fetchTPUData();
   };
 
   // Status helpers
@@ -169,9 +188,12 @@ function MonitorDelivery() {
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Monitor Delivery</h2>
             <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Click ISSN to view serial issues and track progress</p>
           </div>
-          <button onClick={fetchTPUData} disabled={loading} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={fetchTPUData} disabled={loading} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
+            </button>
+            {Object.values(selectedIssues).filter(Boolean).length > 0 && <button onClick={handleBulkArchive} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>Archive selected ({Object.values(selectedIssues).filter(Boolean).length})</button>}
+          </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
@@ -197,16 +219,17 @@ function MonitorDelivery() {
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>ISSN</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Issues</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>No. of Volumes</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>No. of Issues</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Status</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading...</td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading...</td></tr>
               ) : error ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>{error} <button onClick={fetchTPUData} style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Retry</button></td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>{error} <button onClick={fetchTPUData} style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Retry</button></td></tr>
               ) : filteredSubscriptions.length > 0 ? (
                 filteredSubscriptions.map((sub, index) => {
                   const isExpanded = expandedRow === sub.id;
@@ -223,6 +246,9 @@ function MonitorDelivery() {
                         </td>
                         <td style={{ padding: '16px' }}>{sub.serialTitle}</td>
                         <td style={{ padding: '16px' }}>{sub.supplierName}</td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <span style={{ fontWeight: 600, color: '#004A98' }}>{sub.totalVolumes ?? 'N/A'}</span>
+                        </td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           <span style={{ fontWeight: 600, color: '#004A98' }}>{sub.deliveredIssues}</span>
                           <span style={{ color: '#666' }}> / {sub.totalIssues}</span>
@@ -248,7 +274,7 @@ function MonitorDelivery() {
                       {/* Expanded Issues Row */}
                       {isExpanded && (
                         <tr>
-                          <td colSpan="6" style={{ padding: 0 }}>
+                          <td colSpan="7" style={{ padding: 0 }}>
                             <div style={{ background: '#f8f9fa', padding: '16px 24px', borderBottom: '2px solid #004A98' }}>
                               <h4 style={{ margin: '0 0 12px', color: '#004A98', fontSize: 14, fontWeight: 600 }}>Serial Issues for {sub.serialTitle}</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>
@@ -259,6 +285,7 @@ function MonitorDelivery() {
                                     <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Expected Delivery</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Status</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Select</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -277,6 +304,12 @@ function MonitorDelivery() {
                                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#004A98', fontSize: 13 }}>
                                           ₱{parseFloat(issue.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
+                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                          {['delivered', 'for_return'].includes(issue.status) && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                            <button onClick={() => handleArchive(sub, issue)} style={{ padding: '5px 9px', border: '1px solid #6c757d', background: '#fff', color: '#495057', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}>Archive</button>
+                                            <input type="checkbox" checked={!!selectedIssues[`${sub.subscription_id}-${issue.issue_number}`]} onChange={() => toggleIssueSelection(sub.subscription_id, issue.issue_number)} aria-label={`Select Issue ${issue.issue_number} for archive`} />
+                                          </div>}
+                                        </td>
                                       </tr>
                                     );
                                   })}
@@ -290,7 +323,7 @@ function MonitorDelivery() {
                   );
                 })
               ) : (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No subscriptions with issues found.</td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No subscriptions with issues found.</td></tr>
               )}
             </tbody>
           </table>
@@ -361,7 +394,7 @@ function MonitorDelivery() {
                           onClick={() => window.open(fileUrl, '_blank')}
                           onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<div style="padding:20px;text-align:center;background:#fff;borderRadius:8px;color:#999;fontSize:12px;">Image failed to load</div>'; }}
                         />
-                      ) : (
+                        ) : (
                         <a
                           href={fileUrl}
                           target="_blank"

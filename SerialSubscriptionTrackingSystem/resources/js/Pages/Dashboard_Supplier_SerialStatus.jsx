@@ -4,7 +4,7 @@ import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
 import { IoSearchOutline } from "react-icons/io5";
-import { MdOutlineNotificationsActive } from "react-icons/md";
+import { MdOutlineNotificationsActive, MdRateReview } from "react-icons/md";
 import { VscAccount } from "react-icons/vsc";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
@@ -15,6 +15,7 @@ const sidebarItems = [
   { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
   { icon: <FaTruckFast />, label: 'Delivery', route: '/dashboard-supplier-delivery' },
+  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: '/customer-satisfaction' },
 ];
 
 function Sidebar({ active, setActive }) {

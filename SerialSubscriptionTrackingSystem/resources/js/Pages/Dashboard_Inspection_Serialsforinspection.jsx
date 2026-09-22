@@ -127,6 +127,10 @@ function SerialsForInspection() {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const formatCurrency = (amount) => {
+    return `₱${parseFloat(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  };
+
   // Enhanced resolveFileUrl with better path handling and path remapping
   const urlCache = useRef({});
   const resolveFileUrl = (rawUrl) => {
@@ -430,6 +434,7 @@ function SerialsForInspection() {
                                     <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Supplier</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Received Date</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Status</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Action</th>
                                   </tr>
                                 </thead>
@@ -445,6 +450,9 @@ function SerialsForInspection() {
                                           <span style={{ padding: '4px 10px', borderRadius: 20, background: statusColor.bg, color: statusColor.text, fontSize: 11, fontWeight: 500 }}>
                                             {getStatusLabel(issue.status)}
                                           </span>
+                                        </td>
+                                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#004A98', fontSize: 13 }}>
+                                          {formatCurrency(issue.cost)}
                                         </td>
                                         <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                           {issue.status === 'received' ? (
@@ -630,6 +638,7 @@ function SerialsForInspection() {
                   <div><span style={{ color: '#666' }}>Inspected:</span> <strong>{formatDate(selectedIssueView.inspected_at)}</strong></div>
                   <div><span style={{ color: '#666' }}>Inspector:</span> <strong>{selectedIssueView.inspector_name || 'N/A'}</strong></div>
                   <div><span style={{ color: '#666' }}>Condition:</span> <strong style={{ color: selectedIssueView.status === 'for_return' ? '#721c24' : '#155724' }}>{selectedIssueView.condition || 'N/A'}</strong></div>
+                  <div><span style={{ color: '#666' }}>Cost:</span> <strong style={{ color: '#004A98' }}>{formatCurrency(selectedIssueView.cost)}</strong></div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div>

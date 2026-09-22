@@ -164,7 +164,8 @@ function SubscriptionTracking() {
     volumeStart: '',
     volumeNumber: '',
     issuesStart: '',
-    dateOfPublication: ''
+    dateOfPublication: '',
+    dateOfPublicationType: 'specific'
   });
   const [serialItems, setSerialItems] = useState([]);
   
@@ -222,9 +223,9 @@ function SubscriptionTracking() {
           serialTitle: sub.serial_title,
           supplierName: sub.supplier_name,
           period: sub.period,
-          awardCost: `P${parseFloat(sub.award_cost || 0).toLocaleString()}`,
-          deliveredCost: `P${parseFloat(sub.delivered_cost || 0).toLocaleString()}`,
-          remainingCost: `P${parseFloat(sub.remaining_cost || 0).toLocaleString()}`,
+          awardCost: `P${parseFloat(sub.active_award_cost ?? sub.award_cost ?? 0).toLocaleString()}`,
+          deliveredCost: `P${parseFloat(sub.active_delivered_cost ?? sub.delivered_cost ?? 0).toLocaleString()}`,
+          remainingCost: `P${parseFloat(sub.active_remaining_cost ?? sub.remaining_cost ?? 0).toLocaleString()}`,
           status: sub.status || 'Active',
           paymentStatus: sub.payment_status || 'Pending',
           progress: sub.progress || 0,
@@ -240,6 +241,15 @@ function SubscriptionTracking() {
         }));
         // API already returns newest first via orderBy('created_at', 'desc')
         setSubscriptions(apiSubscriptions);
+
+        // If View Details is currently open, refresh its data too so the
+        // modal reflects the exact same fresh values as the table row —
+        // otherwise it keeps showing whatever was passed in when it opened.
+        setViewDetailsSubscription((prev) => {
+          if (!prev) return prev;
+          const updated = apiSubscriptions.find((s) => s.id === prev.id);
+          return updated || prev;
+        });
       }
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
@@ -621,7 +631,8 @@ function SubscriptionTracking() {
       volumeStart: '',
       volumeNumber: '',
       issuesStart: '',
-      dateOfPublication: ''
+      dateOfPublication: '',
+      dateOfPublicationType: 'specific'
     });
     setSerialItems([]);
   };
@@ -690,14 +701,17 @@ function SubscriptionTracking() {
     } else if (name === 'category' && value !== 'Others') {
       // If category is changed and it's not "Others", clear customCategory
       setSerialFormData({ ...serialFormData, [name]: value, customCategory: '' });
+    } else if (name === 'dateOfPublicationType') {
+      // Reset the date value when switching format to avoid mismatched formats
+      setSerialFormData({ ...serialFormData, [name]: value, dateOfPublication: '' });
     } else {
       setSerialFormData({ ...serialFormData, [name]: value });
     }
   };
 
   const handleAddSerialItem = () => {
-    if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierId || !serialFormData.deliveryDate) {
-      Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Account, Delivery Date). Volume and Issues fields are optional.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+    if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierId || !serialFormData.deliveryDate || !serialFormData.volumeNumber || !serialFormData.issuesNo) {
+      Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Account, Delivery Date, No. of Volumes, No. of Issues).', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
       return;
     }
 
@@ -739,7 +753,8 @@ function SubscriptionTracking() {
       volumeStart: '',
       volumeNumber: '',
       issuesStart: '',
-      dateOfPublication: ''
+      dateOfPublication: '',
+      dateOfPublicationType: 'specific'
     });
   };
 
@@ -795,7 +810,13 @@ function SubscriptionTracking() {
             language: item.language,
             category: item.category,
             amount: item.amount,
-            unitPrice: item.unitPrice
+            unitPrice: item.unitPrice,
+            volumeNumber: item.volumeNumber,
+            issuesNo: item.issuesNo,
+            volumeStart: item.volumeStart,
+            issuesStart: item.issuesStart,
+            dateOfPublication: item.dateOfPublication,
+            dateOfPublicationType: item.dateOfPublicationType
           })),
           transactions: [
             { 
@@ -1561,13 +1582,31 @@ function SubscriptionTracking() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issues No.</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>No. of Volumes *</label>
+                  <input
+                    type="text"
+                    name="volumeNumber"
+                    value={serialFormData.volumeNumber}
+                    onChange={handleSerialInputChange}
+                    placeholder="e.g., 4"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>No. of Issues *</label>
                   <input
                     type="text"
                     name="issuesNo"
                     value={serialFormData.issuesNo}
                     onChange={handleSerialInputChange}
-                    placeholder="e.g., 1-12"
+                    placeholder="e.g., 12"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1585,7 +1624,7 @@ function SubscriptionTracking() {
                     name="volumeStart"
                     value={serialFormData.volumeStart}
                     onChange={handleSerialInputChange}
-                    placeholder="e.g., 1"
+                    placeholder="e.g., Vol. 1"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1597,25 +1636,7 @@ function SubscriptionTracking() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Volume Number</label>
-                  <input
-                    type="text"
-                    name="volumeNumber"
-                    value={serialFormData.volumeNumber}
-                    onChange={handleSerialInputChange}
-                    placeholder="e.g., Vol. 5"
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '6px',
-                      border: '1px solid #ddd',
-                      fontSize: '14px',
-                      background: '#fff'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issues Start</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issue Start</label>
                   <input
                     type="text"
                     name="issuesStart"
@@ -1632,12 +1653,73 @@ function SubscriptionTracking() {
                     }}
                   />
                 </div>
-                <DatePickerField
-                  label="Date of Publication"
-                  name="dateOfPublication"
-                  value={serialFormData.dateOfPublication}
-                  onChange={handleSerialInputChange}
-                />
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Date of Publication Format</label>
+                  <select
+                    name="dateOfPublicationType"
+                    value={serialFormData.dateOfPublicationType}
+                    onChange={handleSerialInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="specific">Specific Date</option>
+                    <option value="month_year">Month &amp; Year</option>
+                    <option value="season">Season &amp; Year (e.g., Summer 2025)</option>
+                  </select>
+                </div>
+                {serialFormData.dateOfPublicationType === 'specific' && (
+                  <DatePickerField
+                    label="Date of Publication"
+                    name="dateOfPublication"
+                    value={serialFormData.dateOfPublication}
+                    onChange={handleSerialInputChange}
+                  />
+                )}
+                {serialFormData.dateOfPublicationType === 'month_year' && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Date of Publication</label>
+                    <input
+                      type="month"
+                      name="dateOfPublication"
+                      value={serialFormData.dateOfPublication}
+                      onChange={handleSerialInputChange}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #ddd',
+                        fontSize: '14px',
+                        background: '#fff'
+                      }}
+                    />
+                  </div>
+                )}
+                {serialFormData.dateOfPublicationType === 'season' && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Date of Publication</label>
+                    <input
+                      type="text"
+                      name="dateOfPublication"
+                      value={serialFormData.dateOfPublication}
+                      onChange={handleSerialInputChange}
+                      placeholder="e.g., Summer 2025, Spring 2025"
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #ddd',
+                        fontSize: '14px',
+                        background: '#fff'
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
@@ -1848,7 +1930,7 @@ function SubscriptionTracking() {
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>ISSN</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.serials?.[0]?.issn || '1234-5678'}
+                    {viewDetailsSubscription.issn || viewDetailsSubscription.serials?.[0]?.issn || 'N/A'}
                   </p>
                 </div>
                 <div>
@@ -1860,25 +1942,25 @@ function SubscriptionTracking() {
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Publisher</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '500', color: '#333' }}>
-                    {viewDetailsSubscription.publisher || `${viewDetailsSubscription.serialTitle} Publishers`}
+                    {viewDetailsSubscription.authorPublisher || viewDetailsSubscription.author_publisher || viewDetailsSubscription.serials?.[0]?.authorPublisher || 'N/A'}
                   </p>
                 </div>
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Language</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.language || 'English'}
+                    {viewDetailsSubscription.serials?.[0]?.language || 'English'}
                   </p>
                 </div>
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Frequency</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.serials?.[0]?.frequency || 'Quarterly'}
+                    {viewDetailsSubscription.frequency || viewDetailsSubscription.serials?.[0]?.frequency || 'N/A'}
                   </p>
                 </div>
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Category</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.category || 'Economics'}
+                    {viewDetailsSubscription.category || viewDetailsSubscription.serials?.[0]?.category || 'N/A'}
                   </p>
                 </div>
                 <div>
@@ -1896,7 +1978,7 @@ function SubscriptionTracking() {
                 <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Date Added</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
-                    {viewDetailsSubscription.dateAdded || viewDetailsSubscription.transactions?.[0]?.date || '2025-01-08'}
+                    {formatDisplayDate(viewDetailsSubscription.created_at) !== '-' ? formatDisplayDate(viewDetailsSubscription.created_at) : (viewDetailsSubscription.transactions?.[0]?.date || 'N/A')}
                   </p>
                 </div>
               </div>

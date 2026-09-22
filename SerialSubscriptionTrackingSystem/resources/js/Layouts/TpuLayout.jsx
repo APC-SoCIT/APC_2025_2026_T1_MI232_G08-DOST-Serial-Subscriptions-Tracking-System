@@ -6,6 +6,7 @@ import { ImStatsBars } from "react-icons/im";
 import { FaTruck, FaUserPlus, FaUserCircle } from "react-icons/fa";
 import { MdMarkEmailRead } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
+import { MdRateReview } from "react-icons/md";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -21,7 +22,9 @@ const sidebarItems = [
   { icon: <HiUsers />, label: 'Supplier Info', route: 'tpu.supplierinfo' },
   { icon: <ImStatsBars />, label: 'Subscription', route: 'tpu.subscriptiontracking' },
   { icon: <FaTruck />, label: 'Monitor Delivery', route: 'tpu.monitordelivery' },
+  { icon: <HiMenu />, label: 'Archive', route: 'archive.page' },
   { icon: <FaUserPlus />, label: 'Add Account', route: 'tpu.addaccount' },
+  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: 'customer-satisfaction.page' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
@@ -36,7 +39,9 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
     'tpu.supplierinfo': '/dashboard-tpu-supplierinfo',
     'tpu.subscriptiontracking': '/dashboard-tpu-subscriptiontracking',
     'tpu.monitordelivery': '/dashboard-tpu-monitordelivery',
+    'archive.page': '/archive',
     'tpu.addaccount': '/dashboard-tpu-addaccount',
+    'customer-satisfaction.page': '/customer-satisfaction',
   };
   
   return (

@@ -102,6 +102,28 @@ export default function SupplierDashboard() {
 
   const [showFilter, setShowFilter] = useState(false);
 
+  /* ===== SERIAL TITLE FILTER STATE (no Supplier filter — already scoped to self) ===== */
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options');
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, []);
+
   /* ===== TEMP STATE (LIKE ADMIN) ===== */
 
   const [tempYear, setTempYear] = useState(year);
@@ -124,6 +146,8 @@ export default function SupplierDashboard() {
 
     setStartMonth(MONTHS[s.getMonth()]);
     setEndMonth(MONTHS[e.getMonth()]);
+
+    setSerialTitle(tempSerialTitle);
 
     setShowFilter(false);
   };
@@ -153,6 +177,7 @@ export default function SupplierDashboard() {
           params: {
             start_date: startDate,
             end_date: endDate,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -166,7 +191,9 @@ export default function SupplierDashboard() {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -255,7 +282,7 @@ export default function SupplierDashboard() {
   const kpiCards = useMemo(() => ([
     {
       id: "awarded",
-      title: "Awarded Serials",
+      title: "Awarded Serials Issues",
       value: kpis.awarded,
       sourceLabel: "List of Serials",
       sourcePath: "/dashboard-supplier-listofserial",
@@ -337,13 +364,14 @@ export default function SupplierDashboard() {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -477,6 +505,31 @@ export default function SupplierDashboard() {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Serial Title Selector (no Supplier filter — already scoped to self) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -488,11 +541,13 @@ export default function SupplierDashboard() {
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(2026, 'January'));
                     setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(2026, 'January'));
                     setEndDate(lastDayOfMonth(2026, 'December'));
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >

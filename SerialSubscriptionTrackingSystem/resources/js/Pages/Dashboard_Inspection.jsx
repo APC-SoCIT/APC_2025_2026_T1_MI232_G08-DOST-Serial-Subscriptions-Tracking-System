@@ -102,6 +102,32 @@ const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilter, setShowFilter] = useState(false);
 
+/* ===== SUPPLIER / SERIAL TITLE FILTER STATE ===== */
+const [supplierName, setSupplierName] = useState("");
+const [serialTitle, setSerialTitle] = useState("");
+const [tempSupplierName, setTempSupplierName] = useState("");
+const [tempSerialTitle, setTempSerialTitle] = useState("");
+const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+useEffect(() => {
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await axios.get('/api/dashboard-filter-options', {
+        params: { supplier_name: tempSupplierName || undefined }
+      });
+      if (response.data.success) {
+        setFilterOptions({
+          suppliers: response.data.suppliers || [],
+          serial_titles: response.data.serial_titles || [],
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard filter options:', error);
+    }
+  };
+  fetchFilterOptions();
+}, [tempSupplierName]);
+
 /* TEMP (Apply system) */
 const [tempYear, setTempYear] = useState(year);
 const [tempStartMonth, setTempStartMonth] = useState(startMonth);
@@ -121,6 +147,9 @@ const applyFilter = () => {
 
   setStartMonth(MONTHS[s.getMonth()]);
   setEndMonth(MONTHS[e.getMonth()]);
+
+  setSupplierName(tempSupplierName);
+  setSerialTitle(tempSerialTitle);
 
   setShowFilter(false);
 };
@@ -151,6 +180,8 @@ const selectWeek = (day) => {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_name: supplierName || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -164,7 +195,9 @@ const selectWeek = (day) => {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierName, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -216,29 +249,22 @@ const factor = useMemo(() => {
     }));
   }, [pipelineData]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  // Read directly from dashboardStats (the real API totals) instead of
+  // re-deriving from the monthly chart buckets, which use a different
+  // population/date-scoping and will never match the backend's own numbers.
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      received: acc.received + (month.received || 0),
-      inspected: acc.inspected + (month.inspected || 0),
-      pending: acc.pending + (month.pending || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { received: 0, inspected: 0, pending: 0, returned: 0 });
-    
-    const successRate = totals.received > 0 
-      ? Math.round((totals.inspected / totals.received) * 100) 
-      : 0;
-    
     return {
-      received: totals.received,
-      inspected: totals.inspected,
-      pending: totals.pending,
-      returned: totals.returned,
-      success: successRate,
+      received: dashboardStats.received || 0,
+      inspected: dashboardStats.inspected || 0,
+      pending: dashboardStats.pending || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
+      totalVolumes: dashboardStats.total_volumes || 0,
+      totalIssuesCount: dashboardStats.total_issues_count || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
   // Derive inspectedVolume from pipelineData to ensure consistency
   const inspectedVolume = useMemo(() => {
@@ -261,6 +287,14 @@ const factor = useMemo(() => {
       sourceLabel: "List of Serials",
       sourcePath: "/inspection-serials",
       chartIds: ["intake", "pipeline"],
+    },
+    {
+      id: "volumesIssues",
+      title: "Volumes / Issues",
+      value: `${kpis.totalVolumes} Vols / ${kpis.totalIssuesCount} Issues`,
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
+      chartIds: ["pipeline"],
     },
     {
       id: "inspected",
@@ -329,13 +363,15 @@ const factor = useMemo(() => {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierName(supplierName);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierName || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -469,6 +505,49 @@ const factor = useMemo(() => {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Supplier Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierName}
+                    onChange={(e) => {
+                      setTempSupplierName(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Serial Title Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -480,11 +559,15 @@ const factor = useMemo(() => {
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(2026, 'January'));
                     setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempSupplierName('');
+                    setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(2026, 'January'));
                     setEndDate(lastDayOfMonth(2026, 'December'));
+                    setSupplierName('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -653,37 +736,40 @@ const factor = useMemo(() => {
 
 /* UI */
 
-const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onSelect}
-    onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onSelect();
-      }
-    }}
-    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
-  >
-    <p className="text-sm text-gray-600">{title}</p>
-    <p className="text-3xl font-bold">{value}</p>
-    <div className="mt-4 flex justify-end">
-      <button
-        type="button"
-        aria-label={`See more in ${sourceLabel}`}
-        title={`Open ${sourceLabel}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSeeMore();
-        }}
-        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-      >
-        See More
-      </button>
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => {
+  const isLongValue = typeof value === 'string' && value.length > 10;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+    >
+      <p className="text-sm text-gray-600">{title}</p>
+      <p className={isLongValue ? "text-xl font-bold leading-tight" : "text-3xl font-bold"}>{value}</p>
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          aria-label={`See more in ${sourceLabel}`}
+          title={`Open ${sourceLabel}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSeeMore();
+          }}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+        >
+          See More
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Chart = ({title,children}) => (
   <div className="bg-white p-6 rounded-xl shadow">

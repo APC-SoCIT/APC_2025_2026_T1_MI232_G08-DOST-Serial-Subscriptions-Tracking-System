@@ -79,7 +79,7 @@ export default function TPUDashboard() {
     prepare: 0,
     efficiency: 0,
   });
-  const [chartData, setChartData] = useState({ monthly: [], pipeline: [] });
+  const [chartData, setChartData] = useState({ monthly: [], pipeline: [], supplierRanking: [] });
   const [isLoading, setIsLoading] = useState(true);
 
   /* ===== FILTER STATE ===== */
@@ -96,6 +96,32 @@ const [tempFilterMode, setTempFilterMode] = useState("year"); // popup
 
   const [showFilter, setShowFilter] = useState(false);
 
+  /* ===== SUPPLIER / SERIAL TITLE FILTER STATE ===== */
+  const [supplierName, setSupplierName] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierName, setTempSupplierName] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_name: tempSupplierName || undefined }
+        });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierName]);
+
   /* ===== TEMP STATES ===== */
 
   const [tempYear, setTempYear] = useState(year);
@@ -109,6 +135,8 @@ useEffect(() => {
     setTempStartMonth(startMonth);
     setTempStartDate(startDate);
     setTempEndDate(endDate);
+    setTempSupplierName(supplierName);
+    setTempSerialTitle(serialTitle);
 
     // Sync calendar for week view
     setCalendarYear(year);
@@ -168,6 +196,8 @@ useEffect(() => {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_name: supplierName || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -181,7 +211,9 @@ useEffect(() => {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierName, serialTitle]);
 
   /* ================= MASTER FACTOR ================= */
 
@@ -232,6 +264,9 @@ useEffect(() => {
       setEndMonth(MONTHS[e.getMonth()]);
     }
 
+    setSupplierName(tempSupplierName);
+    setSerialTitle(tempSerialTitle);
+
     setShowFilter(false);
   };
 
@@ -253,33 +288,25 @@ useEffect(() => {
     }));
   }, [chartData.monthly, months]);
 
-  /* ================= KPI (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPI (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of chart data to ensure alignment
+  // Read directly from dashboardStats (the real API totals) instead of
+  // re-deriving from the monthly chart buckets, which use a different
+  // population/date-scoping and will never match the backend's own numbers.
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      awarded: acc.awarded + (month.awarded || 0),
-      delivered: acc.delivered + (month.delivered || 0),
-      forDelivery: acc.forDelivery + (month.forDelivery || 0),
-      inspected: acc.inspected + (month.inspected || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { awarded: 0, delivered: 0, forDelivery: 0, inspected: 0, returned: 0 });
-    
-    const successRate = totals.awarded > 0 
-      ? Math.round((totals.inspected / totals.awarded) * 100) 
-      : 0;
-    
     return {
-      total: totals.awarded,
-      delivered: totals.delivered,
-      awaiting: totals.forDelivery,
-      returned: totals.returned,
-      inspected: totals.inspected,
+      total: dashboardStats.total_serials || 0,
+      delivered: dashboardStats.delivered || 0,
+      awaiting: dashboardStats.for_delivery || 0,
+      returned: dashboardStats.returned || 0,
+      inspected: dashboardStats.inspected || 0,
       pending: dashboardStats.pending || 0,
       prepare: dashboardStats.prepare || 0,
-      success: successRate,
+      success: dashboardStats.efficiency || 0,
+      totalVolumes: dashboardStats.total_volumes || 0,
+      totalIssuesCount: dashboardStats.total_issues_count || 0,
     };
-  }, [pipelineData, dashboardStats]);
+  }, [dashboardStats]);
 
   // Derive deliveryTrend from pipelineData to ensure consistency
   const deliveryTrend = useMemo(() => {
@@ -307,6 +334,14 @@ useEffect(() => {
       chartIds: ["pipeline", "supplierRanking"],
     },
     {
+      id: "volumesIssues",
+      title: "Volumes / Issues",
+      value: `${kpis.totalVolumes} Vols / ${kpis.totalIssuesCount} Issues`,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline"],
+    },
+    {
       id: "delivered",
       title: "Delivered to GSPS",
       value: kpis.delivered,
@@ -324,7 +359,7 @@ useEffect(() => {
     },
     {
       id: "returned",
-      title: "Overdue / Returned",
+      title: "Returned",
       value: kpis.returned,
       sourceLabel: "Monitor Delivery",
       sourcePath: "/dashboard-tpu-monitordelivery",
@@ -354,12 +389,11 @@ useEffect(() => {
   const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
   const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
-  const supplierRanking = [
-    { name:"ABC Books", value: 100 },
-    { name:"Med Pub Ltd", value: 95 },
-    { name:"Global Periodicals", value: 80 },
-    { name:"Nat Geo", value: 72 }
-  ];
+  // Supplier Reliability Ranking — real data from the backend (Delivered /
+  // (Delivered + For Return) per supplier), not hardcoded placeholder names.
+  const supplierRanking = chartData.supplierRanking && chartData.supplierRanking.length > 0
+    ? chartData.supplierRanking
+    : [];
 
   const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     const RADIAN = Math.PI/180;
@@ -401,13 +435,15 @@ useEffect(() => {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierName(supplierName);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierName || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -541,6 +577,50 @@ useEffect(() => {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Supplier Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierName}
+                    onChange={(e) => {
+                      setTempSupplierName(e.target.value);
+                      // Reset serial title since the available titles change with the supplier
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Serial Title Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -552,11 +632,15 @@ useEffect(() => {
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(2026, 'January'));
                     setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempSupplierName('');
+                    setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(2026, 'January'));
                     setEndDate(lastDayOfMonth(2026, 'December'));
+                    setSupplierName('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -688,14 +772,25 @@ useEffect(() => {
           </Chart>
           )}
 
-          {shouldShowChart("supplierRanking") && (
+            {shouldShowChart("supplierRanking") && supplierRanking.length > 0 && (
           <Chart title="Supplier Reliability Ranking">
-            <ResponsiveContainer height={300}>
-              <BarChart data={supplierRanking} layout="vertical">
+            <ResponsiveContainer height={Math.max(240, supplierRanking.length * 70)}>
+              <BarChart
+                data={supplierRanking}
+                layout="vertical"
+                margin={{ top: 8, right: 55, bottom: 8, left: 8 }}
+                barCategoryGap="25%"
+              >
                 <XAxis type="number" domain={[0,100]} tickFormatter={(v)=>`${v}%`}/>
-                <YAxis dataKey="name" type="category"/>
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  width={130}
+                  tick={{ fontSize: 13 }}
+                  interval={0}
+                />
                 <Tooltip formatter={(v)=>`${v}%`}/>
-                <Bar dataKey="value" fill="#2563eb">
+                <Bar dataKey="value" fill="#2563eb" barSize={38}>
                   <LabelList dataKey="value" position="right" formatter={(v)=>`${v}%`} />
                 </Bar>
               </BarChart>
@@ -733,37 +828,40 @@ useEffect(() => {
 
 /* ================= UI ================= */
 
-const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onSelect}
-    onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onSelect();
-      }
-    }}
-    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
-  >
-    <p className="text-sm text-gray-600">{title}</p>
-    <p className="text-3xl font-bold">{value}</p>
-    <div className="mt-4 flex justify-end">
-      <button
-        type="button"
-        aria-label={`See more in ${sourceLabel}`}
-        title={`Open ${sourceLabel}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSeeMore();
-        }}
-        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-      >
-        See More
-      </button>
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => {
+  const isLongValue = typeof value === 'string' && value.length > 10;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+    >
+      <p className="text-sm text-gray-600">{title}</p>
+      <p className={isLongValue ? "text-xl font-bold leading-tight" : "text-3xl font-bold"}>{value}</p>
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          aria-label={`See more in ${sourceLabel}`}
+          title={`Open ${sourceLabel}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSeeMore();
+          }}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+        >
+          See More
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Chart = ({title,children}) => (
   <div className="bg-white p-6 rounded-xl shadow">

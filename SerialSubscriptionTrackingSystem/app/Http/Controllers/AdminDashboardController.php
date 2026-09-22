@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\SupplierAccount;
 use App\Models\Subscription;
+use App\Models\SerialIssue;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -30,8 +31,10 @@ class AdminDashboardController extends Controller
             // Supplier Account Statistics
             $supplierStats = $this->getSupplierStats($startDate, $endDate);
             
-            // Subscription Statistics
-            $subscriptionStats = $this->getSubscriptionStats($startDate, $endDate);
+            // Subscription Statistics — optionally scoped by Supplier / Serial Title
+            $supplierName = $request->input('supplier_name') ?: null;
+            $serialTitle = $request->input('serial_title') ?: null;
+            $subscriptionStats = $this->getSubscriptionStats($startDate, $endDate, $supplierName, $serialTitle);
 
             // Time Series Data for Charts
             $chartData = $this->getChartData($startDate, $endDate);
@@ -149,21 +152,64 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Get subscription statistics
+     * Get subscription statistics — optionally scoped by Supplier and/or Serial Title.
+     * "Active" mirrors TPU Monitor Delivery's "Ongoing" definition exactly (see below).
      */
-    private function getSubscriptionStats($startDate, $endDate)
+    private function getSubscriptionStats($startDate, $endDate, $supplierName = null, $serialTitle = null)
     {
-        $total = Subscription::count();
-        $active = Subscription::where('status', 'Active')->count();
-        $completed = Subscription::where('status', 'Completed')->count();
-        $inactive = Subscription::where('status', 'Inactive')->count();
+        $query = Subscription::query();
+        if ($supplierName) {
+            $query->where('supplier_name', $supplierName);
+        }
+        if ($serialTitle) {
+            $query->where('serial_title', $serialTitle);
+        }
+        $subscriptions = $query->get()->filter(fn ($subscription) => $subscription->hasActiveRecords());
+        $total = $subscriptions->count();
+
+        // "Active" here mirrors TPU Monitor Delivery's "Ongoing" definition exactly:
+        // a subscription counts as active/ongoing if it's in the qualifying status
+        // list, has at least one non-archived serial issue, and not every issue has
+        // been delivered (or any issue is For Return). This intentionally ignores
+        // the subscription's own `status` field beyond the qualifying-status check,
+        // since that field alone doesn't reflect real delivery progress.
+        $qualifyingStatuses = ['Active', 'accepted', 'Delivered', 'delivered'];
+        $active = 0;
+        foreach ($subscriptions as $subscription) {
+            if (!in_array($subscription->status, $qualifyingStatuses, true)) {
+                continue;
+            }
+            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
+                ->whereNull('archived_at')
+                ->get();
+            if ($issues->isEmpty()) {
+                continue;
+            }
+            $deliveredCount = $issues->where('status', 'delivered')->count();
+            $forReturnCount = $issues->where('status', 'for_return')->count();
+            $totalIssueCount = $issues->count();
+            $isDelivered = ($forReturnCount === 0 && $totalIssueCount > 0 && $deliveredCount === $totalIssueCount);
+            if (!$isDelivered) {
+                $active++;
+            }
+        }
+
+        $completed = $subscriptions->where('status', 'Completed')->count();
+        $inactive = $subscriptions->where('status', 'Inactive')->count();
 
         // Subscriptions created within date range
-        $createdInRange = Subscription::whereBetween('created_at', [$startDate, $endDate])->count();
+        $createdInRange = $subscriptions->filter(fn ($subscription) => $subscription->created_at >= $startDate && $subscription->created_at <= $endDate)->count();
 
-        // Total value of subscriptions
-        $totalValue = Subscription::sum('award_cost') ?? 0;
-        $deliveredValue = Subscription::sum('delivered_cost') ?? 0;
+        $totalValue = 0;
+        $deliveredValue = 0;
+        foreach ($subscriptions as $subscription) {
+            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
+                ->whereNull('archived_at')->get();
+            $totalValue += $issues->isEmpty() ? ($subscription->award_cost ?? 0) : $issues->sum('cost');
+            $deliveredValue += $issues->isEmpty()
+                ? ($subscription->delivered_cost ?? 0)
+                : $issues->where('status', 'delivered')->sum('cost');
+        }
 
         return [
             'total' => $total,

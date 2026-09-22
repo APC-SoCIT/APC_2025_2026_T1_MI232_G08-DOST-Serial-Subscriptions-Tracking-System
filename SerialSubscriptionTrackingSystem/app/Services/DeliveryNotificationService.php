@@ -31,9 +31,10 @@ class DeliveryNotificationService
             $subscriptions = Subscription::where('status', 'Active')->get();
 
             foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
+                $serials = $subscription->activeSerials();
 
                 foreach ($serials as $index => $serial) {
+                    if (!empty($serial['archived_at'])) continue;
                     // Skip if serial is already completed or inspected
                     $status = $serial['status'] ?? 'pending';
                     if (in_array($status, ['completed', 'inspected'])) {
@@ -211,9 +212,10 @@ class DeliveryNotificationService
                 continue;
             }
 
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             foreach ($serials as $index => $serial) {
+                if (!empty($serial['archived_at'])) continue;
                 $status = $serial['status'] ?? 'pending';
                 if (in_array($status, ['completed', 'inspected', 'received'])) {
                     continue;

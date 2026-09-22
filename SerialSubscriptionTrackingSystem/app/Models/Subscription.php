@@ -62,6 +62,21 @@ class Subscription extends Model
         return $query->where('status', 'Active');
     }
 
+    public function activeSerials(): array
+    {
+        return array_values(array_filter($this->serials ?? [], fn ($serial) => empty($serial['archived_at'])));
+    }
+
+    public function hasActiveRecords(): bool
+    {
+        if (!empty($this->serials)) {
+            return count($this->activeSerials()) > 0;
+        }
+
+        return SerialIssue::where('subscription_id', (string) ($this->_id ?? $this->id))
+            ->whereNull('archived_at')->exists();
+    }
+
     /**
      * Scope for a specific period
      */

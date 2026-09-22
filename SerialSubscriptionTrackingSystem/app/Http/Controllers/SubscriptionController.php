@@ -41,12 +41,16 @@ class SubscriptionController extends Controller
         }
 
         $subscriptions = $query->orderBy('created_at', 'desc')->get();
-        
-        // Recalculate delivered_cost for each subscription based on inspected serials
+
         foreach ($subscriptions as $subscription) {
             $this->recalculateDeliveredCost($subscription);
         }
 
+        $subscriptions = $subscriptions->filter(function ($subscription) {
+            $subscription->serials = $subscription->activeSerials();
+            return $subscription->hasActiveRecords();
+        })->values();
+        
         return response()->json([
             'subscriptions' => $subscriptions,
             'success' => true,
@@ -61,7 +65,7 @@ class SubscriptionController extends Controller
         $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
         
         // Get all issues for this subscription from SerialIssue model
-        $issues = SerialIssue::where('subscription_id', $subscriptionId)->get();
+        $issues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
         
         if ($issues->isEmpty()) {
             // If no issues found, use the old Subscription.serials array logic
@@ -69,6 +73,7 @@ class SubscriptionController extends Controller
             $deliveredCost = 0;
             
             foreach ($serials as $serial) {
+                if (!empty($serial['archived_at'])) continue;
                 $inspectionStatus = $serial['inspection_status'] ?? null;
                 
                 // Only count serials that have been inspected and marked as "Good" (inspected status)
@@ -101,8 +106,11 @@ class SubscriptionController extends Controller
         $allDelivered = false;
         if (!$issues->isEmpty()) {
             $deliveredCount = $issues->where('status', 'delivered')->count();
+            $forReturnCount = $issues->where('status', 'for_return')->count();
             $totalCount = $issues->count();
-            $allDelivered = ($deliveredCount === $totalCount && $totalCount > 0);
+            // All issues must be delivered AND none for_return — a single unresolved
+            // return keeps the subscription from being considered fully delivered.
+            $allDelivered = ($forReturnCount === 0 && $deliveredCount === $totalCount && $totalCount > 0);
         }
         
         // Update the subscription if values differ
@@ -130,6 +138,16 @@ class SubscriptionController extends Controller
         if ($needsSave) {
             $subscription->save();
         }
+
+        $hasArchivedSerials = collect($subscription->serials ?? [])->contains(fn ($serial) => !empty($serial['archived_at']));
+        $activeAwardCost = $issues->isEmpty() && !$hasArchivedSerials
+            ? ($subscription->award_cost ?? 0)
+            : ($issues->isEmpty()
+                ? collect($subscription->activeSerials())->sum(fn ($serial) => (float) ($serial['amount'] ?? $serial['quantity'] ?? 1) * (float) ($serial['unitPrice'] ?? 0))
+                : $issues->sum('cost'));
+        $subscription->setAttribute('active_award_cost', $activeAwardCost);
+        $subscription->setAttribute('active_delivered_cost', $deliveredCost);
+        $subscription->setAttribute('active_remaining_cost', max(0, $activeAwardCost - $deliveredCost));
     }
 
     /**
@@ -144,8 +162,9 @@ class SubscriptionController extends Controller
             $this->recalculateDeliveredCost($subscription);
         }
         
-        // Refresh the collection after updates
-        $subscriptions = Subscription::all();
+        $subscriptions = $subscriptions->filter(function ($subscription) {
+            return $subscription->hasActiveRecords();
+        })->values();
 
         $totalAwardCost = $subscriptions->sum('award_cost');
         $totalDeliveredCost = $subscriptions->sum('delivered_cost');
@@ -185,6 +204,12 @@ class SubscriptionController extends Controller
             'frequency' => 'nullable|string|in:weekly,biweekly,monthly,quarterly,annually,Weekly,Biweekly,Monthly,Quarterly,Annually',
             'total_issues' => 'nullable|integer|min:1|max:52',
             'start_date' => 'nullable|date',
+            // Volume/issue tracking fields (Item 1)
+            'total_volumes' => 'nullable|integer|min:1',
+            'volume_start' => 'nullable|string|max:100',
+            'issue_start' => 'nullable|string|max:100',
+            'publication_date_type' => 'nullable|string|in:specific,month_year,season',
+            'publication_date' => 'nullable|string|max:100'
         ]);
 
         $deliveredCost = $validated['delivered_cost'] ?? 0;
@@ -249,6 +274,11 @@ class SubscriptionController extends Controller
             'created_by' => Auth::id(),
             'frequency' => $validated['frequency'] ?? null,
             'total_issues' => $validated['total_issues'] ?? null,
+            'total_volumes' => $validated['total_volumes'] ?? null,
+            'volume_start' => $validated['volume_start'] ?? null,
+            'issue_start' => $validated['issue_start'] ?? null,
+            'publication_date_type' => $validated['publication_date_type'] ?? null,
+            'publication_date' => $validated['publication_date'] ?? null,
         ]);
 
         // Serial issues will be generated when supplier accepts the subscription
@@ -292,6 +322,8 @@ class SubscriptionController extends Controller
             ], 404);
         }
 
+        $this->recalculateDeliveredCost($subscription);
+
         return response()->json([
             'success' => true,
             'subscription' => $subscription,
@@ -333,7 +365,7 @@ class SubscriptionController extends Controller
 
         if ($existingIssues === 0 && !empty($subscription->total_issues)) {
             $totalIssues = intval($subscription->total_issues);
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
 
             // Calculate total cost for distribution
             $totalCost = 0;
@@ -401,7 +433,12 @@ class SubscriptionController extends Controller
             'award_cost' => 'sometimes|numeric|min:0',
             'delivered_cost' => 'sometimes|numeric|min:0',
             'remaining_cost' => 'sometimes|numeric|min:0',
-            'status' => 'sometimes|string|in:Active,Inactive,Completed',
+            // Widened to include every status this app actually sets on a subscription
+            // (pending, accepted, Delivered/delivered) — the old list of
+            // Active/Inactive/Completed rejected the subscription's own current
+            // status on every edit, causing the whole request to 422 and nothing
+            // to save, however the person edited the form.
+            'status' => 'sometimes|string|in:Active,Inactive,Completed,pending,accepted,Delivered,delivered',
             'serials' => 'nullable|array',
             'transactions' => 'nullable|array',
             'note' => 'nullable|string',
@@ -410,6 +447,122 @@ class SubscriptionController extends Controller
             'author_publisher' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:100',
         ]);
+
+        foreach (($subscription->serials ?? []) as $index => $serial) {
+            if (!empty($serial['archived_at']) && isset($validated['serials'][$index]) && $validated['serials'][$index] != $serial) {
+                return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+            }
+        }
+
+        // Re-link the supplier the same way store() does, so an edited supplier
+        // actually resolves to a real SupplierAccount (id + canonical name)
+        // instead of just overwriting the display name with free text.
+        if (isset($validated['supplier_name']) || isset($validated['supplier_id'])) {
+            $newSupplierName = trim($validated['supplier_name'] ?? $subscription->supplier_name);
+            $newSupplierId = !empty($validated['supplier_id']) ? trim((string) $validated['supplier_id']) : null;
+
+            if ($newSupplierId) {
+                $supplierAccount = SupplierAccount::where('_id', $newSupplierId)
+                    ->orWhere('id', $newSupplierId)
+                    ->first();
+                if ($supplierAccount) {
+                    $newSupplierId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                    $newSupplierName = $supplierAccount->company_name ?? $newSupplierName;
+                }
+            } else {
+                $matchingSuppliers = SupplierAccount::approved()
+                    ->where('company_name', 'regex', '/^' . preg_quote($newSupplierName, '/') . '$/i')
+                    ->get();
+                if ($matchingSuppliers->count() === 1) {
+                    $supplierAccount = $matchingSuppliers->first();
+                    $newSupplierId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                    $newSupplierName = $supplierAccount->company_name ?? $newSupplierName;
+                }
+            }
+
+            $validated['supplier_name'] = $newSupplierName;
+            $validated['supplier_id'] = $newSupplierId ?? $subscription->supplier_id;
+        }
+
+        // Frequency change: recalculate Number of Issues to match the new
+        // frequency, and regenerate the issue schedule (dates + cost split)
+        // when it's safe to do so — i.e. no issue has progressed past
+        // "Pending", so nothing real is lost. If any issue has moved beyond
+        // Pending, the physical schedule is left untouched to avoid rewriting
+        // real delivery history; only the total_issues field updates so the
+        // new frequency is at least reflected for display.
+        $issuesPerYear = [
+            'weekly' => 52,
+            'biweekly' => 26,
+            'monthly' => 12,
+            'quarterly' => 4,
+            'annually' => 1,
+        ];
+        if (isset($validated['frequency']) && $validated['frequency'] !== $subscription->frequency) {
+            $newTotalIssues = $issuesPerYear[strtolower($validated['frequency'])] ?? null;
+            if ($newTotalIssues) {
+                $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+                $existingIssues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
+                $anyProgressed = $existingIssues->contains(fn ($issue) => $issue->status !== 'pending');
+
+                if ($existingIssues->isEmpty()) {
+                    $subscription->total_issues = $newTotalIssues;
+                } elseif (!$anyProgressed) {
+                    // Anchor the regenerated schedule to the earliest original
+                    // expected delivery date, so the timeline stays continuous
+                    // rather than restarting from "today".
+                    $originalStart = $existingIssues->min('expected_delivery_date');
+                    try {
+                        $originalStart = $originalStart ? Carbon::parse($originalStart) : now();
+                    } catch (\Exception $e) {
+                        $originalStart = now();
+                    }
+                    foreach ($existingIssues as $issue) {
+                        $issue->delete();
+                    }
+                    $subscription->total_issues = $newTotalIssues;
+                    // Frequency-only edits must NEVER change the award cost total —
+                    // only an explicit award_cost edit does. Whatever value was
+                    // submitted (same as before, or a genuine user change) is what
+                    // gets re-split — nothing is invented here.
+                    $newAwardCost = $validated['award_cost'] ?? $subscription->award_cost ?? 0;
+                    SerialIssue::generateForSubscription(
+                        $subscription,
+                        strtolower($validated['frequency']),
+                        $newTotalIssues,
+                        $originalStart,
+                        $newAwardCost
+                    );
+
+                    // Don't trust generateForSubscription's own per-issue cost math —
+                    // force the newly created issues' costs to sum EXACTLY to
+                    // $newAwardCost, so the total can never drift just from
+                    // regenerating the schedule at a new frequency.
+                    $freshIssues = SerialIssue::where('subscription_id', $subscriptionId)
+                        ->whereNull('archived_at')
+                        ->orderBy('issue_number')
+                        ->get();
+                    $freshCount = $freshIssues->count();
+                    if ($freshCount > 0) {
+                        $evenCost = floor(($newAwardCost / $freshCount) * 100) / 100;
+                        $runningTotal = 0;
+                        foreach ($freshIssues as $index => $issue) {
+                            if ($index === $freshCount - 1) {
+                                // Last issue absorbs the rounding remainder so the
+                                // sum matches the award cost exactly, to the cent.
+                                $issue->cost = round($newAwardCost - $runningTotal, 2);
+                            } else {
+                                $issue->cost = $evenCost;
+                                $runningTotal += $evenCost;
+                            }
+                            $issue->save();
+                        }
+                    }
+                } else {
+                    $subscription->total_issues = $newTotalIssues;
+                }
+            }
+        }
 
         $subscription->fill($validated);
 
@@ -425,6 +578,42 @@ class SubscriptionController extends Controller
         }
 
         $subscription->save();
+
+        // If Award Cost genuinely changed (and the frequency-change branch
+        // above didn't already regenerate a fresh, evenly-split schedule)
+        // redistribute cost across the issues that haven't been delivered
+        // yet, so the new award amount is reflected per-issue too — not just
+        // on the subscription's own totals. Delivered issues keep their
+        // historical cost untouched. "Genuinely changed" means the submitted
+        // value differs from what was already saved — the edit form always
+        // sends award_cost, even on a frequency-only edit, so isset() alone
+        // is not enough to detect a real change.
+        $frequencyJustRegenerated = isset($validated['frequency']) && $validated['frequency'] !== ($oldValues['frequency'] ?? null);
+        $awardCostActuallyChanged = isset($validated['award_cost']) && (float) $validated['award_cost'] !== (float) ($oldValues['award_cost'] ?? 0);
+        if ($awardCostActuallyChanged && !$frequencyJustRegenerated) {
+            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+            $issues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
+            if ($issues->isNotEmpty()) {
+                $deliveredCostSum = $issues->where('status', 'delivered')->sum('cost');
+                $pendingIssues = $issues->filter(fn ($issue) => !in_array($issue->status, ['delivered', 'for_return'], true));
+                $pendingCount = $pendingIssues->count();
+                if ($pendingCount > 0) {
+                    $remainingBudget = max(0, ($subscription->award_cost ?? 0) - $deliveredCostSum);
+                    $costPerIssue = round($remainingBudget / $pendingCount, 2);
+                    foreach ($pendingIssues as $issue) {
+                        $issue->cost = $costPerIssue;
+                        $issue->save();
+                    }
+                }
+            }
+        }
+
+        // Item 3 fix: once a subscription has generated SerialIssue records, THAT
+        // is the real source of truth for delivered/remaining cost everywhere else
+        // in the app (GSPS, Inspection, Monitor Delivery all sum SerialIssue.cost).
+        // Without this call, editing award_cost only updated this one document and
+        // never propagated to any dashboard reading through SerialIssue.
+        $this->recalculateDeliveredCost($subscription);
 
         // Log the update
         AuditLogService::logUpdate($subscription, $oldValues, "Subscription '{$subscription->serial_title}' updated");
@@ -629,20 +818,24 @@ class SubscriptionController extends Controller
         $serialId = 1;
         
         foreach ($subscriptions as $subscription) {
-            $subscriptionSerials = $subscription->serials ?? [];
+            $subscriptionSerials = $subscription->activeSerials();
             
             // Reverse the serials array so newest ones appear first
             $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
+                if (!empty($serial['archived_at'])) continue;
                 $serials[] = [
                     'id' => $serialId++,
                     'subscription_id' => $subscription->_id ?? $subscription->id,
                     'subscription_status' => $subscription->status,
-                    'issn' => $serial['issn'] ?? '',
-                    'title' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                    // Prefer the subscription-level fields (kept current by Edit
+                    // Subscription) over the older per-serial array copies, so an
+                    // edit to ISSN/title actually shows up here.
+                    'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
+                    'title' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
                     'dateDelivered' => $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null,
-                    'frequency' => $serial['frequency'] ?? '',
+                    'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
                     'status' => $serial['status'] ?? 'pending', // pending, prepare, for_delivery
                     'supplier_name' => $subscription->supplier_name,
                     // Inspection-related fields for Delivered/For Return status
@@ -691,6 +884,9 @@ class SubscriptionController extends Controller
         
         foreach ($serials as $index => &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                if (!empty($serial['archived_at'])) {
+                    return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+                }
                 $oldStatus = $serial['status'] ?? 'pending';
                 $serialTitle = $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial';
                 $serialIndex = $index;
@@ -826,12 +1022,13 @@ class SubscriptionController extends Controller
         $serialId = 1;
         
         foreach ($subscriptions as $subscription) {
-            $subscriptionSerials = $subscription->serials ?? [];
+            $subscriptionSerials = $subscription->activeSerials();
             
             // Reverse the serials array so newest ones appear first
             $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
+                if (!empty($serial['archived_at'])) continue;
                 $status = $serial['status'] ?? 'pending';
                 
                 // Only include serials that are "for_delivery" or "received"
@@ -839,20 +1036,20 @@ class SubscriptionController extends Controller
                     $deliverySerials[] = [
                         'id' => $serialId++,
                         'subscription_id' => $subscription->_id ?? $subscription->id,
-                        'issn' => $serial['issn'] ?? '',
-                        'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                        'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
+                        'serialTitle' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
                         'supplierName' => $subscription->supplier_name,
                         'deliveryDate' => $serial['deliveryDate'] ?? null,
                         'status' => $status,
                         'receivedDate' => $serial['receivedDate'] ?? null,
-                        'frequency' => $serial['frequency'] ?? '',
+                        'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
                         'quantity' => $serial['quantity'] ?? 1,
                         // Include attachment URL for viewing
                         'attachmentUrl' => $serial['attachmentUrl'] ?? null,
                         // Additional serial details for view modal
                         'language' => $serial['language'] ?? '',
-                        'authorPublisher' => $serial['authorPublisher'] ?? '',
-                        'category' => $serial['category'] ?? '',
+                        'authorPublisher' => $subscription->author_publisher ?: ($serial['authorPublisher'] ?? ''),
+                        'category' => $subscription->category ?: ($serial['category'] ?? ''),
                         'volumeNumber' => $serial['volumeNumber'] ?? '',
                         'issuesNo' => $serial['issuesNo'] ?? '',
                     ];
@@ -888,6 +1085,7 @@ class SubscriptionController extends Controller
             
             // Get all serial issues for this subscription
             $issues = SerialIssue::forSubscription((string) $subscription->_id)
+                ->whereNull('archived_at')
                 ->orderBy('issue_number', 'asc')
                 ->get();
 
@@ -907,10 +1105,9 @@ class SubscriptionController extends Controller
             $forReturnCount = $issues->where('status', 'for_return')->count();
             $totalIssueCount = $issues->count();
             
-            // Subscription is "Delivered" only if ALL non-return issues are delivered
-            // "for_return" issues don't count towards the total
-            $deliverableIssueCount = $totalIssueCount - $forReturnCount;
-            $aggregatedStatus = ($deliverableIssueCount > 0 && $deliveredCount === $deliverableIssueCount) ? 'Delivered' : 'Ongoing';
+            // Subscription is "Delivered" only if EVERY issue is delivered — a single
+            // unresolved For Return issue keeps the whole title "Ongoing".
+            $aggregatedStatus = ($forReturnCount === 0 && $totalIssueCount > 0 && $deliveredCount === $totalIssueCount) ? 'Delivered' : 'Ongoing';
             
             if ($aggregatedStatus === 'Delivered') {
                 $totalDelivered++;
@@ -1015,6 +1212,9 @@ class SubscriptionController extends Controller
         
         foreach ($serials as $index => &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                if (!empty($serial['archived_at'])) {
+                    return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+                }
                 $oldStatus = $serial['status'] ?? 'for_delivery';
                 $serialTitle = $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial';
                 $serialIndex = $index;
@@ -1159,6 +1359,9 @@ class SubscriptionController extends Controller
 
         foreach ($serials as &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                if (!empty($serial['archived_at'])) {
+                    return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+                }
                 // Update the attachment URL
                 $serial['attachmentUrl'] = $attachmentUrl;
                 $updated = true;
@@ -1230,6 +1433,9 @@ class SubscriptionController extends Controller
 
         foreach ($serials as &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                if (!empty($serial['archived_at'])) {
+                    return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+                }
                 // Update the inspection attachment URL
                 $serial['inspection_attachment'] = $attachmentUrl;
                 $updated = true;
@@ -1281,7 +1487,7 @@ class SubscriptionController extends Controller
         $serialId = 1;
         
         foreach ($subscriptions as $subscription) {
-            $subscriptionSerials = $subscription->serials ?? [];
+            $subscriptionSerials = $subscription->activeSerials();
             
             // Reverse the serials array so newest ones appear first
             $subscriptionSerials = array_reverse($subscriptionSerials);
@@ -1295,14 +1501,14 @@ class SubscriptionController extends Controller
                     $inspectionSerials[] = [
                         'id' => $serialId++,
                         'subscription_id' => $subscription->_id ?? $subscription->id,
-                        'issn' => $serial['issn'] ?? '',
-                        'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                        'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
+                        'serialTitle' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
                         'supplierName' => $subscription->supplier_name,
                         'deliveryDate' => $serial['deliveryDate'] ?? null,
                         'receivedDate' => $serial['receivedDate'] ?? null,
                         'status' => $status,
                         'inspection_status' => $inspectionStatus,
-                        'frequency' => $serial['frequency'] ?? '',
+                        'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
                         'quantity' => $serial['quantity'] ?? 1,
                         // Inspection details if already inspected
                         'inspector_name' => $serial['inspector_name'] ?? null,
@@ -1315,8 +1521,8 @@ class SubscriptionController extends Controller
                         'inspection_attachment' => $serial['inspection_attachment'] ?? null,
                         // Additional serial details for view modal
                         'language' => $serial['language'] ?? '',
-                        'authorPublisher' => $serial['authorPublisher'] ?? '',
-                        'category' => $serial['category'] ?? '',
+                        'authorPublisher' => $subscription->author_publisher ?: ($serial['authorPublisher'] ?? ''),
+                        'category' => $subscription->category ?: ($serial['category'] ?? ''),
                         'volumeNumber' => $serial['volumeNumber'] ?? '',
                         'issuesNo' => $serial['issuesNo'] ?? '',
                         'other_description' => $serial['other_description'] ?? null,
@@ -1351,8 +1557,10 @@ class SubscriptionController extends Controller
             // Recalculate delivered cost and status (updates subscription if all issues are delivered)
             $this->recalculateDeliveredCost($subscription);
             
-            // Get all serial issues for this subscription
+            // Get all serial issues for this subscription — excludes archived issues, so
+            // archived serials no longer appear here or inflate the counts.
             $issues = SerialIssue::forSubscription((string) $subscription->_id)
+                ->whereNull('archived_at') 
                 ->orderBy('issue_number', 'asc')
                 ->get();
 
@@ -1379,10 +1587,9 @@ class SubscriptionController extends Controller
             $pendingInspectionCount = $issues->where('status', 'received')->count();
             $totalIssueCount = $issues->count();
             
-            // Subscription is "Delivered" only if ALL non-return issues are delivered
-            // "for_return" issues don't count towards delivered status
-            $deliverableCount = $totalIssueCount - $forReturnCount;
-            $aggregatedStatus = ($deliverableCount > 0 && $deliveredCount === $deliverableCount) ? 'Delivered' : 'Ongoing';
+            // Subscription is "Delivered" only if EVERY issue is delivered — a single
+            // unresolved For Return issue keeps the whole title "Ongoing".
+            $aggregatedStatus = ($forReturnCount === 0 && $totalIssueCount > 0 && $deliveredCount === $totalIssueCount) ? 'Delivered' : 'Ongoing';
             
             if ($aggregatedStatus === 'Delivered') {
                 $totalDelivered++;
@@ -1532,6 +1739,9 @@ class SubscriptionController extends Controller
         
         foreach ($serials as &$serial) {
             if (($serial['issn'] ?? '') === $validated['serial_issn']) {
+                if (!empty($serial['archived_at'])) {
+                    return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+                }
                 // Check if this serial was already marked as inspected (to prevent double-counting)
                 $wasAlreadyInspected = ($serial['inspection_status'] ?? null) === 'inspected';
                 
@@ -1705,6 +1915,7 @@ class SubscriptionController extends Controller
             $this->recalculateDeliveredCost($subscription);
             
             $issues = SerialIssue::where('subscription_id', (string)($subscription->_id ?? $subscription->id))
+                ->whereNull('archived_at')
                 ->orderBy('issue_number', 'asc')
                 ->get();
 
@@ -1757,10 +1968,9 @@ class SubscriptionController extends Controller
             
             $totalIssues = count($issueData);
             
-            // Aggregated status: "Delivered" only if ALL non-return issues are delivered
-            // "for_return" issues don't count towards delivered status
-            $deliverableCount = $totalIssues - $forReturnCount;
-            $aggregatedStatus = ($deliverableCount > 0 && $deliveredCount === $deliverableCount) ? 'Delivered' : 'Ongoing';
+            // Aggregated status: "Delivered" only if EVERY issue is delivered — a single
+            // unresolved For Return issue keeps the whole title "Ongoing".
+            $aggregatedStatus = ($forReturnCount === 0 && $totalIssues > 0 && $deliveredCount === $totalIssues) ? 'Delivered' : 'Ongoing';
             
             if ($aggregatedStatus === 'Delivered') {
                 $deliveredSubs++;
@@ -1768,16 +1978,20 @@ class SubscriptionController extends Controller
                 $ongoingSubs++;
             }
             
-            // Get first serial info for display
+            // Get first serial info for display — prefer the subscription-level
+            // fields (kept current by Edit Subscription) over the older
+            // per-serial array copies, so an edited ISSN/title actually shows up
+            // on Monitor Delivery instead of the value captured at creation time.
             $serials = $subscription->serials ?? [];
             $firstSerial = !empty($serials) ? $serials[0] : [];
             
             $result[] = [
                 'id' => (string) ($subscription->_id ?? $subscription->id),
                 'subscription_id' => (string) ($subscription->_id ?? $subscription->id),
-                'issn' => $firstSerial['issn'] ?? '',
-                'serialTitle' => $firstSerial['serialTitle'] ?? $firstSerial['title'] ?? '',
+                'issn' => $subscription->issn ?: ($firstSerial['issn'] ?? ''),
+                'serialTitle' => $subscription->serial_title ?: ($firstSerial['serialTitle'] ?? $firstSerial['title'] ?? ''),
                 'supplierName' => $subscription->supplier_name,
+                'totalVolumes' => $subscription->total_volumes ?? ($firstSerial['volumeNumber'] ?? null),
                 'totalIssues' => $totalIssues,
                 'deliveredIssues' => $deliveredCount,
                 'forReturnCount' => $forReturnCount,
@@ -1823,12 +2037,13 @@ class SubscriptionController extends Controller
         $totalForReturn = 0;
         
         foreach ($subscriptions as $subscription) {
-            $subscriptionSerials = $subscription->serials ?? [];
+            $subscriptionSerials = $subscription->activeSerials();
             
             // Reverse to show newest first
             $subscriptionSerials = array_reverse($subscriptionSerials);
             
             foreach ($subscriptionSerials as $serial) {
+                if (!empty($serial['archived_at'])) continue;
                 $status = $serial['status'] ?? 'created';
                 $inspectionStatus = $serial['inspection_status'] ?? null;
                 
@@ -1864,8 +2079,8 @@ class SubscriptionController extends Controller
                 $monitoredSerials[] = [
                     'id' => $serialId++,
                     'subscription_id' => $subscription->_id ?? $subscription->id,
-                    'issn' => $serial['issn'] ?? '',
-                    'serialTitle' => $serial['serialTitle'] ?? $serial['title'] ?? '',
+                    'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
+                    'serialTitle' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
                     'supplierName' => $subscription->supplier_name,
                     'deliveryDate' => $serial['deliveryDate'] ?? null,
                     'receivedDate' => $serial['receivedDate'] ?? null,
@@ -1873,7 +2088,7 @@ class SubscriptionController extends Controller
                     'deliveryStatus' => $deliveryStatus,
                     'status' => $status,
                     'inspection_status' => $inspectionStatus,
-                    'frequency' => $serial['frequency'] ?? '',
+                    'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
                     'quantity' => $serial['quantity'] ?? $serial['amount'] ?? 1,
                     'unitPrice' => $serial['unitPrice'] ?? 0,
                     'inspector_name' => $serial['inspector_name'] ?? null,
