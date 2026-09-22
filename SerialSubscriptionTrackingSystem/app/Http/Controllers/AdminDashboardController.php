@@ -48,7 +48,7 @@ class AdminDashboardController extends Controller
                     'start_date' => $startDate->toDateString(),
                     'end_date' => $endDate->toDateString(),
                 ],
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

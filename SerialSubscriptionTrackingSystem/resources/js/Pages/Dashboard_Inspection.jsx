@@ -15,13 +15,13 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 4, CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
-
 const COLORS = {
   received: "#2563eb",
   pending: "#facc15",
@@ -93,11 +93,11 @@ export default function InspectionDashboard() {
  /* ===== FILTER STATE (same as Supplier) ===== */
 
 const [filterMode, setFilterMode] = useState("year");
-const [year, setYear] = useState(2026);
+const [year, setYear] = useState(CURRENT_YEAR);
 const [startMonth, setStartMonth] = useState("January");
 const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
+const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
 const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilter, setShowFilter] = useState(false);
@@ -189,15 +189,14 @@ const factor = useMemo(() => {
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          received: item.received || 0,
-          pending: item.pending || 0,
-          inspected: item.inspected || 0,
-          returned: item.returned || 0,
-        }));
+      const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+      return months.map(month => ({
+        month,
+        received: monthlyByMonth.get(month)?.received || 0,
+        pending: monthlyByMonth.get(month)?.pending || 0,
+        inspected: monthlyByMonth.get(month)?.inspected || 0,
+        returned: monthlyByMonth.get(month)?.returned || 0,
+      }));
     }
     return months.map((m) => ({
       month: m,
@@ -335,7 +334,7 @@ const factor = useMemo(() => {
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -357,7 +356,7 @@ const factor = useMemo(() => {
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `Inspection_Dashboard_Report_${startDate}_to_${endDate}.csv`;
+                    link.download = `Inspection_Dashboard_Report_${startDate}_to_${endDate}.xlsx`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -476,15 +475,15 @@ const factor = useMemo(() => {
                 <button
                   onClick={() => {
                     setFilterMode('year');
-                    setTempYear(2026);
+                    setTempYear(CURRENT_YEAR);
                     setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
-                    setYear(2026);
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -527,7 +526,7 @@ const factor = useMemo(() => {
               sourceLabel={card.sourceLabel}
               isActive={card.id === activeKpi}
               onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
-              onSeeMore={() => router.visit(card.sourcePath)}
+              onSeeMore={() => router.visit(`${card.sourcePath}?month=${encodeURIComponent(startMonth === endMonth ? String(monthIndex(startMonth) + 1).padStart(2, "0") : '')}&year=${year}&start_date=${startDate}&end_date=${endDate}`)}
             />
           ))}
         </div>
@@ -539,7 +538,7 @@ const factor = useMemo(() => {
           <Chart title="Inspection Intake Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={intakeTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="received" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
@@ -552,7 +551,7 @@ const factor = useMemo(() => {
       <Chart title="Inspection Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
-      <XAxis dataKey="month"/>
+      <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
       <YAxis/>
       <Tooltip/>
       
@@ -615,7 +614,7 @@ const factor = useMemo(() => {
           <Chart title="Monthly Inspected Volume">
             <ResponsiveContainer height={300}>
               <BarChart data={inspectedVolume}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Bar dataKey="inspected" fill="#2563eb"/>

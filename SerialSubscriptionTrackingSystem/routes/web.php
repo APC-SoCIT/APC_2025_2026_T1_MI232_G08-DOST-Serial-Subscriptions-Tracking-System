@@ -173,7 +173,6 @@ Route::middleware(['auth'])->group(function () {
     // Profile routes - available to all authenticated users
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Chat routes - available to all authenticated users
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');

@@ -34,11 +34,15 @@ class NotificationController extends Controller
         $notifications = [];
         $notificationId = 1;
         $sevenDaysAgo = Carbon::now()->subDays(7);
+        $readAllAt = UserNotification::where('user_id', (string) ($user->_id ?? $user->id))
+            ->where('type', '__incoming_notifications_read_all')
+            ->orderBy('created_at', 'desc')
+            ->first()?->created_at;
         
         foreach ($subscriptions as $subscription) {
             $serials = $subscription->serials ?? [];
             
-            foreach ($serials as $serial) {
+            foreach ($serials as $serialIndex => $serial) {
                 $status = $serial['status'] ?? 'pending';
                 $inspectionStatus = $serial['inspection_status'] ?? null;
                 
@@ -93,7 +97,9 @@ class NotificationController extends Controller
                     
                     // Parse delivery date if available
                     $deliveryDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null;
-                    $timestamp = $deliveryDate ? Carbon::parse($deliveryDate) : Carbon::now();
+                    $timestamp = $deliveryDate
+                        ? Carbon::parse($deliveryDate)
+                        : Carbon::parse($subscription->created_at ?? Carbon::now());
                     
                     $notifications[] = [
                         'id' => $notificationId++,
@@ -106,7 +112,8 @@ class NotificationController extends Controller
                         'notification_type' => $notificationType,
                         'message' => $message,
                         'timestamp' => $timestamp->toISOString(),
-                        'is_read' => false, // Could be stored in a notifications table in the future
+                        'is_read' => $readAllAt && $timestamp->lte($readAllAt),
+                        'notification_key' => "serial:{$subscription->_id}:{$serialIndex}:{$status}:{$inspectionStatus}",
                     ];
                 }
             }
@@ -128,7 +135,8 @@ class NotificationController extends Controller
                     'notification_type' => 'account_approval',
                     'message' => 'New supplier account awaiting approval',
                     'timestamp' => $account->created_at ? $account->created_at->toISOString() : Carbon::now()->toISOString(),
-                    'is_read' => false,
+                    'is_read' => $readAllAt && Carbon::parse($account->created_at)->lte($readAllAt),
+                    'notification_key' => 'account:' . (string) ($account->_id ?? $account->id),
                     'account_id' => (string) ($account->_id ?? $account->id),
                     'email' => $account->email ?? '',
                 ];
@@ -166,7 +174,8 @@ class NotificationController extends Controller
                         'notification_type' => 'delivery_reminder',
                         'message' => $urgencyMessages[$delivery['urgency']] ?? 'Delivery reminder',
                         'timestamp' => Carbon::parse($delivery['delivery_date'])->toISOString(),
-                        'is_read' => false,
+                        'is_read' => $readAllAt && Carbon::parse($delivery['delivery_date'])->lte($readAllAt),
+                        'notification_key' => 'delivery-reminder:' . ($delivery['subscription_id'] ?? '') . ':' . $delivery['delivery_date'],
                         'delivery_date' => $delivery['delivery_date'],
                         'days_until_delivery' => $delivery['days_until_delivery'],
                         'urgency' => $delivery['urgency'],
@@ -209,7 +218,10 @@ class NotificationController extends Controller
         
         // Add UserNotifications for the current user's role
         $normalizedRole = strtolower($userRole);
-        $userNotificationsQuery = UserNotification::where(function ($q) use ($normalizedRole, $user) {
+        $userNotificationsQuery = UserNotification::whereNotIn('type', [
+            '__incoming_notification_read',
+            '__incoming_notifications_read_all',
+        ])->where(function ($q) use ($normalizedRole, $user) {
             $q->where('user_role', $normalizedRole)
               ->orWhere('user_id', $user->id);
         });
@@ -280,7 +292,9 @@ class NotificationController extends Controller
             'notification_id' => 'nullable|string',
             'notification_type' => 'nullable|string',
             'user_notification_id' => 'nullable|string',
+            'notification_key' => 'nullable|string',
         ]);
+        $user = Auth::user();
 
         // If it's a UserNotification, mark it as read
         if (!empty($validated['user_notification_id'])) {
@@ -292,6 +306,26 @@ class NotificationController extends Controller
                     'message' => 'Notification marked as read',
                 ]);
             }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Notification not found',
+            ], 404);
+        }
+
+        if (!empty($validated['notification_key'])) {
+            UserNotification::create([
+                'user_id' => (string) ($user->_id ?? $user->id),
+                'user_role' => strtolower($user->role ?? 'user'),
+                'type' => '__incoming_notification_read',
+                'title' => 'Notification read marker',
+                'message' => 'Synthetic notification marked as read',
+                'data' => ['notification_key' => $validated['notification_key']],
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Notification marked as read']);
         }
 
         // If it's a delivery notification, mark it as read
@@ -303,12 +337,17 @@ class NotificationController extends Controller
                     'message' => 'Notification marked as read',
                 ]);
             }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Notification not found',
+            ], 404);
         }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Notification marked as read',
-        ]);
+            'success' => false,
+            'message' => 'A notification identifier is required',
+        ], 422);
     }
     
     /**
@@ -318,6 +357,17 @@ class NotificationController extends Controller
     {
         $user = Auth::user();
         $userRole = strtolower($user->role ?? 'user');
+
+        UserNotification::create([
+            'user_id' => (string) ($user->_id ?? $user->id),
+            'user_role' => $userRole,
+            'type' => '__incoming_notifications_read_all',
+            'title' => 'Notifications read marker',
+            'message' => 'All current notifications marked as read',
+            'data' => [],
+            'is_read' => true,
+            'read_at' => now(),
+        ]);
 
         // Mark all UserNotifications as read for this role
         $userNotifCount = UserNotification::where(function ($q) use ($userRole, $user) {

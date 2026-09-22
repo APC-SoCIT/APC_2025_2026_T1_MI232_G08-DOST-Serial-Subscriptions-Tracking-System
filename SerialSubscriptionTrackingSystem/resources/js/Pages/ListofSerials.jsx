@@ -1,14 +1,16 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 import { FaHistory } from "react-icons/fa";
 import { MdExpandMore, MdExpandLess, MdRefresh, MdVisibility } from "react-icons/md";
 
 export default function ListOfSerials() {
+  const queryParams = new URLSearchParams(window.location.search);
   const [currentPage, setCurrentPage] = useState(1);
   const [filterDate, setFilterDate] = useState("");
-  const [filterMonth, setFilterMonth] = useState("");
-  const [filterYear, setFilterYear] = useState("");
+  const [filterMonth, setFilterMonth] = useState(queryParams.get("month") || "");
+  const [filterYear, setFilterYear] = useState(queryParams.get("year") || "");
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -90,7 +92,9 @@ export default function ListOfSerials() {
       setLoading(true);
       setError(null);
       
-      const response = await axios.get('/api/subscriptions/inspection-tracking');
+      const response = await axios.get('/api/subscriptions/inspection-tracking', {
+        params: getDateRangeParams(),
+      });
       
       if (response.data.success) {
         setSubscriptions(response.data.subscriptions || []);

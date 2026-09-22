@@ -13,6 +13,7 @@ import { FaTruckFast } from "react-icons/fa6";
 import { FaHistory } from "react-icons/fa";
 import { MdListAlt, MdViewList } from "react-icons/md";
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 import SerialsNotification from "@/Components/SerialsNotification";
 import SupplierSerialIssues from "@/Components/SupplierSerialIssues";
 
@@ -324,7 +325,7 @@ function Dashboard_Supplier_ListofSerial() {
       const supplierName = auth?.user?.name || '';
       
       const response = await axios.get('/api/subscriptions/supplier-serials', {
-        params: { supplier_name: supplierName }
+        params: { supplier_name: supplierName, ...getDateRangeParams() }
       });
       
       if (response.data.success) {
