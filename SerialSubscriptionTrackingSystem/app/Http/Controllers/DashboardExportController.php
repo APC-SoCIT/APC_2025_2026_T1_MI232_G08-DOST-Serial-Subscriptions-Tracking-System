@@ -48,7 +48,7 @@ class DashboardExportController extends Controller
         return 'P' . number_format((float) ($cost ?? 0), 2);
     }
 
-      private function applyDashboardFilters($query, Request $request)
+    private function applyDashboardFilters($query, Request $request)
     {
         $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
@@ -62,6 +62,7 @@ class DashboardExportController extends Controller
 
         return $query;
     }
+
     /**
      * Resolve the display ID for a serial item.
      */
@@ -133,8 +134,9 @@ class DashboardExportController extends Controller
 
     /**
      * EXACT copy of DashboardStatsController::totalSerialTitles() — must stay
-     * identical, since TPU's "Total Serials Encoded" is a subscription count
-     * built with this specific mutate-then-check sequence, not an issue count.
+     * identical, since TPU's "Total Serial Titles Encoded" is a subscription
+     * count built with this specific mutate-then-check sequence, not an
+     * issue count.
      */
     private function totalSerialTitles($subscriptions): int
     {
@@ -147,15 +149,17 @@ class DashboardExportController extends Controller
     /**
      * EXACT copy of DashboardStatsController::qualifyingSubscriptionIssues() —
      * subscriptions in the qualifying status list, each with its non-archived
-     * SerialIssue records. Returns [bySubscription, allIssues] where
-     * bySubscription is used for subscription-level counts (e.g. GSPS/
-     * Inspection "Received" cards) and allIssues for issue-level counts.
+     * SerialIssue records. Scoped by supplier ACCOUNT id (not name) — two
+     * accounts sharing a company name must never be conflated together, same
+     * as every live dashboard controller. Returns [bySubscription, allIssues]
+     * where bySubscription is used for subscription-level counts and
+     * allIssues for issue-level counts.
      */
-    private function qualifyingSubscriptionIssues(?string $supplierName, ?string $serialTitle): array
+    private function qualifyingSubscriptionIssues(?string $supplierId, ?string $serialTitle): array
     {
         $query = Subscription::whereIn('status', self::QUALIFYING_STATUSES);
-        if ($supplierName) {
-            $query->where('supplier_name', $supplierName);
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
         }
         if ($serialTitle) {
             $query->where('serial_title', $serialTitle);
@@ -267,9 +271,11 @@ class DashboardExportController extends Controller
 
     // =====================================================================
     // ADMIN — leads with Account & Approval Summary (the real subject of
-    // Admin's dashboard). Total/Active Subscriptions only appear when a
-    // Supplier or Serial Title filter is applied, exactly like the live
-    // dashboard's extra KPI cards.
+    // Admin's dashboard), and every summary metric is immediately followed
+    // by its own detail table listing the actual records that add up to
+    // that number. Total/Active Subscriptions + Serial Issues Detail only
+    // appear when a Supplier or Serial Title filter is applied, exactly
+    // like the live dashboard's extra KPI cards.
     // =====================================================================
     public function adminExport(Request $request)
     {
@@ -284,14 +290,22 @@ class DashboardExportController extends Controller
         $serialTitle = $request->input('serial_title') ?: null;
 
         $subscriptions = Subscription::whereBetween('created_at', [$startDate, $endDate])->get();
-        $totalUsers = User::where('role', '!=', 'admin')->count();
-        $approvedUsers = User::where('role', '!=', 'admin')
-            ->whereNotNull('email_verified_at')
-            ->count();
-        $pendingAccounts = SupplierAccount::where('status', 'pending')->count();
-        $approvalBacklog = SupplierAccount::where('status', 'pending')
+
+        // Matches UserController::index()'s User::all() and
+        // UserController::stats()'s definitions exactly — no admin exclusion.
+        $allUsers = User::all();
+        $totalUsers = $allUsers->count();
+        $approvedUsersList = $allUsers->filter(fn ($u) => !empty($u->email_verified_at));
+        $approvedUsers = $approvedUsersList->count();
+
+        $pendingSupplierAccounts = SupplierAccount::where('status', 'pending')->get();
+        $pendingAccounts = $pendingSupplierAccounts->count();
+
+        $backlogAccounts = SupplierAccount::where('status', 'pending')
             ->where('created_at', '<', Carbon::now()->subDays(7))
-            ->count();
+            ->get();
+        $approvalBacklog = $backlogAccounts->count();
+
         $approvedAccounts = SupplierAccount::where('status', 'approved')
             ->whereNotNull('approved_at')
             ->whereNotNull('created_at')
@@ -305,26 +319,18 @@ class DashboardExportController extends Controller
             }
             $avgApprovalTime = round($totalApprovalDays / $approvedAccounts->count(), 1);
         }
-        $activeSupplierIds = Subscription::distinct('supplier_id')->pluck('supplier_id')->toArray();
-        $inactiveApprovedSuppliers = SupplierAccount::where('status', 'approved')
-            ->whereNotIn('_id', $activeSupplierIds)
-            ->count();
-        $serialDetails = [];
 
-        foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
-            foreach ($serials as $serial) {
-                $serialDetails[] = [
-                    $this->getSerialDisplayId($serial),
-                    $subscription->serial_title ?? 'N/A',
-                    $subscription->supplier_name ?? 'N/A',
-                    $this->getAdminSerialStatus($serial),
-                    $this->getSerialAwardedDate($serial, $subscription),
-                    $this->getSerialDeliveredDate($serial),
-                    $this->getSerialInspectedDate($serial),
-                ];
+        // "Disabled Supplier Accounts" — approved accounts whose linked User
+        // is disabled. Matches List of Suppliers' own definition exactly.
+        $allApprovedSupplierAccounts = SupplierAccount::approved()->get();
+        $disabledSupplierAccountsList = [];
+        foreach ($allApprovedSupplierAccounts as $account) {
+            $user = $account->user_id ? User::find($account->user_id) : null;
+            if ($user && ($user->is_disabled ?? false)) {
+                $disabledSupplierAccountsList[] = $account;
             }
         }
+        $disabledSupplierAccounts = count($disabledSupplierAccountsList);
 
         $data = [
             ['Dashboard Report: ' . $dashboardName],
@@ -338,10 +344,95 @@ class DashboardExportController extends Controller
             ['Pending Accounts', $pendingAccounts],
             ['Approval Backlog (>7 days)', $approvalBacklog],
             ['Avg Approval Time (days)', $avgApprovalTime],
-            ['Inactive Approved Suppliers', $inactiveApprovedSuppliers],
+            ['Disabled Supplier Accounts', $disabledSupplierAccounts],
         ];
 
-            if ($supplierId || $serialTitle) {
+        // --- Total Users detail: every user in the system ---
+        $data[] = [''];
+        $data[] = ['=== TOTAL USERS DETAIL (' . $totalUsers . ') ==='];
+        $data[] = ['Name', 'Email', 'Role', 'Verified?', 'Disabled?', 'Date Created'];
+        foreach ($allUsers as $user) {
+            $data[] = [
+                $user->name ?? 'N/A',
+                $user->email ?? 'N/A',
+                ucfirst($user->role ?? 'N/A'),
+                !empty($user->email_verified_at) ? 'Yes' : 'No',
+                ($user->is_disabled ?? false) ? 'Yes' : 'No',
+                $this->formatDate($user->created_at),
+            ];
+        }
+
+        // --- Approved Users detail: subset of the above, verified only ---
+        $data[] = [''];
+        $data[] = ['=== APPROVED USERS DETAIL (' . $approvedUsers . ') ==='];
+        $data[] = ['Name', 'Email', 'Role', 'Date Verified'];
+        foreach ($approvedUsersList as $user) {
+            $data[] = [
+                $user->name ?? 'N/A',
+                $user->email ?? 'N/A',
+                ucfirst($user->role ?? 'N/A'),
+                $this->formatDate($user->email_verified_at),
+            ];
+        }
+
+        // --- Pending Accounts detail: pending supplier accounts ---
+        $data[] = [''];
+        $data[] = ['=== PENDING ACCOUNTS DETAIL (' . $pendingAccounts . ') ==='];
+        $data[] = ['Company Name', 'Contact Person', 'Email', 'Date Submitted', 'Days Pending'];
+        foreach ($pendingSupplierAccounts as $account) {
+            $daysPending = $account->created_at ? Carbon::parse($account->created_at)->diffInDays(Carbon::now()) : 'N/A';
+            $data[] = [
+                $account->company_name ?? 'N/A',
+                $account->contact_person ?? 'N/A',
+                $account->email ?? 'N/A',
+                $this->formatDate($account->created_at),
+                $daysPending,
+            ];
+        }
+
+        // --- Approval Backlog detail: subset of the above, pending >7 days ---
+        $data[] = [''];
+        $data[] = ['=== APPROVAL BACKLOG DETAIL (' . $approvalBacklog . ') ==='];
+        $data[] = ['Company Name', 'Contact Person', 'Email', 'Date Submitted', 'Days Pending'];
+        foreach ($backlogAccounts as $account) {
+            $daysPending = $account->created_at ? Carbon::parse($account->created_at)->diffInDays(Carbon::now()) : 'N/A';
+            $data[] = [
+                $account->company_name ?? 'N/A',
+                $account->contact_person ?? 'N/A',
+                $account->email ?? 'N/A',
+                $this->formatDate($account->created_at),
+                $daysPending,
+            ];
+        }
+
+        // --- Avg Approval Time detail: every approved account's own turnaround ---
+        $data[] = [''];
+        $data[] = ['=== AVG APPROVAL TIME DETAIL (avg ' . $avgApprovalTime . ' days across ' . $approvedAccounts->count() . ' accounts) ==='];
+        $data[] = ['Company Name', 'Date Submitted', 'Date Approved', 'Days to Approve'];
+        foreach ($approvedAccounts as $account) {
+            $days = Carbon::parse($account->created_at)->diffInDays(Carbon::parse($account->approved_at));
+            $data[] = [
+                $account->company_name ?? 'N/A',
+                $this->formatDate($account->created_at),
+                $this->formatDate($account->approved_at),
+                $days,
+            ];
+        }
+
+        // --- Disabled Supplier Accounts detail ---
+        $data[] = [''];
+        $data[] = ['=== DISABLED SUPPLIER ACCOUNTS DETAIL (' . $disabledSupplierAccounts . ') ==='];
+        $data[] = ['Company Name', 'Contact Person', 'Email', 'Date Approved'];
+        foreach ($disabledSupplierAccountsList as $account) {
+            $data[] = [
+                $account->company_name ?? 'N/A',
+                $account->contact_person ?? 'N/A',
+                $account->email ?? 'N/A',
+                $this->formatDate($account->approved_at),
+            ];
+        }
+
+        if ($supplierId || $serialTitle) {
             $subscriptionQuery = $this->applyDashboardFilters(Subscription::query(), $request);
             $filteredSubscriptions = $subscriptionQuery->get()->filter(fn ($s) => $s->hasActiveRecords())->values();
             $activeCount = $this->countActiveSubscriptions($filteredSubscriptions);
@@ -352,7 +443,7 @@ class DashboardExportController extends Controller
             $data[] = ['Total Subscriptions', $filteredSubscriptions->count()];
             $data[] = ['Active Subscriptions', $activeCount];
 
-            [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
+            [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
             $issueRows = $this->issueRowsFrom($allIssues, $startDate, $endDate);
 
             $data[] = [''];
@@ -363,21 +454,15 @@ class DashboardExportController extends Controller
             }
         }
 
-        $data[] = [''];
-        $data[] = ['=== SERIAL DETAILS ==='];
-        $data[] = ['Serial No./ID', 'Subscription Title', 'Supplier', 'Status', 'Awarded Date', 'Delivered Date', 'Inspected Date'];
-
-        foreach ($serialDetails as $detail) {
-            $data[] = $detail;
-        }
-
         return $this->generateXlsxResponse($data, 'Admin_Dashboard_Report');
     }
 
     // =====================================================================
-    // TPU — summary lines match the 7 KPI cards exactly: Total Serials
-    // Encoded, Volumes/Issues, Delivered to GSPS, Awaiting delivery,
-    // Returned, Inspected, Delivery Success Rate.
+    // TPU — summary lines match the 7 KPI cards exactly: Total Serial Titles
+    // Encoded, Serial Issues Delivered to GSPS, Serial Issue awaiting
+    // Delivery, Serial Issues For Delivery, Serial Issues For Returned,
+    // Accepted Serial Issues, Delivery Success Rate. Volumes/Issues line
+    // removed — that KPI card no longer exists on the live dashboard.
     // =====================================================================
     public function tpuExport(Request $request)
     {
@@ -388,29 +473,21 @@ class DashboardExportController extends Controller
             ? Carbon::parse($request->input('end_date'))->endOfDay()
             : Carbon::now()->endOfDay();
         $dashboardName = $request->input('dashboard_name', 'TPU Dashboard');
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
         $subscriptionQuery = $this->applyDashboardFilters(Subscription::query(), $request);
         $allSubscriptions = $subscriptionQuery->get();
         $totalSerialTitles = $this->totalSerialTitles($allSubscriptions);
 
-        $totalVolumes = 0;
-        $totalIssuesCount = 0;
-        foreach ($allSubscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
-            $firstSerial = !empty($serials) ? $serials[0] : [];
-            $volumes = $subscription->total_volumes ?? ($firstSerial['volumeNumber'] ?? null);
-            if (!empty($volumes)) {
-                $totalVolumes += (int) $volumes;
-                $totalIssuesCount += (int) ($subscription->total_issues ?? 0);
-            }
-        }
-
-        [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
+        [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
 
         $delivered = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true))->count();
-        $awaiting = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE, SerialIssue::STATUS_FOR_DELIVERY], true))->count();
+        // "Serial Issue awaiting Delivery" — Pending and Preparing only,
+        // excluding For Delivery status (that has its own separate metric).
+        $awaitingOnly = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE], true))->count();
+        // "Serial Issues For Delivery" — status exactly for_delivery.
+        $forDeliveryOnly = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count();
         $inspected = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count();
         $returned = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count();
         $successBase = $inspected + $returned;
@@ -423,12 +500,12 @@ class DashboardExportController extends Controller
             [''],
             ['=== SUMMARY ==='],
             ['Metric', 'Value'],
-            ['Total Serials Encoded', $totalSerialTitles],
-            ['Volumes / Issues', "{$totalVolumes} Vols / {$totalIssuesCount} Issues"],
-            ['Delivered to GSPS', $delivered],
-            ['Awaiting delivery', $awaiting],
-            ['Returned', $returned],
-            ['Inspected', $inspected],
+            ['Total Serial Titles Encoded', $totalSerialTitles],
+            ['Serial Issues Delivered to GSPS', $delivered],
+            ['Serial Issue awaiting Delivery', $awaitingOnly],
+            ['Serial Issues For Delivery', $forDeliveryOnly],
+            ['Serial Issues For Returned', $returned],
+            ['Accepted Serial Issues', $inspected],
             ['Delivery Success Rate', $efficiency . '%'],
             [''],
             ['=== SERIAL ISSUES DETAIL ==='],
@@ -443,11 +520,12 @@ class DashboardExportController extends Controller
     }
 
     // =====================================================================
-    // GSPS — summary matches the 5 KPI cards exactly: Received Serials,
-    // Forwarded to Inspection, Pending Receipt Confirmation, Returned
-    // Issues, Success Rate. "Received Serials" is a SUBSCRIPTION count
-    // (subscriptions with at least one non-archived issue), matching the
-    // live dashboard — not an issue count.
+    // GSPS — summary matches the 4 KPI cards exactly: Received Serial
+    // Issues, Serial Issues forwarded to Inspection, Pending Receipt
+    // Confirmation, Returned Issues. Success Rate card was removed from the
+    // live dashboard, so it's dropped here too. "Received Serial Issues" is
+    // now an ISSUE count (status exactly received), not a subscription
+    // count.
     // =====================================================================
     public function gspsExport(Request $request)
     {
@@ -458,17 +536,18 @@ class DashboardExportController extends Controller
             ? Carbon::parse($request->input('end_date'))->endOfDay()
             : Carbon::now()->endOfDay();
         $dashboardName = $request->input('dashboard_name', 'GSPS Dashboard');
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
-        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
-        $receivedSerials = count($bySubscription);
+        [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
+
+        // Received Serial Issues — status exactly "received", matching the
+        // live dashboard's fixed definition, not a subscription count.
+        $receivedOnly = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED)->count();
 
         $forwardedTier = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true));
         $returned = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
         $pending = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
-        $successNumerator = $forwardedTier->count() - $returned->count();
-        $successRate = $forwardedTier->count() ? round(($successNumerator / $forwardedTier->count()) * 100) : 0;
 
         $data = [
             ['Dashboard Report: ' . $dashboardName],
@@ -477,11 +556,10 @@ class DashboardExportController extends Controller
             [''],
             ['=== SUMMARY ==='],
             ['Metric', 'Value'],
-            ['Received Serials', $receivedSerials],
-            ['Forwarded to Inspection', $forwardedTier->count()],
+            ['Received Serial Issues', $receivedOnly],
+            ['Serial Issues forwarded to Inspection', $forwardedTier->count()],
             ['Pending Receipt Confirmation', $pending->count()],
             ['Returned Issues', $returned->count()],
-            ['Success Rate', $successRate . '%'],
             [''],
             ['=== SERIAL ISSUES DETAIL ==='],
             self::SERIAL_ISSUE_HEADER,
@@ -498,11 +576,12 @@ class DashboardExportController extends Controller
     }
 
     // =====================================================================
-    // INSPECTION — summary matches the 5 KPI cards exactly: Received from
-    // GSPS, Inspected (Passed), Returned (Damaged), Pending Inspection,
-    // Inspection Success Rate. "Received from GSPS" is a SUBSCRIPTION count
-    // (qualifying subscriptions with at least one issue that reached
-    // Received/Delivered/For Return), matching the live dashboard.
+    // INSPECTION — summary matches the 5 KPI cards exactly: Serial Issues
+    // received from GSPS, Inspected (Passed), Returned (Damaged), Pending
+    // Inspection, Inspection Success Rate. "Serial Issues received from
+    // GSPS" is now the FULL received+delivered+for_return tier (an issue
+    // count), matching the live dashboard's fixed definition — not a
+    // subscription count, and it does not shrink once an issue is inspected.
     // =====================================================================
     public function inspectionExport(Request $request)
     {
@@ -513,14 +592,11 @@ class DashboardExportController extends Controller
             ? Carbon::parse($request->input('end_date'))->endOfDay()
             : Carbon::now()->endOfDay();
         $dashboardName = $request->input('dashboard_name', 'Inspection Dashboard');
-        $supplierName = $request->input('supplier_name') ?: null;
-        $serialTitle = $request->input('serial_title') ?: null;
 
         $subscriptionQuery = $this->applyDashboardFilters(Subscription::whereIn('status', self::QUALIFYING_STATUSES), $request);
         $subscriptions = $subscriptionQuery->get();
         $receivedTier = [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN];
 
-        $qualifyingSubs = 0;
         $inspectionIssuesWithSub = collect();
         foreach ($subscriptions as $subscription) {
             $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
@@ -530,7 +606,6 @@ class DashboardExportController extends Controller
             if ($tierIssues->count() === 0) {
                 continue;
             }
-            $qualifyingSubs++;
             $inspectionIssuesWithSub = $inspectionIssuesWithSub->merge(
                 $tierIssues->map(fn ($issue) => ['subscription' => $subscription, 'issue' => $issue])
             );
@@ -549,7 +624,7 @@ class DashboardExportController extends Controller
             [''],
             ['=== SUMMARY ==='],
             ['Metric', 'Value'],
-            ['Received from GSPS', $qualifyingSubs],
+            ['Serial Issues received from GSPS', $inspectionIssuesWithSub->count()],
             ['Inspected (Passed)', $inspected->count()],
             ['Returned (Damaged)', $returned->count()],
             ['Pending Inspection', $pending->count()],
@@ -567,9 +642,14 @@ class DashboardExportController extends Controller
     }
 
     // =====================================================================
-    // SUPPLIER — summary matches all 6 KPI cards exactly: Awarded Serials
-    // Issues, Preparing Delivery, For Delivery, Delivered to GSPS, Returned,
-    // Success Rate. Scoped to the logged-in supplier's own subscriptions.
+    // SUPPLIER — summary matches the 5 KPI cards exactly: Serial Issues For
+    // Preparing, Serial Issues For Delivery, Serial Issues Delivered to
+    // GSPS, Serial Issues For Returned, Success Rate. "Awarded Serials
+    // Issues" and "Delivered Issues" (was "Completed Issues") cards removed
+    // from the live dashboard's summary line — Delivered Issues still shown
+    // via Success Rate's own base, so kept out of the top summary to match
+    // exactly what's on screen. Scoped to the logged-in supplier's own
+    // subscriptions.
     // =====================================================================
     public function supplierExport(Request $request)
     {
@@ -591,7 +671,6 @@ class DashboardExportController extends Controller
             $subscriptionQuery->where('serial_title', $serialTitle);
         }
         $subscriptions = $subscriptionQuery->get();
-        $subscriptionIds = $subscriptions->map(fn ($s) => (string) ($s->_id ?? $s->id))->all();
 
         $issuesWithSub = collect();
         foreach ($subscriptions as $subscription) {
@@ -601,7 +680,6 @@ class DashboardExportController extends Controller
             $issuesWithSub = $issuesWithSub->merge($issues->map(fn ($issue) => ['subscription' => $subscription, 'issue' => $issue]));
         }
 
-        $awarded = $issuesWithSub->count();
         $preparing = $issuesWithSub->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count();
         $forDelivery = $issuesWithSub->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count();
         $delivered = $issuesWithSub->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count();
@@ -617,12 +695,11 @@ class DashboardExportController extends Controller
             [''],
             ['=== SUMMARY ==='],
             ['Metric', 'Value'],
-            ['Awarded Serials Issues', $awarded],
-            ['Preparing Delivery', $preparing],
-            ['For Delivery', $forDelivery],
-            ['Delivered to GSPS', $delivered],
-            ['Completed Issues', $deliveredOnly],
-            ['Returned', $returned],
+            ['Serial Issues For Preparing', $preparing],
+            ['Serial Issues For Delivery', $forDelivery],
+            ['Serial Issues Delivered to GSPS', $delivered],
+            ['Delivered Issues', $deliveredOnly],
+            ['Serial Issues For Returned', $returned],
             ['Success Rate', $successRate . '%'],
             [''],
             ['=== SERIAL ISSUES DETAIL ==='],
