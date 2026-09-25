@@ -137,6 +137,7 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Addaccount');
     })->name('tpu.addaccount');
 
+    Route::get('/customer-satisfaction', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
     Route::get('/tpu/customer-satisfaction-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
 });
 
@@ -191,7 +192,6 @@ Route::middleware(['auth', 'verified', 'role:inspection'])->group(function () {
 
 // ===================== AUTHENTICATED ROUTES (ALL ROLES) =====================
 Route::middleware(['auth'])->group(function () {
-    Route::get('/customer-satisfaction', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
     // Session check endpoint - used to verify session is still valid and extend it
     Route::get('/api/session/check', function () {
         return response()->json([
@@ -205,7 +205,6 @@ Route::middleware(['auth'])->group(function () {
     // Profile routes - available to all authenticated users
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Chat routes - available to all authenticated users
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chats.index');
@@ -238,22 +237,23 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/api/customer-satisfaction/responses', [CustomerSatisfactionController::class, 'adminIndex'])->name('customer-satisfaction.responses');
 });
 
+// Performance feedback overall report — shared by Admin and TPU so both
+// views are always backed by the exact same data.
+Route::middleware(['auth', 'role:admin,tpu'])->group(function () {
+    Route::get('/api/customer-satisfaction/report', [CustomerSatisfactionController::class, 'report'])->name('customer-satisfaction.report');
+});
+
 Route::middleware(['auth', 'role:admin,tpu'])->group(function () {
     Route::get('/archive', [ArchiveController::class, 'page'])->name('archive.page');
     Route::get('/api/archive', [ArchiveController::class, 'index'])->name('archive.index');
 });
 
-Route::middleware(['auth', 'role:admin,tpu,gsps,inspection,supplier'])->group(function () {
-    Route::get('/api/customer-satisfaction/eligible', [CustomerSatisfactionController::class, 'eligible'])->name('customer-satisfaction.eligible');
-    Route::post('/api/customer-satisfaction', [CustomerSatisfactionController::class, 'store'])->name('customer-satisfaction.store');
-});
-
 Route::middleware(['auth', 'role:tpu'])->group(function () {
     Route::post('/api/archive/bulk', [ArchiveController::class, 'bulkArchive'])->name('archive.bulk');
     Route::post('/api/archive/bulk-restore', [ArchiveController::class, 'bulkRestore'])->name('archive.bulkRestore');
+    Route::post('/api/archive/subscription/{subscriptionId}', [ArchiveController::class, 'archiveSubscription'])->name('archive.subscription');
     Route::post('/api/archive/{subscriptionId}/{issueNumber}', [ArchiveController::class, 'archive'])->name('archive.store');
     Route::delete('/api/archive/{subscriptionId}/{issueNumber}', [ArchiveController::class, 'restore'])->name('archive.restore');
-    Route::get('/api/customer-satisfaction/report', [CustomerSatisfactionController::class, 'report'])->name('customer-satisfaction.report');
 });
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
@@ -348,6 +348,10 @@ Route::middleware(['auth', 'role:tpu'])->group(function () {
     
     // TPU Dashboard Export
     Route::get('/api/tpu/export-report', [DashboardExportController::class, 'tpuExport'])->name('tpu.export-report');
+
+    // Performance feedback - TPU only submits, and only TPU sees the active-supplier dropdown
+    Route::get('/api/customer-satisfaction/suppliers', [CustomerSatisfactionController::class, 'suppliers'])->name('customer-satisfaction.suppliers');
+    Route::post('/api/customer-satisfaction', [CustomerSatisfactionController::class, 'store'])->name('customer-satisfaction.store');
 });
 
 // ===================== GSPS-ONLY API ROUTES =====================

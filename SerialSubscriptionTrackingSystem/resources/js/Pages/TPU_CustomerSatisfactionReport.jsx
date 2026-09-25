@@ -5,18 +5,22 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Too
 import TPULayout from '@/Layouts/TpuLayout';
 
 const labels = {
-  ease_of_navigation: 'Ease of navigation',
-  speed_and_reliability: 'Speed and reliability',
-  record_accuracy: 'Record accuracy',
-  overall_satisfaction: 'Overall satisfaction',
+  delivered_on_schedule: 'Delivered on schedule',
+  completeness_of_delivery: 'Completeness of delivery',
+  compliance_technical_specs: 'Compliance with technical specs',
+  quality_of_goods: 'Quality of goods',
+  packaging_handling_condition: 'Packaging & handling',
+  responsiveness: 'Responsiveness',
+  after_sales_support: 'After-sales support',
+  compliance_contract_terms: 'Compliance with contract terms',
 };
 
-const chartColors = ['#004A98', '#0D9488', '#E67E22', '#7C3AED', '#DC2626', '#64748B'];
+const chartColors = ['#004A98', '#0D9488', '#E67E22', '#7C3AED', '#DC2626', '#64748B', '#059669', '#B45309'];
 
-function HorizontalResponseChart({ data, labelKey, title }) {
-  const chartData = Object.entries(data || {}).map(([label, count]) => ({
+function HorizontalResponseChart({ data, title, valueSuffix = '', maxValue = null }) {
+  const chartData = Object.entries(data || {}).map(([label, value]) => ({
     label,
-    count,
+    value,
   }));
   const chartHeight = Math.max(260, chartData.length * 44);
 
@@ -29,12 +33,12 @@ function HorizontalResponseChart({ data, labelKey, title }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }} barCategoryGap="24%">
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e9ed" />
-                <XAxis type="number" allowDecimals={false} tick={{ fill: '#68737d', fontSize: 12 }} />
-                <YAxis type="category" dataKey="label" width={110} tick={{ fill: '#34414d', fontSize: 12 }} tickFormatter={(value) => labelKey === 'role' ? String(value).replace(/^./, (letter) => letter.toUpperCase()) : (String(value).length > 18 ? `${String(value).slice(0, 18)}...` : value)} />
-                <Tooltip formatter={(value) => [value, 'Responses']} cursor={{ fill: '#f0f4f8' }} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#004A98">
+                <XAxis type="number" domain={maxValue ? [0, maxValue] : undefined} allowDecimals={!!maxValue} tick={{ fill: '#68737d', fontSize: 12 }} />
+                <YAxis type="category" dataKey="label" width={130} tick={{ fill: '#34414d', fontSize: 12 }} tickFormatter={(value) => (String(value).length > 20 ? `${String(value).slice(0, 20)}...` : value)} />
+                <Tooltip formatter={(value) => [`${value}${valueSuffix}`, title]} cursor={{ fill: '#f0f4f8' }} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} fill="#004A98">
                   {chartData.map((entry, index) => <Cell key={`${entry.label}-${index}`} fill={chartColors[index % chartColors.length]} />)}
-                  <LabelList dataKey="count" position="right" fill="#34414d" fontSize={12} />
+                  <LabelList dataKey="value" position="right" fill="#34414d" fontSize={12} formatter={(value) => `${value}${valueSuffix}`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -45,7 +49,7 @@ function HorizontalResponseChart({ data, labelKey, title }) {
   );
 }
 
-export default function TPUCustomerSatisfactionReport() {
+export default function TPUPerformanceFeedbackReport() {
   const [report, setReport] = useState(null);
 
   useEffect(() => {
@@ -53,10 +57,10 @@ export default function TPUCustomerSatisfactionReport() {
   }, []);
 
   return (
-    <TPULayout title="Customer Satisfaction Report">
-      <Head title="Customer Satisfaction Report" />
+    <TPULayout title="Performance Feedback Report">
+      <Head title="Performance Feedback Report" />
       <div style={{ padding: '28px 32px', color: '#1f2933' }}>
-        <h1 style={{ color: '#004A98', fontSize: 24 }}>Customer Satisfaction Report</h1>
+        <h1 style={{ color: '#004A98', fontSize: 24 }}>Performance Feedback Report</h1>
         {!report ? <p>Loading report...</p> : (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, margin: '20px 0' }}>
@@ -70,7 +74,7 @@ export default function TPUCustomerSatisfactionReport() {
               </div>
               {Object.entries(report.averages || {}).map(([key, value]) => (
                 <div key={key} style={{ background: '#fff', padding: 20, borderRadius: 8, minWidth: 180, boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
-                  <small>{labels[key]}</small>
+                  <small>{labels[key] || key}</small>
                   <strong style={{ display: 'block', fontSize: 24, color: '#f5a623' }}>{value} / 5</strong>
                 </div>
               ))}
@@ -87,13 +91,21 @@ export default function TPUCustomerSatisfactionReport() {
                   </div>
                 ))}
               </section>
-              <HorizontalResponseChart data={report.by_role} labelKey="role" title="Responses by Role" />
-              <HorizontalResponseChart data={report.by_delivery} labelKey="delivery" title="Responses by Delivery" />
+              <HorizontalResponseChart data={report.by_supplier} title="Responses by Supplier" />
+              <HorizontalResponseChart data={report.supplier_ratings} title="Average Rating by Supplier" valueSuffix=" / 5" maxValue={5} />
             </div>
 
             <section style={{ background: '#fff', padding: 20, borderRadius: 8, marginTop: 18 }}>
-              <h2 style={{ fontSize: 17, color: '#004A98' }}>Suggestions for improvement</h2>
-              {(report.suggestions || []).length ? report.suggestions.map((item, index) => <p key={index} style={{ borderBottom: '1px solid #edf0f2', paddingBottom: 10 }}>&ldquo;{item.suggestion}&rdquo; <small>({item.role}, {item.delivery_title})</small></p>) : <p>No suggestions submitted.</p>}
+              <h2 style={{ fontSize: 17, color: '#004A98', margin: '0 0 16px' }}>Comments about the supplier</h2>
+              {(report.comments || []).length ? report.comments.map((item, index) => (
+                <div key={index} style={{ borderBottom: index < report.comments.length - 1 ? '1px solid #edf0f2' : 'none', padding: '14px 0' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 15, color: '#1f2933', lineHeight: 1.5 }}>&ldquo;{item.comment}&rdquo;</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 12, color: '#68737d' }}>
+                    <span><strong style={{ color: '#004A98' }}>Supplier:</strong> {item.supplier_name || 'Unknown'}</span>
+                    <span><strong style={{ color: '#004A98' }}>Submitted by:</strong> {item.submitted_by || 'Anonymous'}</span>
+                  </div>
+                </div>
+              )) : <p style={{ color: '#68737d' }}>No comments submitted.</p>}
             </section>
           </>
         )}

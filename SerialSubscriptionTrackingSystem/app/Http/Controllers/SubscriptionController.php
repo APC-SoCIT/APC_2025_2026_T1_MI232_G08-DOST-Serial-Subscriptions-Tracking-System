@@ -198,8 +198,9 @@ class SubscriptionController extends Controller
             'period' => 'nullable|string',
             'award_cost' => 'required|numeric|min:0',
             'delivered_cost' => 'nullable|numeric|min:0',
-            'serials' => 'nullable|array',
+             'serials' => 'nullable|array',
             'transactions' => 'nullable|array',
+            'author_publisher' => 'nullable|string|max:255',
             // New fields for serial issue generation
             'frequency' => 'nullable|string|in:weekly,biweekly,monthly,quarterly,annually,Weekly,Biweekly,Monthly,Quarterly,Annually',
             'total_issues' => 'nullable|integer|min:1|max:52',
@@ -209,7 +210,8 @@ class SubscriptionController extends Controller
             'volume_start' => 'nullable|string|max:100',
             'issue_start' => 'nullable|string|max:100',
             'publication_date_type' => 'nullable|string|in:specific,month_year,season',
-            'publication_date' => 'nullable|string|max:100'
+            'publication_date' => 'nullable|string|max:100',
+            'issue_date_serial' => 'nullable|string|max:255'
         ]);
 
         $deliveredCost = $validated['delivered_cost'] ?? 0;
@@ -257,9 +259,15 @@ class SubscriptionController extends Controller
             $issn = $validated['serials'][0]['issn'] ?? null;
         }
 
+         $authorPublisher = $validated['author_publisher'] ?? null;
+        if (!$authorPublisher && !empty($validated['serials'])) {
+            $authorPublisher = $validated['serials'][0]['authorPublisher'] ?? null;
+        }
+
         $subscription = Subscription::create([
             'serial_title' => $validated['serial_title'],
             'issn' => $issn,
+            'author_publisher' => $authorPublisher,
             'supplier_id' => $supplierId,
             'supplier_name' => $supplierName,
             'period' => $validated['period'] ?? null,
@@ -279,6 +287,7 @@ class SubscriptionController extends Controller
             'issue_start' => $validated['issue_start'] ?? null,
             'publication_date_type' => $validated['publication_date_type'] ?? null,
             'publication_date' => $validated['publication_date'] ?? null,
+            'issue_date_serial' => $validated['issue_date_serial'] ?? null,
         ]);
 
         // Serial issues will be generated when supplier accepts the subscription
@@ -446,12 +455,31 @@ class SubscriptionController extends Controller
             'frequency' => 'nullable|string|max:50',
             'author_publisher' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:100',
+            'issue_date_serial' => 'nullable|string|max:255',
         ]);
 
         foreach (($subscription->serials ?? []) as $index => $serial) {
             if (!empty($serial['archived_at']) && isset($validated['serials'][$index]) && $validated['serials'][$index] != $serial) {
                 return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
             }
+        }
+
+         // Supplier changes are only allowed while the subscription is still
+        // 'pending' — i.e. the supplier hasn't accepted the award yet. Once
+        // accepted (or further along), swapping the supplier out would mean
+        // reassigning work someone has already agreed to and possibly started
+        // on, so the request is rejected outright rather than silently
+        // allowed.
+        $newSupplierNameRequested = $validated['supplier_name'] ?? null;
+        $newSupplierIdRequested = $validated['supplier_id'] ?? null;
+        $supplierGenuinelyChanged = ($newSupplierNameRequested !== null && trim($newSupplierNameRequested) !== $subscription->supplier_name)
+            || ($newSupplierIdRequested !== null && trim((string) $newSupplierIdRequested) !== (string) ($subscription->supplier_id ?? ''));
+
+        if ($supplierGenuinelyChanged && $subscription->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Supplier cannot be changed once the subscription has been accepted by the supplier.',
+            ], 422);
         }
 
         // Re-link the supplier the same way store() does, so an edited supplier
@@ -484,13 +512,11 @@ class SubscriptionController extends Controller
             $validated['supplier_id'] = $newSupplierId ?? $subscription->supplier_id;
         }
 
-        // Frequency change: recalculate Number of Issues to match the new
-        // frequency, and regenerate the issue schedule (dates + cost split)
-        // when it's safe to do so — i.e. no issue has progressed past
-        // "Pending", so nothing real is lost. If any issue has moved beyond
-        // Pending, the physical schedule is left untouched to avoid rewriting
-        // real delivery history; only the total_issues field updates so the
-        // new frequency is at least reflected for display.
+        // Frequency change: only allowed while EVERY issue is still "Pending" —
+        // the moment any issue has progressed (Preparing, For Delivery, Received,
+        // Delivered, or For Return), the schedule is locked and the request is
+        // rejected outright, rather than silently accepting the new frequency
+        // label without actually resizing the issue schedule to match it.
         $issuesPerYear = [
             'weekly' => 52,
             'biweekly' => 26,
@@ -505,9 +531,16 @@ class SubscriptionController extends Controller
                 $existingIssues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
                 $anyProgressed = $existingIssues->contains(fn ($issue) => $issue->status !== 'pending');
 
+                if ($anyProgressed) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Frequency cannot be changed once any issue has progressed past Pending (Preparing, Delivered, Returned, etc.). Award Cost can still be edited.',
+                    ], 422);
+                }
+
                 if ($existingIssues->isEmpty()) {
                     $subscription->total_issues = $newTotalIssues;
-                } elseif (!$anyProgressed) {
+                } else {
                     // Anchor the regenerated schedule to the earliest original
                     // expected delivery date, so the timeline stays continuous
                     // rather than restarting from "today".
@@ -558,8 +591,6 @@ class SubscriptionController extends Controller
                             $issue->save();
                         }
                     }
-                } else {
-                    $subscription->total_issues = $newTotalIssues;
                 }
             }
         }

@@ -14,7 +14,7 @@ class Subscription extends Model
      *
      * @var array<string>
      */
-    protected $fillable = [
+       protected $fillable = [
         'serial_title',
         'supplier_id',
         'supplier_name',
@@ -34,6 +34,12 @@ class Subscription extends Model
         'serials', // Array of serial items
         'transactions', // Array of payment transactions
         'total_issues', // Total number of serial issues for recurring delivery
+        'total_volumes', // Number of volumes covered in the subscription period
+        'volume_start', // Starting volume label (e.g., "Vol. 1")
+        'issue_start', // Starting issue label (e.g., "Issue 1")
+        'publication_date_type', // 'specific', 'month_year', or 'season'
+        'publication_date', // The publication date value, format depends on publication_date_type
+        'issue_date_serial', // Manually entered issue date serial details
     ];
 
     /**

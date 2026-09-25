@@ -10,6 +10,7 @@ import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
 import SerialsNotification from "@/Components/SerialsNotification";
 import { MdRefresh, MdRateReview } from "react-icons/md";
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -302,7 +303,7 @@ function Dashboard_Supplier_Delivery() {
     setLoading(true);
     try {
       const response = await axios.get('/api/serial-issues/supplier', {
-        params: { supplier_name: auth?.user?.name || '' }
+        params: { supplier_name: auth?.user?.name || '', ...getDateRangeParams() }
       });
       if (response.data.success) {
         const fetchedIssues = response.data.issues || [];

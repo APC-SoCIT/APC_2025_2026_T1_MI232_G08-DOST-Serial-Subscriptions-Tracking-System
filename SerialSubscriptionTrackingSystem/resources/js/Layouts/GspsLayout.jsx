@@ -4,7 +4,6 @@ import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { FaTruck, FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
-import { MdRateReview } from "react-icons/md";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -19,7 +18,6 @@ const sidebarItems = [
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'gsps.chat', path: '/dashboard-gsps-chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'gsps.supplierinfo', path: '/dashboard-gsps-supplierinfo' },
   { icon: <FaTruck />, label: 'Delivery Status', route: 'gsps.deliverystatus', path: '/dashboard-gsps-deliverystatus' },
-  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: 'customer-satisfaction.page', path: '/customer-satisfaction' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {

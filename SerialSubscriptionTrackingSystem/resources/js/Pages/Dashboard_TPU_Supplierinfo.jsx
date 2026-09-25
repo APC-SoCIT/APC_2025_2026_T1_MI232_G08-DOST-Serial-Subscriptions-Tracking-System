@@ -1,16 +1,18 @@
 // resources/js/Pages/Dashboard_TPU_Supplierinfo.jsx
 import React, { useState, useEffect } from 'react';
 import TPULayout from '@/Layouts/TpuLayout';
-import { MdSearch, MdFilterList, MdAdd, MdClose, MdExpandMore } from "react-icons/md";
+import { MdSearch, MdAdd, MdClose, MdExpandMore } from "react-icons/md";
+import { HiUserAdd } from "react-icons/hi";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import 'animate.css';
 
 function SupplierInfo() {
   const { approvedSuppliers = [] } = usePage().props;
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilter, setShowFilter] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('All');
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
@@ -23,7 +25,7 @@ function SupplierInfo() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountStatusFilter, setAccountStatusFilter] = useState('all');
   const [accountSearchTerm, setAccountSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('suppliers'); // 'suppliers' or 'accounts'
+  const [activeTab, setActiveTab] = useState('suppliers'); // 'suppliers' | 'accounts' | 'create'
 
   // State for the selected supplier from dropdown
   const [selectedSupplier, setSelectedSupplier] = useState(null);
@@ -33,8 +35,25 @@ function SupplierInfo() {
     email: '',
     phone: '',
     address: '',
-    status: 'Active'
+    status: 'Approved'
   });
+
+  // ===== Create Supplier Account tab state (kept separate from the two
+  // sections above, so nothing there is touched by this addition) =====
+  const [createAccountFormData, setCreateAccountFormData] = useState({
+    company_name: '',
+    contact_person: '',
+    email: '',
+    phone: '',
+    address: '',
+    username: '',
+    password: '',
+    password_confirmation: '',
+  });
+  const [createAccountShowPassword, setCreateAccountShowPassword] = useState(false);
+  const [createAccountShowConfirmPassword, setCreateAccountShowConfirmPassword] = useState(false);
+  const [createAccountErrors, setCreateAccountErrors] = useState({});
+  const [createAccountSubmitting, setCreateAccountSubmitting] = useState(false);
 
   // Load suppliers from localStorage on mount, filtering out any that no longer exist in approved suppliers
   useEffect(() => {
@@ -98,7 +117,7 @@ function SupplierInfo() {
       email: supplier.email || '',
       phone: supplier.phone || '',
       address: supplier.address || '',
-      status: 'Active'
+      status: 'Approved'
     });
     setShowDropdown(false);
   };
@@ -119,7 +138,7 @@ function SupplierInfo() {
       email: newSupplier.email,
       phone: newSupplier.phone,
       address: newSupplier.address,
-      status: newSupplier.status,
+      status: 'Approved',
       addedAt: new Date().toISOString(),
       sourceAccountId: selectedSupplier?._id || selectedSupplier?.id || null,
     };
@@ -136,7 +155,7 @@ function SupplierInfo() {
       email: '',
       phone: '',
       address: '',
-      status: 'Active'
+      status: 'Approved'
     });
 
     // Clear success message after 3 seconds
@@ -153,15 +172,6 @@ function SupplierInfo() {
     }
   };
 
-  const handleToggleStatus = (id) => {
-    setSuppliers(prev => prev.map(s => {
-      if (s.id === id) {
-        return { ...s, status: s.status === 'Active' ? 'Inactive' : 'Active' };
-      }
-      return s;
-    }));
-  };
-
   const filteredSuppliers = suppliers.filter(supplier => {
     const matchesSearch = 
       supplier.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -169,9 +179,7 @@ function SupplierInfo() {
       supplier.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.address.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === 'All' || supplier.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   // Filter supplier accounts
@@ -220,6 +228,172 @@ function SupplierInfo() {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+  };
+
+  // ===== Create Supplier Account tab handlers =====
+
+  const handleCreateAccountInputChange = (e) => {
+    const { name, value } = e.target;
+    setCreateAccountFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (createAccountErrors[name]) {
+      setCreateAccountErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleCreateAccountPhoneChange = (e) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 11);
+    setCreateAccountFormData(prev => ({
+      ...prev,
+      phone: value
+    }));
+    if (createAccountErrors.phone) {
+      setCreateAccountErrors(prev => ({ ...prev, phone: '' }));
+    }
+  };
+
+  const validateCreateAccountForm = () => {
+    const newErrors = {};
+
+    if (!createAccountFormData.company_name.trim()) {
+      newErrors.company_name = 'Supplier name is required';
+    }
+    if (!createAccountFormData.contact_person.trim()) {
+      newErrors.contact_person = 'Contact person is required';
+    }
+    if (!createAccountFormData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(createAccountFormData.email)) {
+      newErrors.email = 'Please enter a valid email';
+    }
+    if (!createAccountFormData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else {
+      const digitsOnly = createAccountFormData.phone.replace(/\D/g, '');
+      if (digitsOnly.length !== 11) {
+        newErrors.phone = 'Phone number must be exactly 11 digits';
+      }
+    }
+    if (!createAccountFormData.address.trim()) {
+      newErrors.address = 'Address is required';
+    }
+    if (!createAccountFormData.username.trim()) {
+      newErrors.username = 'Username is required';
+    } else if (createAccountFormData.username.length < 4) {
+      newErrors.username = 'Username must be at least 4 characters';
+    }
+    if (!createAccountFormData.password) {
+      newErrors.password = 'Password is required';
+    } else if (createAccountFormData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    } else if (!/^(?=.*[a-zA-Z])(?=.*[0-9])/.test(createAccountFormData.password)) {
+      newErrors.password = 'Password must contain both letters and numbers';
+    }
+    if (!createAccountFormData.password_confirmation) {
+      newErrors.password_confirmation = 'Please confirm your password';
+    } else if (createAccountFormData.password !== createAccountFormData.password_confirmation) {
+      newErrors.password_confirmation = 'Passwords do not match';
+    }
+
+    setCreateAccountErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleCreateAccountSubmit = async (e) => {
+    e.preventDefault();
+
+    if (validateCreateAccountForm()) {
+      setCreateAccountSubmitting(true);
+      setCreateAccountErrors({});
+
+      try {
+        const response = await axios.post('/api/supplier-accounts', createAccountFormData);
+
+        if (response.data.success) {
+          // Reset form
+          setCreateAccountFormData({
+            company_name: '',
+            contact_person: '',
+            email: '',
+            phone: '',
+            address: '',
+            username: '',
+            password: '',
+            password_confirmation: '',
+          });
+
+          // Refresh Created Supplier Accounts list so the new account shows up immediately
+          fetchSupplierAccounts();
+
+          Swal.fire({
+            title: "Supplier account created successfully! Awaiting admin approval.",
+            icon: "success",
+            confirmButtonColor: "#0062f4",
+            showClass: {
+              popup: `
+                animate__animated
+                animate__fadeInUp
+                animate__faster
+              `
+            },
+            hideClass: {
+              popup: `
+                animate__animated
+                animate__fadeOutDown
+                animate__faster
+              `
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error creating account:', error.response?.data || error);
+
+        if (error.response?.status === 419) {
+          Swal.fire({ title: 'Session expired. Please refresh the page and try again.', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        } else if (error.response?.status === 403) {
+          Swal.fire({ title: 'You do not have permission to create supplier accounts.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        } else if (error.response?.data?.errors) {
+          const serverErrors = {};
+          Object.keys(error.response.data.errors).forEach(key => {
+            serverErrors[key] = error.response.data.errors[key][0];
+          });
+          setCreateAccountErrors(serverErrors);
+        } else if (error.response?.data?.message) {
+          Swal.fire({ title: error.response.data.message, icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        } else {
+          Swal.fire({ title: 'An error occurred while creating the account. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+        }
+      } finally {
+        setCreateAccountSubmitting(false);
+      }
+    }
+  };
+
+  const createAccountInputStyle = {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: 8,
+    border: '1px solid #ddd',
+    fontSize: 14,
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    boxSizing: 'border-box',
+  };
+
+  const createAccountLabelStyle = {
+    display: 'block',
+    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#333',
+  };
+
+  const createAccountErrorStyle = {
+    color: '#dc3545',
+    fontSize: 12,
+    marginTop: 4,
   };
 
   return (
@@ -285,6 +459,23 @@ function SupplierInfo() {
         >
           Created Supplier Accounts
         </button>
+        <button
+          onClick={() => setActiveTab('create')}
+          style={{
+            padding: '12px 24px',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'create' ? '3px solid #004A98' : '3px solid transparent',
+            color: activeTab === 'create' ? '#004A98' : '#666',
+            fontWeight: activeTab === 'create' ? 600 : 400,
+            fontSize: 14,
+            cursor: 'pointer',
+            marginBottom: -2,
+            transition: 'all 0.2s',
+          }}
+        >
+          Create Supplier Account
+        </button>
       </div>
 
       {activeTab === 'suppliers' && (
@@ -326,56 +517,6 @@ function SupplierInfo() {
           >
             <MdAdd size={18} /> Add Supplier
           </button>
-
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 16px',
-                background: '#f5f5f5',
-                border: '1px solid #ddd',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 14,
-              }}
-            >
-              <MdFilterList /> Filter
-            </button>
-            
-            {showFilter && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                background: '#fff',
-                borderRadius: 6,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                padding: 16,
-                width: 180,
-                zIndex: 10,
-                marginTop: 8,
-              }}>
-                <p style={{ margin: '0 0 8px 0', fontWeight: 500 }}>Filter by Status</p>
-                {['All', 'Active', 'Inactive'].map(status => (
-                  <label key={status} style={{ display: 'block', marginBottom: 6, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={statusFilter === status}
-                      onChange={() => {
-                        setStatusFilter(status);
-                        setShowFilter(false);
-                      }}
-                      style={{ marginRight: 8 }}
-                    />
-                    {status}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -414,7 +555,7 @@ function SupplierInfo() {
                   email: '',
                   phone: '',
                   address: '',
-                  status: 'Active'
+                  status: 'Approved'
                 });
               }}
               style={{
@@ -624,7 +765,7 @@ function SupplierInfo() {
                   />
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 24 }}>
                   <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, color: '#333' }}>
                     Address <span style={{ color: 'red' }}>*</span>
                   </label>
@@ -646,26 +787,23 @@ function SupplierInfo() {
                   />
                 </div>
 
+                {/* Status — fixed to Approved, not editable. Being added here
+                    already means the account is an approved supplier. */}
                 <div style={{ marginBottom: 24 }}>
                   <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, color: '#333' }}>
                     Status
                   </label>
-                  <select
-                    name="status"
-                    value={newSupplier.status}
-                    onChange={handleInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #ddd',
-                      fontSize: 14,
-                      background: '#fff',
-                    }}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #ddd',
+                    fontSize: 14,
+                    background: '#f0f7ff',
+                    color: '#004A98',
+                    fontWeight: 500,
+                  }}>
+                    Approved
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -680,7 +818,7 @@ function SupplierInfo() {
                         email: '',
                         phone: '',
                         address: '',
-                        status: 'Active'
+                        status: 'Approved'
                       });
                     }}
                     style={{
@@ -733,14 +871,14 @@ function SupplierInfo() {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#f5f5f5' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Contact Person</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Supplier Name</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Email</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Phone</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Address</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Status</th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Actions</th>
+            <tr style={{ background: 'linear-gradient(90deg, #004A98, #0062f4)', color: '#fff' }}>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Contact Person</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier Name</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Email</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Phone</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Address</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Status</th>
+              <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -753,28 +891,24 @@ function SupplierInfo() {
                 </td>
               </tr>
             ) : (
-              paginatedSuppliers.map((supplier) => (
-                <tr key={supplier.id} style={{ borderBottom: '1px solid #eee' }}>
+              paginatedSuppliers.map((supplier, index) => (
+                <tr key={supplier.id} style={{ borderBottom: '1px solid #eee', background: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                   <td style={{ padding: '12px 16px' }}>{supplier.contactPerson}</td>
                   <td style={{ padding: '12px 16px' }}>{supplier.supplierName}</td>
                   <td style={{ padding: '12px 16px', color: '#004A98' }}>{supplier.email}</td>
                   <td style={{ padding: '12px 16px' }}>{supplier.phone}</td>
                   <td style={{ padding: '12px 16px' }}>{supplier.address}</td>
                   <td style={{ padding: '12px 16px' }}>
-                    <span 
-                      onClick={() => handleToggleStatus(supplier.id)}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: 20,
-                        background: supplier.status === 'Active' ? '#d4edda' : '#f8d7da',
-                        color: supplier.status === 'Active' ? '#155724' : '#721c24',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                      }}
-                      title="Click to toggle status"
-                    >
-                      {supplier.status}
+                    {/* Fixed, non-interactive — being listed here already means Active */}
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      background: '#d4edda',
+                      color: '#155724',
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}>
+                      Active
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -913,12 +1047,12 @@ function SupplierInfo() {
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#f5f5f5' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Company</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Contact</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Username</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Status</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Created</th>
+                  <tr style={{ background: 'linear-gradient(90deg, #004A98, #0062f4)', color: '#fff' }}>
+                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Company</th>
+                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Contact</th>
+                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Username</th>
+                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Status</th>
+                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Created</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -929,8 +1063,8 @@ function SupplierInfo() {
                       </td>
                     </tr>
                   ) : (
-                    filteredAccounts.map((account) => (
-                      <tr key={account._id || account.id} style={{ borderBottom: '1px solid #eee' }}>
+                    filteredAccounts.map((account, index) => (
+                      <tr key={account._id || account.id} style={{ borderBottom: '1px solid #eee', background: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                         <td style={{ padding: '14px 16px' }}>
                           <div>
                             <div style={{ fontWeight: 500, color: '#333', fontSize: 14 }}>{account.company_name}</div>
@@ -968,6 +1102,230 @@ function SupplierInfo() {
           }}>
             Showing {filteredAccounts.length} of {supplierAccounts.length} accounts
           </p>
+        </div>
+      )}
+
+      {/* Create Supplier Account Tab */}
+      {activeTab === 'create' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+            <HiUserAdd style={{ fontSize: 28, color: '#004A98' }} />
+            <h3 style={{ color: '#004A98', margin: 0, fontSize: 20 }}>Create Supplier Account</h3>
+          </div>
+
+          <form onSubmit={handleCreateAccountSubmit}>
+            {/* Supplier Name - full width */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={createAccountLabelStyle}>
+                Supplier Name <span style={{ color: '#dc3545' }}>*</span>
+              </label>
+              <input
+                type="text"
+                name="company_name"
+                value={createAccountFormData.company_name}
+                onChange={handleCreateAccountInputChange}
+                placeholder="Enter supplier name"
+                style={{
+                  ...createAccountInputStyle,
+                  borderColor: createAccountErrors.company_name ? '#dc3545' : '#ddd',
+                }}
+              />
+              {createAccountErrors.company_name && <p style={createAccountErrorStyle}>{createAccountErrors.company_name}</p>}
+            </div>
+
+            {/* Contact Person & Email Row */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Contact Person <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="contact_person"
+                  value={createAccountFormData.contact_person}
+                  onChange={handleCreateAccountInputChange}
+                  placeholder="Enter contact person"
+                  style={{
+                    ...createAccountInputStyle,
+                    borderColor: createAccountErrors.contact_person ? '#dc3545' : '#ddd',
+                  }}
+                />
+                {createAccountErrors.contact_person && <p style={createAccountErrorStyle}>{createAccountErrors.contact_person}</p>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Email Address <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="email"
+                  value={createAccountFormData.email}
+                  onChange={handleCreateAccountInputChange}
+                  placeholder="Enter email address"
+                  autoComplete="email"
+                  style={{
+                    ...createAccountInputStyle,
+                    borderColor: createAccountErrors.email ? '#dc3545' : '#ddd',
+                  }}
+                />
+                {createAccountErrors.email && <p style={createAccountErrorStyle}>{createAccountErrors.email}</p>}
+              </div>
+            </div>
+
+            {/* Phone & Address Row */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Phone Number <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={createAccountFormData.phone}
+                  onChange={handleCreateAccountPhoneChange}
+                  placeholder="09XXXXXXXXX"
+                  maxLength={11}
+                  style={{
+                    ...createAccountInputStyle,
+                    borderColor: createAccountErrors.phone ? '#dc3545' : '#ddd',
+                  }}
+                />
+                {createAccountErrors.phone && <p style={createAccountErrorStyle}>{createAccountErrors.phone}</p>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Address <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="address"
+                  value={createAccountFormData.address}
+                  onChange={handleCreateAccountInputChange}
+                  placeholder="Enter address"
+                  style={{
+                    ...createAccountInputStyle,
+                    borderColor: createAccountErrors.address ? '#dc3545' : '#ddd',
+                  }}
+                />
+                {createAccountErrors.address && <p style={createAccountErrorStyle}>{createAccountErrors.address}</p>}
+              </div>
+            </div>
+
+            {/* Username - full width */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={createAccountLabelStyle}>
+                Username <span style={{ color: '#dc3545' }}>*</span>
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={createAccountFormData.username}
+                onChange={handleCreateAccountInputChange}
+                placeholder="Enter username (min 4 characters)"
+                style={{
+                  ...createAccountInputStyle,
+                  borderColor: createAccountErrors.username ? '#dc3545' : '#ddd',
+                }}
+              />
+              {createAccountErrors.username && <p style={createAccountErrorStyle}>{createAccountErrors.username}</p>}
+            </div>
+
+            {/* Password & Confirm Password Row */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Password <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={createAccountShowPassword ? 'text' : 'password'}
+                    name="password"
+                    value={createAccountFormData.password}
+                    onChange={handleCreateAccountInputChange}
+                    placeholder="Enter password (min 8 characters)"
+                    style={{
+                      ...createAccountInputStyle,
+                      paddingRight: 40,
+                      borderColor: createAccountErrors.password ? '#dc3545' : '#ddd',
+                    }}
+                  />
+                  <span
+                    onClick={() => setCreateAccountShowPassword(!createAccountShowPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      cursor: 'pointer',
+                      color: '#666',
+                    }}
+                  >
+                    {createAccountShowPassword ? <FaEyeSlash /> : <FaEye />}
+                  </span>
+                </div>
+                {createAccountErrors.password && <p style={createAccountErrorStyle}>{createAccountErrors.password}</p>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={createAccountLabelStyle}>
+                  Confirm Password <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={createAccountShowConfirmPassword ? 'text' : 'password'}
+                    name="password_confirmation"
+                    value={createAccountFormData.password_confirmation}
+                    onChange={handleCreateAccountInputChange}
+                    placeholder="Confirm password"
+                    style={{
+                      ...createAccountInputStyle,
+                      paddingRight: 40,
+                      borderColor: createAccountErrors.password_confirmation ? '#dc3545' : '#ddd',
+                    }}
+                  />
+                  <span
+                    onClick={() => setCreateAccountShowConfirmPassword(!createAccountShowConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      cursor: 'pointer',
+                      color: '#666',
+                    }}
+                  >
+                    {createAccountShowConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                  </span>
+                </div>
+                {createAccountErrors.password_confirmation && <p style={createAccountErrorStyle}>{createAccountErrors.password_confirmation}</p>}
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={createAccountSubmitting}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: createAccountSubmitting ? '#6c9fd1' : '#004A98',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: createAccountSubmitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'background 0.2s',
+              }}
+              onMouseOver={(e) => !createAccountSubmitting && (e.target.style.background = '#003C7A')}
+              onMouseOut={(e) => !createAccountSubmitting && (e.target.style.background = '#004A98')}
+            >
+              {createAccountSubmitting ? 'Creating...' : <><span style={{ fontSize: 18 }}>+</span> Create Account</>}
+            </button>
+          </form>
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdRefresh, MdVisibility, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { FiPackage, FiCheckCircle, FiClock, FiAlertTriangle } from "react-icons/fi";
 import { FaHistory } from "react-icons/fa";
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 /**
  * TPU Monitor Delivery - Shows subscriptions with serial issues
@@ -28,7 +29,6 @@ function MonitorDelivery() {
   
   // History modal
   const [historyModal, setHistoryModal] = useState({ show: false, subscription: null });
-  const [selectedIssues, setSelectedIssues] = useState({});
 
   useEffect(() => {
     fetchTPUData();
@@ -39,7 +39,9 @@ function MonitorDelivery() {
       setLoading(true);
       setError(null);
       
-      const response = await axios.get('/api/subscriptions/tpu-delivery-tracking');
+      const response = await axios.get('/api/subscriptions/tpu-delivery-tracking', {
+        params: getDateRangeParams(),
+      });
       
       if (response.data.success) {
         setSubscriptions(response.data.subscriptions || []);
@@ -67,24 +69,6 @@ function MonitorDelivery() {
 
   const handleToggleRow = (subscriptionId) => {
     setExpandedRow(expandedRow === subscriptionId ? null : subscriptionId);
-  };
-
-  const toggleIssueSelection = (subscriptionId, issueNumber) => {
-    const key = `${subscriptionId}-${issueNumber}`;
-    setSelectedIssues((current) => ({ ...current, [key]: current[key] ? undefined : { subscription_id: subscriptionId, issue_number: issueNumber } }));
-  };
-
-  const handleArchive = async (subscription, issue) => {
-    await axios.post(`/api/archive/${subscription.subscription_id}/${issue.issue_number}`);
-    await fetchTPUData();
-  };
-
-  const handleBulkArchive = async () => {
-    const records = Object.values(selectedIssues).filter(Boolean);
-    if (!records.length) return;
-    await axios.post('/api/archive/bulk', { records });
-    setSelectedIssues({});
-    await fetchTPUData();
   };
 
   // Status helpers
@@ -192,7 +176,6 @@ function MonitorDelivery() {
             <button onClick={fetchTPUData} disabled={loading} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
               <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
             </button>
-            {Object.values(selectedIssues).filter(Boolean).length > 0 && <button onClick={handleBulkArchive} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>Archive selected ({Object.values(selectedIssues).filter(Boolean).length})</button>}
           </div>
         </div>
 
@@ -285,7 +268,6 @@ function MonitorDelivery() {
                                     <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Expected Delivery</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Status</th>
                                     <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
-                                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Select</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -303,12 +285,6 @@ function MonitorDelivery() {
                                         </td>
                                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#004A98', fontSize: 13 }}>
                                           ₱{parseFloat(issue.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                          {['delivered', 'for_return'].includes(issue.status) && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                            <button onClick={() => handleArchive(sub, issue)} style={{ padding: '5px 9px', border: '1px solid #6c757d', background: '#fff', color: '#495057', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}>Archive</button>
-                                            <input type="checkbox" checked={!!selectedIssues[`${sub.subscription_id}-${issue.issue_number}`]} onChange={() => toggleIssueSelection(sub.subscription_id, issue.issue_number)} aria-label={`Select Issue ${issue.issue_number} for archive`} />
-                                          </div>}
                                         </td>
                                       </tr>
                                     );

@@ -110,6 +110,55 @@ class ArchiveController extends Controller
         return response()->json(['success' => true, 'message' => 'Record restored successfully.']);
     }
 
+     /**
+     * Archive an entire serial title (subscription) at once, along with every
+     * one of its issues — only when the subscription's own status is exactly
+     * "Delivered" (i.e. every issue has already been delivered, none left
+     * For Return). This intentionally reuses the same per-issue archiving
+     * mechanism as archive()/bulkArchive() rather than introducing a new
+     * "archived" concept on the Subscription model itself: once every issue
+     * under a subscription has archived_at set, hasActiveRecords() already
+     * returns false for it, so it naturally disappears from every active
+     * listing (Subscription Tracking, Monitor Delivery, GSPS, Inspection)
+     * without any schema change.
+     */
+    public function archiveSubscription(Request $request, $subscriptionId)
+    {
+        $subscription = Subscription::find($subscriptionId);
+        if (!$subscription) {
+            return response()->json(['success' => false, 'message' => 'Serial title not found.'], 404);
+        }
+
+        $status = strtolower((string) $subscription->status);
+        if ($status !== 'delivered') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only serial titles with a Delivered status can be archived.',
+            ], 422);
+        }
+
+        $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
+            ->whereNull('archived_at')
+            ->get();
+
+        if ($issues->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This serial title has no issues available to archive.',
+            ], 422);
+        }
+
+        foreach ($issues as $issue) {
+            ArchiveService::archiveIssue($issue);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial title archived successfully.',
+            'archived_count' => $issues->count(),
+        ]);
+    }
+
     public function bulkArchive(Request $request)
     {
         $validated = $request->validate(['records' => ['required', 'array', 'min:1'], 'records.*.subscription_id' => ['required', 'string'], 'records.*.issue_number' => ['required', 'integer', 'min:1']]);

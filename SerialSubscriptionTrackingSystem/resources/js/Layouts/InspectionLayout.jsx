@@ -4,7 +4,6 @@ import { GoHomeFill } from "react-icons/go";
 import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { HiMenu, HiX } from "react-icons/hi";
-import { MdRateReview } from "react-icons/md";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -15,7 +14,6 @@ const navItems = [
   { icon: <FaClipboardList size={18} />, label: "List of Serials", href: "/inspection-serials" },
   { icon: <FaClipboardCheck size={18} />, label: "Serials for Inspection", href: "/inspection-serialsforinspection" },
   { icon: <BsFillChatTextFill size={18} />, label: "Chat", href: "/inspection-chat" },
-  { icon: <MdRateReview size={18} />, label: "Customer Satisfaction", href: "/customer-satisfaction" },
 ];
 
 export default function InspectionLayout({ children, title }) {

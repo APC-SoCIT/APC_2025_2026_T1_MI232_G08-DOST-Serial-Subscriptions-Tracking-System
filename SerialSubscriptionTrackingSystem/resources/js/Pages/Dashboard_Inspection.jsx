@@ -13,8 +13,6 @@ import {
   ResponsiveContainer
 } from "recharts";
 
-/* ================= CONSTANTS ================= */
-
 const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 const MONTHS = [
@@ -28,9 +26,6 @@ const COLORS = {
   inspected: "#22c55e",
   returned: "#ef4444"
 };
-
-
-/* ================= HELPERS ================= */
 
 const monthIndex = (m) => MONTHS.indexOf(m);
 
@@ -74,12 +69,8 @@ const getDaysInMonth = (year, month) => {
   return days;
 };
 
-
-/* ================= COMPONENT ================= */
-
 export default function InspectionDashboard() {
 
-  /* ===== DASHBOARD DATA FROM DATABASE ===== */
   const [dashboardStats, setDashboardStats] = useState({
     received: 0,
     inspected: 0,
@@ -90,88 +81,81 @@ export default function InspectionDashboard() {
   const [chartData, setChartData] = useState({ monthly: [] });
   const [isLoading, setIsLoading] = useState(true);
 
- /* ===== FILTER STATE (same as Supplier) ===== */
+  const [filterMode, setFilterMode] = useState("year");
+  const [year, setYear] = useState(2026);
+  const [startMonth, setStartMonth] = useState("January");
+  const [endMonth, setEndMonth] = useState("December");
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [activeKpi, setActiveKpi] = useState(null);
 
-const [filterMode, setFilterMode] = useState("year");
-const [year, setYear] = useState(2026);
-const [startMonth, setStartMonth] = useState("January");
-const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
-const [activeKpi, setActiveKpi] = useState(null);
+  const [showFilter, setShowFilter] = useState(false);
 
-const [showFilter, setShowFilter] = useState(false);
+  /* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+  const [supplierId, setSupplierId] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierId, setTempSupplierId] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
 
-/* ===== SUPPLIER / SERIAL TITLE FILTER STATE ===== */
-const [supplierName, setSupplierName] = useState("");
-const [serialTitle, setSerialTitle] = useState("");
-const [tempSupplierName, setTempSupplierName] = useState("");
-const [tempSerialTitle, setTempSerialTitle] = useState("");
-const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
-
-useEffect(() => {
-  const fetchFilterOptions = async () => {
-    try {
-      const response = await axios.get('/api/dashboard-filter-options', {
-        params: { supplier_name: tempSupplierName || undefined }
-      });
-      if (response.data.success) {
-        setFilterOptions({
-          suppliers: response.data.suppliers || [],
-          serial_titles: response.data.serial_titles || [],
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_id: tempSupplierId || undefined }
         });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
       }
-    } catch (error) {
-      console.error('Error fetching dashboard filter options:', error);
-    }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierId]);
+
+  const [tempYear, setTempYear] = useState(year);
+  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartDate, setTempStartDate] = useState(startDate);
+  const [tempEndDate, setTempEndDate] = useState(endDate);
+
+  const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
+  const [calendarYear, setCalendarYear] = useState(year);
+
+  const applyFilter = () => {
+    setYear(tempYear);
+    setStartDate(tempStartDate);
+    setEndDate(tempEndDate);
+
+    const s = new Date(tempStartDate);
+    const e = new Date(tempEndDate);
+
+    setStartMonth(MONTHS[s.getMonth()]);
+    setEndMonth(MONTHS[e.getMonth()]);
+
+    setSupplierId(tempSupplierId);
+    setSerialTitle(tempSerialTitle);
+
+    setShowFilter(false);
   };
-  fetchFilterOptions();
-}, [tempSupplierName]);
 
-/* TEMP (Apply system) */
-const [tempYear, setTempYear] = useState(year);
-const [tempStartMonth, setTempStartMonth] = useState(startMonth);
-const [tempStartDate, setTempStartDate] = useState(startDate);
-const [tempEndDate, setTempEndDate] = useState(endDate);
+  const selectWeek = (day) => {
+    const selected = new Date(calendarYear, calendarMonth, day);
+    const dow = selected.getDay();
 
-const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
-const [calendarYear, setCalendarYear] = useState(year);
+    const monday = new Date(selected);
+    monday.setDate(selected.getDate() - dow + (dow === 0 ? -6 : 1));
 
-const applyFilter = () => {
-  setYear(tempYear);
-  setStartDate(tempStartDate);
-  setEndDate(tempEndDate);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
 
-  const s = new Date(tempStartDate);
-  const e = new Date(tempEndDate);
+    setTempStartDate(monday.toISOString().split("T")[0]);
+    setTempEndDate(sunday.toISOString().split("T")[0]);
+  };
 
-  setStartMonth(MONTHS[s.getMonth()]);
-  setEndMonth(MONTHS[e.getMonth()]);
-
-  setSupplierName(tempSupplierName);
-  setSerialTitle(tempSerialTitle);
-
-  setShowFilter(false);
-};
-
-/* ===== WEEK SELECT (REQUIRED) ===== */
-
-const selectWeek = (day) => {
-  const selected = new Date(calendarYear, calendarMonth, day);
-  const dow = selected.getDay();
-
-  // Monday as start of week
-  const monday = new Date(selected);
-  monday.setDate(selected.getDate() - dow + (dow === 0 ? -6 : 1));
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
-  setTempStartDate(monday.toISOString().split("T")[0]);
-  setTempEndDate(sunday.toISOString().split("T")[0]);
-};
-
-  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setIsLoading(true);
@@ -180,7 +164,7 @@ const selectWeek = (day) => {
           params: {
             start_date: startDate,
             end_date: endDate,
-            supplier_name: supplierName || undefined,
+            supplier_id: supplierId || undefined,
             serial_title: serialTitle || undefined,
           }
         });
@@ -197,28 +181,21 @@ const selectWeek = (day) => {
     fetchDashboardStats();
     const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
     return () => window.clearInterval(refreshTimer);
-  }, [startDate, endDate, supplierName, serialTitle]);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
-  /* ===== FACTOR ===== */
+  const factor = useMemo(() => {
+    const y = yearWeight(year);
 
-const factor = useMemo(() => {
-  const y = yearWeight(year);
+    if (filterMode === "year") return y;
 
-  if (filterMode === "year") return y;
+    if (filterMode === "month")
+      return y * ((monthIndex(startMonth)+1)/12);
 
-  if (filterMode === "month")
-    return y * ((monthIndex(startMonth)+1)/12);
+    return y * dateRangeFactor(startDate, endDate);
 
-  return y * dateRangeFactor(startDate, endDate);
-
-}, [filterMode, year, startMonth, startDate, endDate]);
-
-
-
+  }, [filterMode, year, startMonth, startDate, endDate]);
 
   const months = monthRange(startMonth,endMonth);
-
-  /* ================= CHART DATA (FROM DATABASE) ================= */
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
@@ -241,7 +218,6 @@ const factor = useMemo(() => {
     }));
   }, [chartData.monthly, months]);
 
-  // Derive intakeTrend from pipelineData for consistency
   const intakeTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
@@ -249,11 +225,6 @@ const factor = useMemo(() => {
     }));
   }, [pipelineData]);
 
-  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
-
-  // Read directly from dashboardStats (the real API totals) instead of
-  // re-deriving from the monthly chart buckets, which use a different
-  // population/date-scoping and will never match the backend's own numbers.
   const kpis = useMemo(() => {
     return {
       received: dashboardStats.received || 0,
@@ -261,12 +232,9 @@ const factor = useMemo(() => {
       pending: dashboardStats.pending || 0,
       returned: dashboardStats.returned || 0,
       success: dashboardStats.success_rate || 0,
-      totalVolumes: dashboardStats.total_volumes || 0,
-      totalIssuesCount: dashboardStats.total_issues_count || 0,
     };
   }, [dashboardStats]);
 
-  // Derive inspectedVolume from pipelineData to ensure consistency
   const inspectedVolume = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
@@ -280,21 +248,13 @@ const factor = useMemo(() => {
   ];
 
   const kpiCards = useMemo(() => ([
-    {
+     {
       id: "received",
-      title: "Received from GSPS",
+      title: "Serial Issues received from GSPS",
       value: kpis.received,
-      sourceLabel: "List of Serials",
-      sourcePath: "/inspection-serials",
-      chartIds: ["intake", "pipeline"],
-    },
-    {
-      id: "volumesIssues",
-      title: "Volumes / Issues",
-      value: `${kpis.totalVolumes} Vols / ${kpis.totalIssuesCount} Issues`,
       sourceLabel: "Serials for Inspection",
       sourcePath: "/inspection-serialsforinspection",
-      chartIds: ["pipeline"],
+      chartIds: ["intake", "pipeline"],
     },
     {
       id: "inspected",
@@ -336,24 +296,18 @@ const factor = useMemo(() => {
   const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
   const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
-  /* ================= UI ================= */
-
   return (
     <InspectionLayout>
       <Head title="Inspection Dashboard" />
 
       <div className="space-y-6">
 
-        {/* FILTERS - Dropdown Style (matching Admin Logs design) */}
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200">
           
-          {/* Filter Toolbar */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between px-6 py-4 border-b border-gray-100 gap-4">
             
-            {/* Title */}
             <h2 className="text-xl font-bold text-gray-800">Dashboard Overview</h2>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => {
@@ -363,7 +317,7 @@ const factor = useMemo(() => {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
-                    setTempSupplierName(supplierName);
+                    setTempSupplierId(supplierId);
                     setTempSerialTitle(serialTitle);
                   }
                 }}
@@ -371,7 +325,7 @@ const factor = useMemo(() => {
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierName || serialTitle) && (
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -379,11 +333,11 @@ const factor = useMemo(() => {
               <button
                 onClick={async () => {
                   try {
-                                        const response = await axios.get('/api/inspection/export-report', {
+                    const response = await axios.get('/api/inspection/export-report', {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
-                        supplier_name: supplierName || undefined,
+                        supplier_id: supplierId || undefined,
                         serial_title: serialTitle || undefined,
                         dashboard_name: 'Inspection Dashboard',
                       },
@@ -413,12 +367,10 @@ const factor = useMemo(() => {
             </div>
           </div>
 
-          {/* Filter Panel - Expandable */}
           {showFilter && (
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 
-                {/* Year Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
                   <select
@@ -438,7 +390,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Month Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
                   <select
@@ -460,7 +411,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Week Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Week</label>
                   <select
@@ -486,7 +436,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Start Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
                   <input
@@ -497,7 +446,6 @@ const factor = useMemo(() => {
                   />
                 </div>
 
-                {/* End Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
                   <input
@@ -508,25 +456,23 @@ const factor = useMemo(() => {
                   />
                 </div>
 
-                {/* Supplier Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
                   <select
-                    value={tempSupplierName}
+                    value={tempSupplierId}
                     onChange={(e) => {
-                      setTempSupplierName(e.target.value);
+                      setTempSupplierId(e.target.value);
                       setTempSerialTitle('');
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All Suppliers</option>
                     {filterOptions.suppliers.map(s => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s.id} value={s.id}>{s.label}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Serial Title Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
                   {filterOptions.serial_titles.length === 0 ? (
@@ -552,7 +498,6 @@ const factor = useMemo(() => {
                 </div>
               </div>
 
-              {/* Filter Actions */}
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   onClick={() => {
@@ -561,14 +506,14 @@ const factor = useMemo(() => {
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(2026, 'January'));
                     setTempEndDate(lastDayOfMonth(2026, 'December'));
-                    setTempSupplierName('');
+                    setTempSupplierId('');
                     setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(2026, 'January'));
                     setEndDate(lastDayOfMonth(2026, 'December'));
-                    setSupplierName('');
+                    setSupplierId('');
                     setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
@@ -587,7 +532,6 @@ const factor = useMemo(() => {
         </div>
 
 
-        {/* KPIs */}
         {selectedKpi && (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <p className="text-sm text-blue-900">
@@ -617,7 +561,6 @@ const factor = useMemo(() => {
           ))}
         </div>
 
-        {/* CHARTS */}
         <div className="grid md:grid-cols-2 gap-6">
 
           {shouldShowChart("intake") && (
@@ -735,8 +678,6 @@ const factor = useMemo(() => {
     </InspectionLayout>
   );
 }
-
-/* UI */
 
 const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => {
   const isLongValue = typeof value === 'string' && value.length > 10;

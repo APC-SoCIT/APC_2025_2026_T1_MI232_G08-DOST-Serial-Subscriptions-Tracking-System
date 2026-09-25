@@ -9,6 +9,8 @@ use App\Models\SerialIssue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DashboardExportController extends Controller
@@ -46,19 +48,87 @@ class DashboardExportController extends Controller
         return 'P' . number_format((float) ($cost ?? 0), 2);
     }
 
-    private function applyDashboardFilters($query, Request $request)
+      private function applyDashboardFilters($query, Request $request)
     {
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
-        if ($supplierName) {
-            $query->where('supplier_name', $supplierName);
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
         }
         if ($serialTitle) {
             $query->where('serial_title', $serialTitle);
         }
 
         return $query;
+    }
+    /**
+     * Resolve the display ID for a serial item.
+     */
+    private function getSerialDisplayId(array $serial): string
+    {
+        return (string) ($serial['issn'] ?? $serial['serialTitle'] ?? $serial['title'] ?? 'N/A');
+    }
+
+    /**
+     * Normalize a serial's status for the admin report buckets.
+     */
+    private function getAdminSerialStatus(array $serial): string
+    {
+        $status = strtolower((string) ($serial['status'] ?? 'pending'));
+        $inspectionStatus = strtolower((string) ($serial['inspection_status'] ?? ''));
+
+        if ($inspectionStatus === 'inspected') {
+            return 'Inspected';
+        }
+
+        if (in_array($status, ['received', 'delivered'], true)) {
+            return 'Delivered';
+        }
+
+        if (in_array($status, ['pending', 'created'], true)) {
+            return 'Pending';
+        }
+
+        return 'Awarded';
+    }
+
+    /**
+     * Resolve the most useful awarded date for the report.
+     */
+    private function getSerialAwardedDate(array $serial, Subscription $subscription): string
+    {
+        return $this->formatDate(
+            $serial['awarded_date']
+                ?? $serial['award_date']
+                ?? $serial['created_at']
+                ?? $subscription->created_at
+        );
+    }
+
+    /**
+     * Resolve the most useful delivered date for the report.
+     */
+    private function getSerialDeliveredDate(array $serial): string
+    {
+        return $this->formatDate(
+            $serial['receivedDate']
+                ?? $serial['deliveryDate']
+                ?? $serial['dateDelivered']
+                ?? null
+        );
+    }
+
+    /**
+     * Resolve the most useful inspected date for the report.
+     */
+    private function getSerialInspectedDate(array $serial): string
+    {
+        return $this->formatDate(
+            $serial['inspection_date']
+                ?? $serial['inspected_at']
+                ?? null
+        );
     }
 
     /**
@@ -210,26 +280,51 @@ class DashboardExportController extends Controller
             ? Carbon::parse($request->input('end_date'))->endOfDay()
             : Carbon::now()->endOfDay();
         $dashboardName = $request->input('dashboard_name', 'Admin Dashboard');
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
+        $subscriptions = Subscription::whereBetween('created_at', [$startDate, $endDate])->get();
         $totalUsers = User::where('role', '!=', 'admin')->count();
-        $approvedUsers = User::where('role', '!=', 'admin')->whereNotNull('email_verified_at')->count();
+        $approvedUsers = User::where('role', '!=', 'admin')
+            ->whereNotNull('email_verified_at')
+            ->count();
         $pendingAccounts = SupplierAccount::where('status', 'pending')->count();
         $approvalBacklog = SupplierAccount::where('status', 'pending')
             ->where('created_at', '<', Carbon::now()->subDays(7))
             ->count();
-
         $approvedAccounts = SupplierAccount::where('status', 'approved')
-            ->whereNotNull('approved_at')->whereNotNull('created_at')->get();
+            ->whereNotNull('approved_at')
+            ->whereNotNull('created_at')
+            ->get();
         $avgApprovalTime = 0;
         if ($approvedAccounts->isNotEmpty()) {
-            $totalDays = $approvedAccounts->sum(fn ($a) => Carbon::parse($a->created_at)->diffInDays(Carbon::parse($a->approved_at)));
-            $avgApprovalTime = round($totalDays / $approvedAccounts->count(), 1);
+            $totalApprovalDays = 0;
+            foreach ($approvedAccounts as $account) {
+                $totalApprovalDays += Carbon::parse($account->created_at)
+                    ->diffInDays(Carbon::parse($account->approved_at));
+            }
+            $avgApprovalTime = round($totalApprovalDays / $approvedAccounts->count(), 1);
         }
-
         $activeSupplierIds = Subscription::distinct('supplier_id')->pluck('supplier_id')->toArray();
-        $inactiveSuppliers = SupplierAccount::where('status', 'approved')->whereNotIn('_id', $activeSupplierIds)->count();
+        $inactiveApprovedSuppliers = SupplierAccount::where('status', 'approved')
+            ->whereNotIn('_id', $activeSupplierIds)
+            ->count();
+        $serialDetails = [];
+
+        foreach ($subscriptions as $subscription) {
+            $serials = $subscription->serials ?? [];
+            foreach ($serials as $serial) {
+                $serialDetails[] = [
+                    $this->getSerialDisplayId($serial),
+                    $subscription->serial_title ?? 'N/A',
+                    $subscription->supplier_name ?? 'N/A',
+                    $this->getAdminSerialStatus($serial),
+                    $this->getSerialAwardedDate($serial, $subscription),
+                    $this->getSerialDeliveredDate($serial),
+                    $this->getSerialInspectedDate($serial),
+                ];
+            }
+        }
 
         $data = [
             ['Dashboard Report: ' . $dashboardName],
@@ -243,18 +338,18 @@ class DashboardExportController extends Controller
             ['Pending Accounts', $pendingAccounts],
             ['Approval Backlog (>7 days)', $approvalBacklog],
             ['Avg Approval Time (days)', $avgApprovalTime],
-            ['Inactive Approved Suppliers', $inactiveSuppliers],
+            ['Inactive Approved Suppliers', $inactiveApprovedSuppliers],
         ];
 
-        if ($supplierName || $serialTitle) {
+            if ($supplierId || $serialTitle) {
             $subscriptionQuery = $this->applyDashboardFilters(Subscription::query(), $request);
-            $subscriptions = $subscriptionQuery->get()->filter(fn ($s) => $s->hasActiveRecords())->values();
-            $activeCount = $this->countActiveSubscriptions($subscriptions);
+            $filteredSubscriptions = $subscriptionQuery->get()->filter(fn ($s) => $s->hasActiveRecords())->values();
+            $activeCount = $this->countActiveSubscriptions($filteredSubscriptions);
 
             $data[] = [''];
             $data[] = ['=== FILTERED SUBSCRIPTION SUMMARY ==='];
             $data[] = ['Metric', 'Value'];
-            $data[] = ['Total Subscriptions', $subscriptions->count()];
+            $data[] = ['Total Subscriptions', $filteredSubscriptions->count()];
             $data[] = ['Active Subscriptions', $activeCount];
 
             [, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
@@ -268,7 +363,15 @@ class DashboardExportController extends Controller
             }
         }
 
-        return $this->generateCsvResponse($data, 'Admin_Dashboard_Report');
+        $data[] = [''];
+        $data[] = ['=== SERIAL DETAILS ==='];
+        $data[] = ['Serial No./ID', 'Subscription Title', 'Supplier', 'Status', 'Awarded Date', 'Delivered Date', 'Inspected Date'];
+
+        foreach ($serialDetails as $detail) {
+            $data[] = $detail;
+        }
+
+        return $this->generateXlsxResponse($data, 'Admin_Dashboard_Report');
     }
 
     // =====================================================================
@@ -336,7 +439,7 @@ class DashboardExportController extends Controller
             $data[] = $row;
         }
 
-        return $this->generateCsvResponse($data, 'TPU_Dashboard_Report');
+        return $this->generateXlsxResponse($data, 'TPU_Dashboard_Report');
     }
 
     // =====================================================================
@@ -391,7 +494,7 @@ class DashboardExportController extends Controller
             $data[] = $row;
         }
 
-        return $this->generateCsvResponse($data, 'GSPS_Dashboard_Report');
+        return $this->generateXlsxResponse($data, 'GSPS_Dashboard_Report');
     }
 
     // =====================================================================
@@ -530,12 +633,12 @@ class DashboardExportController extends Controller
             $data[] = $row;
         }
 
-        return $this->generateCsvResponse($data, 'Supplier_Dashboard_Report');
+        return $this->generateXlsxResponse($data, 'Supplier_Dashboard_Report');
     }
 
     private function generateCsvResponse(array $data, string $filename): StreamedResponse
     {
-        $filename = $filename . '_' . Carbon::now()->format('Y-m-d_His') . '.csv';
+        $filename = $filename . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
 
         return response()->streamDownload(function () use ($data) {
             $handle = fopen('php://output', 'w');
@@ -545,7 +648,34 @@ class DashboardExportController extends Controller
             }
             fclose($handle);
         }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Generate a standard Excel XLSX response.
+     */
+    private function generateXlsxResponse(array $data, string $filename): StreamedResponse
+    {
+        $filename = $filename . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($data) {
+            $spreadsheet = new Spreadsheet();
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            foreach ($data as $rowIndex => $row) {
+                foreach ($row as $columnIndex => $value) {
+                    $cellCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex + 1) . ($rowIndex + 1);
+                    $worksheet->setCellValue($cellCoordinate, $value);
+                }
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }

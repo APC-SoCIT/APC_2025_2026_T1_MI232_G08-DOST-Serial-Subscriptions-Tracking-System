@@ -5,7 +5,6 @@ import { HiUsers, HiMenu, HiX } from "react-icons/hi";
 import { FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
 import { FaTruckFast } from "react-icons/fa6";
-import { MdRateReview } from "react-icons/md";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -20,7 +19,6 @@ const sidebarItems = [
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'supplier.chat', path: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: 'supplier.listofserial', path: '/dashboard-supplier-listofserial' },
   { icon: <FaTruckFast />, label: 'Delivery', route: 'supplier.delivery', path: '/dashboard-supplier-delivery' },
-  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: 'customer-satisfaction.page', path: '/customer-satisfaction' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {

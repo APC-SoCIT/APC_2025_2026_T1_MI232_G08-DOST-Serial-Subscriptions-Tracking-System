@@ -7,6 +7,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
 import SerialIssuesTable from '@/Components/SerialIssuesTable';
+import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 // Subscription Tracking Component
 function SubscriptionTracking() {
@@ -135,12 +136,15 @@ function SubscriptionTracking() {
     status: 'Active',
     note: '',
     issn: '',
+    issueDateSerial: '',
     frequency: 'Monthly',
     authorPublisher: '',
     category: '',
     customCategory: ''
   });
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [frequencyLocked, setFrequencyLocked] = useState(false);
+  const [supplierLocked, setSupplierLocked] = useState(false);
   
   // Delete Modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -165,7 +169,8 @@ function SubscriptionTracking() {
     volumeNumber: '',
     issuesStart: '',
     dateOfPublication: '',
-    dateOfPublicationType: 'specific'
+    dateOfPublicationType: 'specific',
+    issueDateSerial: ''
   });
   const [serialItems, setSerialItems] = useState([]);
   
@@ -215,13 +220,16 @@ function SubscriptionTracking() {
   const fetchSubscriptions = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/subscriptions');
+      const response = await axios.get('/api/subscriptions', {
+        params: getDateRangeParams(),
+      });
       if (response.data.success) {
         // Transform API data to match the component's expected format
-        const apiSubscriptions = response.data.subscriptions.map(sub => ({
+          const apiSubscriptions = response.data.subscriptions.map(sub => ({
           id: sub._id || sub.id,
           serialTitle: sub.serial_title,
           supplierName: sub.supplier_name,
+          supplierId: sub.supplier_id ? String(sub.supplier_id) : '',
           period: sub.period,
           awardCost: `P${parseFloat(sub.active_award_cost ?? sub.award_cost ?? 0).toLocaleString()}`,
           deliveredCost: `P${parseFloat(sub.active_delivered_cost ?? sub.delivered_cost ?? 0).toLocaleString()}`,
@@ -231,6 +239,7 @@ function SubscriptionTracking() {
           progress: sub.progress || 0,
           note: sub.note,
           issn: sub.issn,
+          issueDateSerial: sub.issue_date_serial,
           frequency: sub.frequency,
           authorPublisher: sub.author_publisher,
           author_publisher: sub.author_publisher,
@@ -460,30 +469,83 @@ function SubscriptionTracking() {
     setShowViewDetailsModal(true);
   };
 
-  const handleCloseViewDetailsModal = () => {
+   const handleCloseViewDetailsModal = () => {
     setShowViewDetailsModal(false);
     setViewDetailsSubscription(null);
   };
 
-  // Edit subscription handlers
-  const handleEditSubscription = (subscription) => {
+  const [archiving, setArchiving] = useState(false);
+
+  const handleArchiveSubscription = async (subscription) => {
+    if (getDisplayStatus(subscription) !== 'Delivered') return;
+
+    const confirmed = window.confirm(
+      `Archive "${subscription.serialTitle}"? This will archive the serial title along with all of its issues.`
+    );
+    if (!confirmed) return;
+
+    setArchiving(true);
+    try {
+      const response = await axios.post(`/api/archive/subscription/${subscription.id}`);
+      if (response.data.success) {
+        setSuccessMessage('Serial title archived successfully!');
+        handleCloseViewDetailsModal();
+        await fetchSubscriptions();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error archiving serial title:', error);
+      Swal.fire({ title: error.response?.data?.message || 'Failed to archive serial title. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+// Edit subscription handlers
+  const handleEditSubscription = async (subscription) => {
     const existingCategory = subscription.category || subscription.serials?.[0]?.category || '';
     const isCustomCategory = existingCategory && !['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education'].includes(existingCategory);
     
-    setEditSubscription(subscription);
+      setEditSubscription(subscription);
     setEditFormData({
       serialTitle: subscription.serialTitle || '',
       supplierName: subscription.supplierName || '',
       period: subscription.period || '',
       awardCost: subscription.awardCost ? subscription.awardCost.replace(/[^0-9.]/g, '') : '',
-      status: subscription.status || 'Active',
+       status: subscription.status || 'Active',
       note: subscription.note || '',
       issn: subscription.issn || subscription.serials?.[0]?.issn || '',
+      issueDateSerial: subscription.issueDateSerial || '',
       frequency: subscription.frequency || subscription.serials?.[0]?.frequency || 'Monthly',
+      supplierId: subscription.supplierId || '',
       authorPublisher: subscription.authorPublisher || subscription.author_publisher || '',
       category: isCustomCategory ? 'Others' : existingCategory,
       customCategory: isCustomCategory ? existingCategory : ''
     });
+
+    // Supplier can only be changed while the subscription is still 'pending'
+    // (i.e. before the supplier has accepted the award). Uses the raw status
+    // straight from the database rather than getDisplayStatus(), since that
+    // helper collapses everything non-Delivered down to "Active" for display
+    // purposes and would hide the pending/accepted distinction we need here.
+    setSupplierLocked((subscription.status || '').toLowerCase() !== 'pending');
+
+    // Check whether any of this subscription's issues have progressed past
+    // Pending — if so, Frequency editing is locked (backend rejects it too;
+    // this just disables the field up front so the person isn't surprised by
+    // a save error after filling out the whole form).
+    setFrequencyLocked(false);
+    try {
+      const response = await axios.get(`/api/subscriptions/${subscription.id}`);
+      if (response.data.success) {
+        const serials = response.data.subscription.serials || [];
+        const anyProgressed = serials.some(s => s.status && s.status !== 'pending');
+        setFrequencyLocked(anyProgressed);
+      }
+    } catch (error) {
+      console.error('Error checking issue progress for frequency lock:', error);
+    }
+
     setShowEditModal(true);
   };
 
@@ -498,6 +560,7 @@ function SubscriptionTracking() {
       status: 'Active',
       note: '',
       issn: '',
+      issueDateSerial: '',
       frequency: 'Monthly',
       authorPublisher: '',
       category: '',
@@ -507,8 +570,15 @@ function SubscriptionTracking() {
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
-    // If category is changed and it's not "Others", clear customCategory
-    if (name === 'category' && value !== 'Others') {
+    if (name === 'supplierId') {
+      const selectedSupplier = supplierOptions.find((s) => s.id === value);
+      setEditFormData({
+        ...editFormData,
+        supplierId: value,
+        supplierName: selectedSupplier ? selectedSupplier.name : '',
+      });
+    } else if (name === 'category' && value !== 'Others') {
+      // If category is changed and it's not "Others", clear customCategory
       setEditFormData({ ...editFormData, [name]: value, customCategory: '' });
     } else {
       setEditFormData({ ...editFormData, [name]: value });
@@ -530,12 +600,14 @@ function SubscriptionTracking() {
     try {
       const response = await axios.put(`/api/subscriptions/${editSubscription.id}`, {
         serial_title: editFormData.serialTitle,
+        supplier_id: editFormData.supplierId,
         supplier_name: editFormData.supplierName,
         period: editFormData.period,
         award_cost: parseFloat(editFormData.awardCost) || 0,
         status: editFormData.status,
         note: editFormData.note,
         issn: editFormData.issn,
+        issue_date_serial: editFormData.issueDateSerial,
         frequency: editFormData.frequency,
         author_publisher: editFormData.authorPublisher,
         category: finalCategory
@@ -632,7 +704,8 @@ function SubscriptionTracking() {
       volumeNumber: '',
       issuesStart: '',
       dateOfPublication: '',
-      dateOfPublicationType: 'specific'
+      dateOfPublicationType: 'specific',
+      issueDateSerial: ''
     });
     setSerialItems([]);
   };
@@ -754,7 +827,8 @@ function SubscriptionTracking() {
       volumeNumber: '',
       issuesStart: '',
       dateOfPublication: '',
-      dateOfPublicationType: 'specific'
+      dateOfPublicationType: 'specific',
+      issueDateSerial: ''
     });
   };
 
@@ -788,7 +862,7 @@ function SubscriptionTracking() {
         const totalCost = items.reduce((sum, item) => sum + (item.amount * parseFloat(item.unitPrice || 0)), 0);
         const firstItem = items[0];
         
-        const subscriptionData = {
+           const subscriptionData = {
           serial_title: items.length === 1 ? firstItem.serialTitle : `${items.length} Serials`,
           supplier_id: firstItem.supplierId || null,
           supplier_name: firstItem.supplierName,
@@ -799,7 +873,9 @@ function SubscriptionTracking() {
           frequency: firstItem.frequency || 'monthly',
           total_issues: parseInt(firstItem.amount) || 12,
           start_date: firstItem.deliveryDate || new Date().toISOString().split('T')[0],
-          serials: items.map(item => ({
+          issue_date_serial: firstItem.issueDateSerial || null,
+          author_publisher: firstItem.authorPublisher || null,
+            serials: items.map(item => ({
             id: item.id,
             serialTitle: item.serialTitle,
             title: item.serialTitle,
@@ -808,6 +884,7 @@ function SubscriptionTracking() {
             status: 'pending',
             deliveryDate: item.deliveryDate || null,
             language: item.language,
+            authorPublisher: item.authorPublisher,
             category: item.category,
             amount: item.amount,
             unitPrice: item.unitPrice,
@@ -816,7 +893,8 @@ function SubscriptionTracking() {
             volumeStart: item.volumeStart,
             issuesStart: item.issuesStart,
             dateOfPublication: item.dateOfPublication,
-            dateOfPublicationType: item.dateOfPublicationType
+            dateOfPublicationType: item.dateOfPublicationType,
+            issueDateSerial: item.issueDateSerial
           })),
           transactions: [
             { 
@@ -1067,17 +1145,17 @@ function SubscriptionTracking() {
           </div>
         </div>
 
-        {/* Subscription Details Table */}
+          {/* Subscription Details Table */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f5f5f5' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Serial Title</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Supplier Name</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Delivery Date</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Award Cost</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Status</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, borderBottom: '2px solid #ddd' }}>Actions</th>
+              <tr style={{ background: 'linear-gradient(90deg, #004A98, #0062f4)', color: '#fff' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier Name</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Delivery Date</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Award Cost</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Status</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1095,8 +1173,8 @@ function SubscriptionTracking() {
                   </td>
                 </tr>
               )}
-              {!loading && paginatedSubscriptions.map((subscription) => (
-                <tr key={subscription.id} style={{ borderBottom: '1px solid #eee' }}>
+              {!loading && paginatedSubscriptions.map((subscription, index) => (
+                <tr key={subscription.id} style={{ borderBottom: '1px solid #eee', background: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                   <td style={{ padding: '16px', fontWeight: 500 }}>{subscription.serialTitle}</td>
                   <td style={{ padding: '16px' }}>{subscription.supplierName}</td>
                   <td style={{ padding: '16px', color: '#666' }}>{formatDisplayDate(subscription.period)}</td>
@@ -1720,6 +1798,24 @@ function SubscriptionTracking() {
                     />
                   </div>
                 )}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issue Date Serial</label>
+                  <input
+                    type="text"
+                    name="issueDateSerial"
+                    value={serialFormData.issueDateSerial}
+                    onChange={handleSerialInputChange}
+                    placeholder="Enter issue date serial details"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
               </div>
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
@@ -1934,6 +2030,12 @@ function SubscriptionTracking() {
                   </p>
                 </div>
                 <div>
+                  <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Issue Date Serial</span>
+                  <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '600', color: '#333' }}>
+                    {viewDetailsSubscription.issueDateSerial || 'N/A'}
+                  </p>
+                </div>
+                <div>
                   <span style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Supplier</span>
                   <p style={{ margin: '6px 0 0 0', fontSize: '15px', fontWeight: '500', color: '#333' }}>
                     {viewDetailsSubscription.supplierName}
@@ -1997,13 +2099,34 @@ function SubscriptionTracking() {
             </div>
 
             {/* Modal Footer */}
+             {/* Modal Footer */}
             <div style={{
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               gap: '12px',
               paddingTop: '20px',
               borderTop: '1px solid #eee'
             }}>
+              <div>
+                <button
+                  onClick={() => handleArchiveSubscription(viewDetailsSubscription)}
+                  disabled={getDisplayStatus(viewDetailsSubscription) !== 'Delivered' || archiving}
+                  title={getDisplayStatus(viewDetailsSubscription) !== 'Delivered' ? 'Only serial titles with a Delivered status can be archived' : 'Archive this serial title and all its issues'}
+                  style={{
+                    padding: '10px 20px',
+                    background: getDisplayStatus(viewDetailsSubscription) !== 'Delivered' ? '#f3f4f6' : '#fff',
+                    color: getDisplayStatus(viewDetailsSubscription) !== 'Delivered' ? '#999' : '#6c757d',
+                    border: '1px solid ' + (getDisplayStatus(viewDetailsSubscription) !== 'Delivered' ? '#ddd' : '#6c757d'),
+                    borderRadius: '6px',
+                    cursor: (getDisplayStatus(viewDetailsSubscription) !== 'Delivered' || archiving) ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  {archiving ? 'Archiving...' : 'Archive'}
+                </button>
+              </div>
               <button
                 onClick={handleCloseViewDetailsModal}
                 style={{
@@ -2023,6 +2146,8 @@ function SubscriptionTracking() {
           </div>
         </div>
       )}
+
+      {/* Edit Subscription Modal */}
 
       {/* Edit Subscription Modal */}
       {showEditModal && editSubscription && (
@@ -2137,11 +2262,13 @@ function SubscriptionTracking() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Supplier Name *</label>
-                  <select
-                    name="supplierName"
-                    value={editFormData.supplierName}
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Issue Date Serial</label>
+                  <input
+                    type="text"
+                    name="issueDateSerial"
+                    value={editFormData.issueDateSerial}
                     onChange={handleEditInputChange}
+                    placeholder="Enter issue date serial details"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -2150,16 +2277,40 @@ function SubscriptionTracking() {
                       fontSize: '14px',
                       background: '#fff'
                     }}
+                  />
+                </div>
+                     <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Supplier Name *</label>
+                  <select
+                    name="supplierId"
+                    value={editFormData.supplierId}
+                    onChange={handleEditInputChange}
+                    disabled={supplierLocked}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '14px',
+                      background: supplierLocked ? '#f3f4f6' : '#fff',
+                      color: supplierLocked ? '#999' : '#000',
+                      cursor: supplierLocked ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     <option value="">Select Supplier</option>
                     {supplierOptions.map(supplier => (
-                      <option key={`${supplier.id}-edit`} value={supplier.name}>{supplier.label}</option>
+                      <option key={`${supplier.id}-edit`} value={supplier.id}>{supplier.label}</option>
                     ))}
-                    {/* Keep current supplier if not in list */}
-                    {editFormData.supplierName && !supplierOptionNames.includes(editFormData.supplierName) && (
-                      <option value={editFormData.supplierName}>{editFormData.supplierName}</option>
+                    {/* Keep current supplier if not in list — value stays the old ID so it's still submitted correctly */}
+                    {editFormData.supplierId && !supplierOptions.some(s => s.id === editFormData.supplierId) && (
+                      <option value={editFormData.supplierId}>{editFormData.supplierName}</option>
                     )}
                   </select>
+                  {supplierLocked && (
+                    <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#dc3545' }}>
+                      Locked — supplier has already accepted this award.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Publisher</label>
@@ -2185,19 +2336,27 @@ function SubscriptionTracking() {
                     name="frequency"
                     value={editFormData.frequency}
                     onChange={handleEditInputChange}
+                    disabled={frequencyLocked}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
                       borderRadius: '6px',
                       border: '1px solid #ddd',
                       fontSize: '14px',
-                      background: '#fff'
+                      background: frequencyLocked ? '#f3f4f6' : '#fff',
+                      color: frequencyLocked ? '#999' : '#000',
+                      cursor: frequencyLocked ? 'not-allowed' : 'pointer'
                     }}
                   >
                     {frequencyOptions.map(freq => (
                       <option key={freq} value={freq}>{freq}</option>
                     ))}
                   </select>
+                  {frequencyLocked && (
+                    <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#dc3545' }}>
+                      Locked — one or more issues have already progressed past Pending.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Category</label>
@@ -2263,26 +2422,7 @@ function SubscriptionTracking() {
                     }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Status</label>
-                  <select
-                    name="status"
-                    value={editFormData.status}
-                    onChange={handleEditInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '6px',
-                      border: '1px solid #ddd',
-                      fontSize: '14px',
-                      background: '#fff'
-                    }}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
+
                 <div style={{ gridColumn: 'span 3' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666' }}>Notes</label>
                   <textarea

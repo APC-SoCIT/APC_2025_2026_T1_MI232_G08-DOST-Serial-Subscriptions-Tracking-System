@@ -54,12 +54,7 @@ class DashboardStatsController extends Controller
 
     /**
      * Serial Titles with active records — replicates SubscriptionController::index()
-     * EXACTLY, including its mutate-then-check sequence: it reassigns
-     * $subscription->serials to only the active serials BEFORE calling
-     * hasActiveRecords(), which changes which branch that method takes for
-     * subscriptions whose original serials were all archived. Doing this any
-     * other way (e.g. calling hasActiveRecords() on the untouched object)
-     * produces a different count.
+     * EXACTLY, including its mutate-then-check sequence.
      */
     private function totalSerialTitles($subscriptions): int
     {
@@ -70,19 +65,16 @@ class DashboardStatsController extends Controller
     }
 
     /**
-     * Supplier names eligible for dashboard filtering: approved AND not disabled.
-     * Joins SupplierAccount to its linked User (by user_id, falling back to
-     * matching email) to check the disabled flag, since status and disabled
-     * are tracked independently.
+     * Eligible supplier ACCOUNTS (not just names) for dashboard filtering:
+     * approved AND not disabled. Two different supplier accounts that share
+     * the same company_name are kept as SEPARATE entries — each is a real,
+     * independent account — with id + label ("Company - Contact") so the
+     * dropdown can distinguish them, matching the Add Serial form's pattern.
      */
-    private function eligibleSupplierNames()
+    private function eligibleSuppliers()
     {
         $approvedAccounts = SupplierAccount::where('status', 'approved')->get();
 
-        // Build a lookup of every user by both id and email, so we can confirm
-        // a real, resolvable link exists rather than assuming "not found" means
-        // "not disabled". A supplier account with no matching user at all is
-        // treated as ineligible, since its disabled status can't be verified.
         $usersById = User::all()->keyBy(fn ($u) => (string) $u->_id);
         $usersByEmail = User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
 
@@ -98,28 +90,37 @@ class DashboardStatsController extends Controller
             }
 
             if (!$matchedUser) {
-                // No resolvable linked user — exclude rather than assume eligible.
                 return false;
             }
 
             return !($matchedUser->is_disabled ?? false);
-        })->pluck('company_name')->filter()->unique()->values();
+        })->map(function ($account) {
+            $id = (string) ($account->_id ?? $account->id);
+            $name = $account->company_name ?? '';
+            $contact = $account->contact_person ?? '';
+            return [
+                'id' => $id,
+                'name' => $name,
+                'contact_person' => $contact,
+                'label' => $contact ? "{$name} - {$contact}" : $name,
+            ];
+        })->filter(fn ($s) => $s['id'] && $s['name'])->values();
     }
 
     /**
      * Filter options for dashboard Supplier/Serial Title dropdowns.
+     * Suppliers are returned as {id, name, contact_person, label} objects —
+     * never collapsed to a bare name string — so two accounts sharing a
+     * company name both appear as distinct, selectable options.
      */
     public function filterOptions(Request $request)
     {
-        $suppliers = $this->eligibleSupplierNames();
+        $suppliers = $this->eligibleSuppliers();
 
         $user = Auth::user();
         $serialTitleQuery = Subscription::query();
 
         if ($user && strtolower($user->role ?? '') === 'supplier') {
-            // Supplier role: scope strictly to their own subscriptions, the same
-            // way SubscriptionController::getSupplierSerials() does, so the
-            // dropdown matches exactly what List of Serials shows them.
             $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
                 ->orWhere('email', $user->email)
                 ->first();
@@ -128,14 +129,14 @@ class DashboardStatsController extends Controller
                 $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
                 $serialTitleQuery->where('supplier_id', $supplierAccountId);
             } else {
-                // No linked account — return nothing rather than leaking other suppliers' titles.
                 $serialTitleQuery->whereRaw(['_id' => null]);
             }
         } else {
-            // Other roles: scope by the selected Supplier filter, if any.
-            $supplierName = $request->input('supplier_name') ?: null;
-            if ($supplierName) {
-                $serialTitleQuery->where('supplier_name', $supplierName);
+            // Scope by the selected Supplier ACCOUNT id — never by name, so
+            // two accounts sharing a company name are never conflated.
+            $supplierId = $request->input('supplier_id') ?: null;
+            if ($supplierId) {
+                $serialTitleQuery->where('supplier_id', $supplierId);
             }
         }
 
@@ -158,43 +159,68 @@ class DashboardStatsController extends Controller
     }
 
     /**
-     * Supplier reliability ranking: for each supplier with at least one
-     * SerialIssue that reached Delivered or For Return, reliability % =
-     * Delivered / (Delivered + For Return) * 100. Suppliers with issues
-     * still pending (no Delivered/For Return yet) are excluded — there's
-     * nothing to rank yet. Sorted highest reliability first, top 6 returned.
+     * Supplier reliability ranking, grouped by supplier ACCOUNT id (not
+     * name) so two accounts with the same company name rank separately.
+     * Label is disambiguated with the contact person only when a name
+     * collision is actually detected among the ranked suppliers.
      */
     private function supplierReliabilityRanking(): array
     {
         [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues();
 
-        $bySupplier = [];
+        $bySupplierId = [];
         foreach ($bySubscription as $entry) {
-            $supplierName = $entry['subscription']->supplier_name;
-            if (!$supplierName) {
+            $supplierId = (string) ($entry['subscription']->supplier_id ?? '');
+            if (!$supplierId) {
                 continue;
             }
-            if (!isset($bySupplier[$supplierName])) {
-                $bySupplier[$supplierName] = ['delivered' => 0, 'for_return' => 0];
+            if (!isset($bySupplierId[$supplierId])) {
+                $bySupplierId[$supplierId] = [
+                    'label' => $entry['subscription']->supplier_name ?? 'Unknown',
+                    'delivered' => 0,
+                    'for_return' => 0,
+                ];
             }
             foreach ($entry['issues'] as $issue) {
                 if ($issue->status === SerialIssue::STATUS_DELIVERED) {
-                    $bySupplier[$supplierName]['delivered']++;
+                    $bySupplierId[$supplierId]['delivered']++;
                 } elseif ($issue->status === SerialIssue::STATUS_FOR_RETURN) {
-                    $bySupplier[$supplierName]['for_return']++;
+                    $bySupplierId[$supplierId]['for_return']++;
                 }
             }
         }
 
+        // Detect name collisions among the suppliers that actually made the
+        // ranking, and disambiguate only those with a contact person suffix.
+        $nameCounts = [];
+        foreach ($bySupplierId as $data) {
+            $nameCounts[$data['label']] = ($nameCounts[$data['label']] ?? 0) + 1;
+        }
+        $hasCollision = collect($nameCounts)->contains(fn ($c) => $c > 1);
+        if ($hasCollision) {
+            $accountsById = SupplierAccount::whereIn('_id', array_keys($bySupplierId))
+                ->get()
+                ->keyBy(fn ($a) => (string) ($a->_id ?? $a->id));
+            foreach ($bySupplierId as $id => &$data) {
+                if (($nameCounts[$data['label']] ?? 0) > 1) {
+                    $contact = $accountsById->get($id)->contact_person ?? null;
+                    if ($contact) {
+                        $data['label'] = "{$data['label']} - {$contact}";
+                    }
+                }
+            }
+            unset($data);
+        }
+
         $ranking = [];
-        foreach ($bySupplier as $name => $counts) {
-            $total = $counts['delivered'] + $counts['for_return'];
+        foreach ($bySupplierId as $data) {
+            $total = $data['delivered'] + $data['for_return'];
             if ($total === 0) {
-                continue; // nothing delivered or returned yet — not rankable
+                continue;
             }
             $ranking[] = [
-                'name' => $name,
-                'value' => round(($counts['delivered'] / $total) * 100),
+                'name' => $data['label'],
+                'value' => round(($data['delivered'] / $total) * 100),
             ];
         }
 
@@ -205,15 +231,14 @@ class DashboardStatsController extends Controller
 
     /**
      * Subscriptions in the qualifying status list, each with its non-archived
-     * SerialIssue records — exactly what getTPUDeliveryTracking() and
-     * getGSPSDeliveryTracking() both operate on. Optionally scoped by
-     * supplier name and/or serial title for dashboard filtering.
+     * SerialIssue records. Scoped by supplier ACCOUNT id (not name) so two
+     * accounts sharing a company name are never conflated together.
      */
-    private function qualifyingSubscriptionIssues(?string $supplierName = null, ?string $serialTitle = null): array
+    private function qualifyingSubscriptionIssues(?string $supplierId = null, ?string $serialTitle = null): array
     {
         $query = Subscription::whereIn('status', self::QUALIFYING_STATUSES);
-        if ($supplierName) {
-            $query->where('supplier_name', $supplierName);
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
         }
         if ($serialTitle) {
             $query->where('serial_title', $serialTitle);
@@ -246,11 +271,6 @@ class DashboardStatsController extends Controller
 
     // =====================================================================
     // TPU
-    // "Total Serials Encoded" = Subscription (Serial Title) count, matching
-    // the Subscription Tracking feature exactly (34).
-    // Every other card = SerialIssue counts, scoped to subscriptions in the
-    // qualifying status list with non-archived issues — the same population
-    // getTPUDeliveryTracking() (Monitor Delivery) uses.
     // =====================================================================
     public function tpuStats(Request $request)
     {
@@ -261,12 +281,12 @@ class DashboardStatsController extends Controller
     {
         $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
         $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
         $subscriptionQuery = Subscription::query();
-        if ($supplierName) {
-            $subscriptionQuery->where('supplier_name', $supplierName);
+        if ($supplierId) {
+            $subscriptionQuery->where('supplier_id', $supplierId);
         }
         if ($serialTitle) {
             $subscriptionQuery->where('serial_title', $serialTitle);
@@ -274,32 +294,22 @@ class DashboardStatsController extends Controller
         $allSubscriptions = $subscriptionQuery->get();
         $totalSerialTitles = $this->totalSerialTitles($allSubscriptions);
 
-        // Volumes/Issues totals (Item 7). Prefer the subscription-level
-        // total_volumes field; fall back to the first serial's volumeNumber
-        // for subscriptions created via the Subscription Tracking "Add Serial"
-        // modal, which stores volume data per-serial instead — same fallback
-        // Monitor Delivery already uses.
-        $totalVolumes = 0;
-        $totalIssuesCount = 0;
-        foreach ($allSubscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
-            $firstSerial = !empty($serials) ? $serials[0] : [];
-            $volumes = $subscription->total_volumes ?? ($firstSerial['volumeNumber'] ?? null);
-            if (!empty($volumes)) {
-                $totalVolumes += (int) $volumes;
-                $totalIssuesCount += (int) ($subscription->total_issues ?? 0);
-            }
-        }
-
-        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
 
         $reachedGspsRows = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
             SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN,
         ], true));
-        // Awaiting Delivery = Pending, Preparing, For Delivery only.
+        // "Serial Issue awaiting Delivery" — Pending and Preparing only.
+        // "For Delivery" status is intentionally excluded here since it now
+        // has its own separate metric (for_delivery_status below) and would
+        // otherwise be double-counted across both cards.
         $awaitingRows = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
-            SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE, SerialIssue::STATUS_FOR_DELIVERY,
+            SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE,
         ], true));
+        // Matches Monitor Delivery's own "For Delivery" status exactly — issues
+        // whose status is literally for_delivery, not the broader "awaiting"
+        // bucket above (which also includes Pending and Preparing).
+        $forDeliveryStatusRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
         $deliveredRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED);
         $returnedRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
         $successBase = $deliveredRows->count() + $returnedRows->count();
@@ -323,11 +333,12 @@ class DashboardStatsController extends Controller
             ];
         });
 
-        return response()->json(['success' => true, 'stats' => [
+          return response()->json(['success' => true, 'stats' => [
             'total_serials' => $totalSerialTitles,
             'awarded' => $allIssues->count(),
             'delivered' => $reachedGspsRows->count(),
             'for_delivery' => $awaitingRows->count(),
+            'for_delivery_status' => $forDeliveryStatusRows->count(),
             'inspected' => $deliveredRows->count(),
             'returned' => $returnedRows->count(),
             'pending' => $awaitingRows->count(),
@@ -337,16 +348,11 @@ class DashboardStatsController extends Controller
             'active_subscriptions' => $allSubscriptions->where('status', 'Active')->count(),
             'total_award_cost' => $allIssues->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
             'total_delivered_cost' => $deliveredRows->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
-            'total_volumes' => $totalVolumes,
-            'total_issues_count' => $totalIssuesCount,
         ], 'charts' => ['monthly' => $monthly, 'pipeline' => $pipeline, 'supplierRanking' => $this->supplierReliabilityRanking()]]);
     }
 
     // =====================================================================
     // GSPS
-    // "Received Serials" / "Total Subscriptions" = subscription (title) count.
-    // "Forwarded to Inspection" = issues with Received, Delivered OR For Return.
-    // "Success Rate" = (Received+Delivered) / (Received+Delivered+For Return).
     // =====================================================================
     public function gspsStats(Request $request)
     {
@@ -357,11 +363,16 @@ class DashboardStatsController extends Controller
     {
         $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
         $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
-        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierName, $serialTitle);
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
         $subsWithIssues = count($bySubscription);
+
+        // Received Serial Issues — counts individual serial issues whose
+        // status is exactly "received" in the Delivery Status flow, not the
+        // broader "reached GSPS" tier below and not a subscription count.
+        $receivedStatusRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED);
 
         $forwardedTier = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
             SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN,
@@ -379,7 +390,7 @@ class DashboardStatsController extends Controller
         ]);
 
         return response()->json(['success' => true, 'stats' => [
-            'received' => $subsWithIssues,
+            'received' => $receivedStatusRows->count(),
             'total_subscriptions' => $subsWithIssues,
             'forwarded' => $forwardedTier->count(),
             'pending' => $pending->count(),
@@ -395,26 +406,22 @@ class DashboardStatsController extends Controller
 
     // =====================================================================
     // Inspection
-    // Mirrors getInspectionTracking() exactly — including that it does NOT
-    // exclude archived issues, unlike the TPU/GSPS queries above. Subscriptions
-    // are further restricted to ones with at least one issue that reached
-    // Received/Delivered/For Return.
     // =====================================================================
     public function inspectionStats(Request $request)
     {
         return $this->liveInspectionStats($request);
     }
 
-        private function liveInspectionStats(Request $request)
+    private function liveInspectionStats(Request $request)
     {
         $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
         $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
-        $supplierName = $request->input('supplier_name') ?: null;
+        $supplierId = $request->input('supplier_id') ?: null;
         $serialTitle = $request->input('serial_title') ?: null;
 
         $subscriptionQuery = Subscription::whereIn('status', self::QUALIFYING_STATUSES);
-        if ($supplierName) {
-            $subscriptionQuery->where('supplier_name', $supplierName);
+        if ($supplierId) {
+            $subscriptionQuery->where('supplier_id', $supplierId);
         }
         if ($serialTitle) {
             $subscriptionQuery->where('serial_title', $serialTitle);
@@ -424,8 +431,6 @@ class DashboardStatsController extends Controller
 
         $qualifyingSubs = 0;
         $inspectionIssues = collect();
-        $totalVolumes = 0;
-        $totalIssuesCount = 0;
         foreach ($subscriptions as $subscription) {
             $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
                 ->whereNull('archived_at')
@@ -434,14 +439,7 @@ class DashboardStatsController extends Controller
             if ($tierIssues->count() === 0) {
                 continue;
             }
-             $qualifyingSubs++;
-            $serials = $subscription->serials ?? [];
-            $firstSerial = !empty($serials) ? $serials[0] : [];
-            $volumes = $subscription->total_volumes ?? ($firstSerial['volumeNumber'] ?? null);
-            if (!empty($volumes)) {
-                $totalVolumes += (int) $volumes;
-                $totalIssuesCount += (int) ($subscription->total_issues ?? 0);
-            }
+            $qualifyingSubs++;
             $inspectionIssues = $inspectionIssues->merge($tierIssues->map(function ($issue) {
                 return [
                     'issue' => $issue,
@@ -464,14 +462,18 @@ class DashboardStatsController extends Controller
         ]);
 
         return response()->json(['success' => true, 'stats' => [
-            'received' => $qualifyingSubs,
+            // "Serial Issues received from GSPS" — the FULL tier of issues
+            // that have ever reached Inspection: received (awaiting
+            // inspection), delivered (passed), and for_return (failed).
+            // This intentionally does NOT shrink as issues get inspected —
+            // an issue that moves from received to delivered/for_return is
+            // still counted here, since it still "was received from GSPS".
+            'received' => $inspectionIssues->count(),
             'total_subscriptions' => $qualifyingSubs,
             'inspected' => $inspected->count(),
             'pending' => $pending->count(),
             'returned' => $returned->count(),
             'success_rate' => $successBase ? round(($inspected->count() / $successBase) * 100) : 0,
-            'total_volumes' => $totalVolumes,
-            'total_issues_count' => $totalIssuesCount,
         ], 'charts' => ['monthly' => $monthly, 'pipeline' => [
             ['name' => 'Received', 'value' => $inspectionIssues->count()],
             ['name' => 'Pending', 'value' => $pending->count()],
@@ -481,7 +483,8 @@ class DashboardStatsController extends Controller
     }
 
     // =====================================================================
-    // Supplier — scoped by the logged-in supplier's account.
+    // Supplier — scoped by the logged-in supplier's account (no supplier
+    // filter needed here — already scoped to self).
     // =====================================================================
     public function supplierStats(Request $request)
     {
@@ -518,9 +521,6 @@ class DashboardStatsController extends Controller
             'preparing' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
             'for_delivery' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
             'delivered' => $issues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
-            // "Completed" = issues whose final inspected outcome was Delivered
-            // (i.e. successfully passed inspection) — the same population the
-            // List of Serials page shows as "Delivered".
             'delivered_only' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
             'returned' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
         ];
@@ -532,9 +532,6 @@ class DashboardStatsController extends Controller
             'preparing' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
             'forDelivery' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
             'delivered' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
-            // "completed" bucket kept separate from "delivered" (which includes
-            // Received too) so the Completed Issues chart line matches the KPI
-            // card and the export exactly — only true STATUS_DELIVERED counts.
             'completed' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
             'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
         ]);
