@@ -40,7 +40,7 @@ class NotificationController extends Controller
             ->first()?->created_at;
         
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
+            $serials = $subscription->activeSerials();
             
             foreach ($serials as $serialIndex => $serial) {
                 $status = $serial['status'] ?? 'pending';

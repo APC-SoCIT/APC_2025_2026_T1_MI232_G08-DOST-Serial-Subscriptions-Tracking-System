@@ -13,24 +13,19 @@ import {
   ResponsiveContainer
 } from "recharts";
 
-/* ================= CONSTANTS ================= */
-
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = [CURRENT_YEAR - 4, CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
+
 const COLORS = {
   received: "#2563eb",
   pending: "#facc15",
   inspected: "#22c55e",
   returned: "#ef4444"
 };
-
-
-/* ================= HELPERS ================= */
 
 const monthIndex = (m) => MONTHS.indexOf(m);
 
@@ -74,12 +69,8 @@ const getDaysInMonth = (year, month) => {
   return days;
 };
 
-
-/* ================= COMPONENT ================= */
-
 export default function InspectionDashboard() {
 
-  /* ===== DASHBOARD DATA FROM DATABASE ===== */
   const [dashboardStats, setDashboardStats] = useState({
     received: 0,
     inspected: 0,
@@ -90,59 +81,81 @@ export default function InspectionDashboard() {
   const [chartData, setChartData] = useState({ monthly: [] });
   const [isLoading, setIsLoading] = useState(true);
 
- /* ===== FILTER STATE (same as Supplier) ===== */
+  const [filterMode, setFilterMode] = useState("year");
+  const [year, setYear] = useState(2026);
+  const [startMonth, setStartMonth] = useState("January");
+  const [endMonth, setEndMonth] = useState("December");
+  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [activeKpi, setActiveKpi] = useState(null);
 
-const [filterMode, setFilterMode] = useState("year");
-const [year, setYear] = useState(CURRENT_YEAR);
-const [startMonth, setStartMonth] = useState("January");
-const [endMonth, setEndMonth] = useState("December");
-const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
-const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
-const [activeKpi, setActiveKpi] = useState(null);
+  const [showFilter, setShowFilter] = useState(false);
 
-const [showFilter, setShowFilter] = useState(false);
+  /* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+  const [supplierId, setSupplierId] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierId, setTempSupplierId] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
 
-/* TEMP (Apply system) */
-const [tempYear, setTempYear] = useState(year);
-const [tempStartMonth, setTempStartMonth] = useState(startMonth);
-const [tempStartDate, setTempStartDate] = useState(startDate);
-const [tempEndDate, setTempEndDate] = useState(endDate);
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_id: tempSupplierId || undefined }
+        });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierId]);
 
-const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
-const [calendarYear, setCalendarYear] = useState(year);
+  const [tempYear, setTempYear] = useState(year);
+  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartDate, setTempStartDate] = useState(startDate);
+  const [tempEndDate, setTempEndDate] = useState(endDate);
 
-const applyFilter = () => {
-  setYear(tempYear);
-  setStartDate(tempStartDate);
-  setEndDate(tempEndDate);
+  const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
+  const [calendarYear, setCalendarYear] = useState(year);
 
-  const s = new Date(tempStartDate);
-  const e = new Date(tempEndDate);
+  const applyFilter = () => {
+    setYear(tempYear);
+    setStartDate(tempStartDate);
+    setEndDate(tempEndDate);
 
-  setStartMonth(MONTHS[s.getMonth()]);
-  setEndMonth(MONTHS[e.getMonth()]);
+    const s = new Date(tempStartDate);
+    const e = new Date(tempEndDate);
 
-  setShowFilter(false);
-};
+    setStartMonth(MONTHS[s.getMonth()]);
+    setEndMonth(MONTHS[e.getMonth()]);
 
-/* ===== WEEK SELECT (REQUIRED) ===== */
+    setSupplierId(tempSupplierId);
+    setSerialTitle(tempSerialTitle);
 
-const selectWeek = (day) => {
-  const selected = new Date(calendarYear, calendarMonth, day);
-  const dow = selected.getDay();
+    setShowFilter(false);
+  };
 
-  // Monday as start of week
-  const monday = new Date(selected);
-  monday.setDate(selected.getDate() - dow + (dow === 0 ? -6 : 1));
+  const selectWeek = (day) => {
+    const selected = new Date(calendarYear, calendarMonth, day);
+    const dow = selected.getDay();
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+    const monday = new Date(selected);
+    monday.setDate(selected.getDate() - dow + (dow === 0 ? -6 : 1));
 
-  setTempStartDate(monday.toISOString().split("T")[0]);
-  setTempEndDate(sunday.toISOString().split("T")[0]);
-};
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
 
-  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
+    setTempStartDate(monday.toISOString().split("T")[0]);
+    setTempEndDate(sunday.toISOString().split("T")[0]);
+  };
+
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setIsLoading(true);
@@ -151,6 +164,8 @@ const selectWeek = (day) => {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_id: supplierId || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -164,39 +179,35 @@ const selectWeek = (day) => {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
-  /* ===== FACTOR ===== */
+  const factor = useMemo(() => {
+    const y = yearWeight(year);
 
-const factor = useMemo(() => {
-  const y = yearWeight(year);
+    if (filterMode === "year") return y;
 
-  if (filterMode === "year") return y;
+    if (filterMode === "month")
+      return y * ((monthIndex(startMonth)+1)/12);
 
-  if (filterMode === "month")
-    return y * ((monthIndex(startMonth)+1)/12);
+    return y * dateRangeFactor(startDate, endDate);
 
-  return y * dateRangeFactor(startDate, endDate);
-
-}, [filterMode, year, startMonth, startDate, endDate]);
-
-
-
+  }, [filterMode, year, startMonth, startDate, endDate]);
 
   const months = monthRange(startMonth,endMonth);
 
-  /* ================= CHART DATA (FROM DATABASE) ================= */
-
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
-      return months.map(month => ({
-        month,
-        received: monthlyByMonth.get(month)?.received || 0,
-        pending: monthlyByMonth.get(month)?.pending || 0,
-        inspected: monthlyByMonth.get(month)?.inspected || 0,
-        returned: monthlyByMonth.get(month)?.returned || 0,
-      }));
+      return chartData.monthly
+        .filter(item => months.includes(item.month))
+        .map(item => ({
+          month: item.month,
+          received: item.received || 0,
+          pending: item.pending || 0,
+          inspected: item.inspected || 0,
+          returned: item.returned || 0,
+        }));
     }
     return months.map((m) => ({
       month: m,
@@ -207,7 +218,6 @@ const factor = useMemo(() => {
     }));
   }, [chartData.monthly, months]);
 
-  // Derive intakeTrend from pipelineData for consistency
   const intakeTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
@@ -215,31 +225,16 @@ const factor = useMemo(() => {
     }));
   }, [pipelineData]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
-
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      received: acc.received + (month.received || 0),
-      inspected: acc.inspected + (month.inspected || 0),
-      pending: acc.pending + (month.pending || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { received: 0, inspected: 0, pending: 0, returned: 0 });
-    
-    const successRate = totals.received > 0 
-      ? Math.round((totals.inspected / totals.received) * 100) 
-      : 0;
-    
     return {
-      received: totals.received,
-      inspected: totals.inspected,
-      pending: totals.pending,
-      returned: totals.returned,
-      success: successRate,
+      received: dashboardStats.received || 0,
+      inspected: dashboardStats.inspected || 0,
+      pending: dashboardStats.pending || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
-  // Derive inspectedVolume from pipelineData to ensure consistency
   const inspectedVolume = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
@@ -253,12 +248,12 @@ const factor = useMemo(() => {
   ];
 
   const kpiCards = useMemo(() => ([
-    {
+     {
       id: "received",
-      title: "Received from GSPS",
+      title: "Serial Issues received from GSPS",
       value: kpis.received,
-      sourceLabel: "List of Serials",
-      sourcePath: "/inspection-serials",
+      sourceLabel: "Serials for Inspection",
+      sourcePath: "/inspection-serialsforinspection",
       chartIds: ["intake", "pipeline"],
     },
     {
@@ -301,24 +296,18 @@ const factor = useMemo(() => {
   const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
   const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
-  /* ================= UI ================= */
-
   return (
     <InspectionLayout>
       <Head title="Inspection Dashboard" />
 
       <div className="space-y-6">
 
-        {/* FILTERS - Dropdown Style (matching Admin Logs design) */}
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200">
           
-          {/* Filter Toolbar */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between px-6 py-4 border-b border-gray-100 gap-4">
             
-            {/* Title */}
             <h2 className="text-xl font-bold text-gray-800">Dashboard Overview</h2>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => {
@@ -328,13 +317,15 @@ const factor = useMemo(() => {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierId(supplierId);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
+                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -346,6 +337,8 @@ const factor = useMemo(() => {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_id: supplierId || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Inspection Dashboard',
                       },
                       responseType: 'blob',
@@ -356,7 +349,7 @@ const factor = useMemo(() => {
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `Inspection_Dashboard_Report_${startDate}_to_${endDate}.xlsx`;
+                    link.download = `Inspection_Dashboard_Report_${startDate}_to_${endDate}.csv`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -374,12 +367,10 @@ const factor = useMemo(() => {
             </div>
           </div>
 
-          {/* Filter Panel - Expandable */}
           {showFilter && (
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 
-                {/* Year Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
                   <select
@@ -399,7 +390,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Month Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
                   <select
@@ -421,7 +411,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Week Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Week</label>
                   <select
@@ -447,7 +436,6 @@ const factor = useMemo(() => {
                   </select>
                 </div>
 
-                {/* Start Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
                   <input
@@ -458,7 +446,6 @@ const factor = useMemo(() => {
                   />
                 </div>
 
-                {/* End Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
                   <input
@@ -468,22 +455,66 @@ const factor = useMemo(() => {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierId}
+                    onChange={(e) => {
+                      setTempSupplierId(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
-              {/* Filter Actions */}
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   onClick={() => {
                     setFilterMode('year');
-                    setTempYear(CURRENT_YEAR);
+                    setTempYear(2026);
                     setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
-                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
-                    setYear(CURRENT_YEAR);
+                    setTempStartDate(firstDayOfMonth(2026, 'January'));
+                    setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempSupplierId('');
+                    setTempSerialTitle('');
+                    setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
-                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setStartDate(firstDayOfMonth(2026, 'January'));
+                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setSupplierId('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -501,7 +532,6 @@ const factor = useMemo(() => {
         </div>
 
 
-        {/* KPIs */}
         {selectedKpi && (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <p className="text-sm text-blue-900">
@@ -526,19 +556,18 @@ const factor = useMemo(() => {
               sourceLabel={card.sourceLabel}
               isActive={card.id === activeKpi}
               onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
-              onSeeMore={() => router.visit(`${card.sourcePath}?month=${encodeURIComponent(startMonth === endMonth ? String(monthIndex(startMonth) + 1).padStart(2, "0") : '')}&year=${year}&start_date=${startDate}&end_date=${endDate}`)}
+              onSeeMore={() => router.visit(card.sourcePath)}
             />
           ))}
         </div>
 
-        {/* CHARTS */}
         <div className="grid md:grid-cols-2 gap-6">
 
           {shouldShowChart("intake") && (
           <Chart title="Inspection Intake Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={intakeTrend}>
-                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
+                <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="received" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
@@ -551,7 +580,7 @@ const factor = useMemo(() => {
       <Chart title="Inspection Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
-      <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
+      <XAxis dataKey="month"/>
       <YAxis/>
       <Tooltip/>
       
@@ -614,7 +643,7 @@ const factor = useMemo(() => {
           <Chart title="Monthly Inspected Volume">
             <ResponsiveContainer height={300}>
               <BarChart data={inspectedVolume}>
-                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
+                <XAxis dataKey="month"/>
                 <YAxis/>
                 <Tooltip/>
                 <Bar dataKey="inspected" fill="#2563eb"/>
@@ -650,39 +679,40 @@ const factor = useMemo(() => {
   );
 }
 
-/* UI */
-
-const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onSelect}
-    onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onSelect();
-      }
-    }}
-    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
-  >
-    <p className="text-sm text-gray-600">{title}</p>
-    <p className="text-3xl font-bold">{value}</p>
-    <div className="mt-4 flex justify-end">
-      <button
-        type="button"
-        aria-label={`See more in ${sourceLabel}`}
-        title={`Open ${sourceLabel}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSeeMore();
-        }}
-        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-      >
-        See More
-      </button>
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => {
+  const isLongValue = typeof value === 'string' && value.length > 10;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+    >
+      <p className="text-sm text-gray-600">{title}</p>
+      <p className={isLongValue ? "text-xl font-bold leading-tight" : "text-3xl font-bold"}>{value}</p>
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          aria-label={`See more in ${sourceLabel}`}
+          title={`Open ${sourceLabel}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSeeMore();
+          }}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+        >
+          See More
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Chart = ({title,children}) => (
   <div className="bg-white p-6 rounded-xl shadow">

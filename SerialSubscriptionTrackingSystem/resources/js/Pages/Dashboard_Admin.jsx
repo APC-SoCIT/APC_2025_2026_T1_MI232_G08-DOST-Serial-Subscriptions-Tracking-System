@@ -53,7 +53,6 @@ const getDaysInMonth = (year, month) => {
   const firstDay = new Date(year, month, 1).getDay();
   const totalDays = new Date(year, month + 1, 0).getDate();
 
-  // Empty cells before month starts
   for (let i = 0; i < firstDay; i++) {
     days.push(null);
   }
@@ -88,7 +87,6 @@ const yearWeight = (year) => {
   }
 };
 
-// 🔑 NEW helper — reacts to Start Date + End Date
 const dateRangeFactor = (startDate, endDate) => {
   if (!startDate || !endDate) return 1;
 
@@ -99,7 +97,6 @@ const dateRangeFactor = (startDate, endDate) => {
 
   const diffDays = (end - start) / (1000 * 60 * 60 * 24);
 
-// Minimum factor so charts don't collapse
 return Math.max(diffDays / 365, 0.25);
 
 };
@@ -109,7 +106,6 @@ return Math.max(diffDays / 365, 0.25);
 /* ================= COMPONENT ================= */
 
 export default function Dashboard() {
-  // Dashboard statistics from database
   const [dashboardStats, setDashboardStats] = useState({
     users: { total: 0, approved: 0, pending: 0, disabled: 0 },
     suppliers: { total: 0, pending: 0, approved: 0, rejected: 0, avg_approval_time: 0, approval_backlog: 0, inactive_suppliers: 0 },
@@ -122,7 +118,6 @@ export default function Dashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // FILTER MODE: year | month | week | custom
 const [filterMode, setFilterMode] = useState("year");
 
 const [year, setYear] = useState(CURRENT_YEAR);
@@ -139,11 +134,39 @@ const [tempEndMonth, setTempEndMonth] = useState(endMonth);
 const [tempStartDate, setTempStartDate] = useState(startDate);
 const [tempEndDate, setTempEndDate] = useState(endDate);
 
-// calendar month for Week mode
+/* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+const [supplierId, setSupplierId] = useState("");
+const [serialTitle, setSerialTitle] = useState("");
+const [tempSupplierId, setTempSupplierId] = useState("");
+const [tempSerialTitle, setTempSerialTitle] = useState("");
+const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+// Tracks whether Apply Filters has ever been clicked — distinguishes the
+// true default state (subscription cards hidden) from "All Suppliers"
+// explicitly chosen and applied (cards shown, with system-wide totals).
+const [filtersApplied, setFiltersApplied] = useState(false);
+
+useEffect(() => {
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await axios.get('/api/dashboard-filter-options', {
+        params: { supplier_id: tempSupplierId || undefined }
+      });
+      if (response.data.success) {
+        setFilterOptions({
+          suppliers: response.data.suppliers || [],
+          serial_titles: response.data.serial_titles || [],
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard filter options:', error);
+    }
+  };
+  fetchFilterOptions();
+}, [tempSupplierId]);
+
 const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
 const [calendarYear, setCalendarYear] = useState(year);
 
-  // Fetch dashboard stats from database
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setIsLoading(true);
@@ -152,6 +175,8 @@ const [calendarYear, setCalendarYear] = useState(year);
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_id: supplierId || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -165,13 +190,12 @@ const [calendarYear, setCalendarYear] = useState(year);
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
 
 const selectWeek = (day) => {
   const start = new Date(calendarYear, calendarMonth, day);
 
-  // Start of week (Monday)
   const dayOfWeek = start.getDay();
   const diff = start.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
 
@@ -186,11 +210,9 @@ const selectWeek = (day) => {
 const applyFilter = () => {
   setYear(tempYear);
 
-  // Always update dates
   setStartDate(tempStartDate);
   setEndDate(tempEndDate);
 
-  // 🔥 IMPORTANT: derive months from dates (for Custom & Week)
   const start = new Date(tempStartDate);
   const end = new Date(tempEndDate);
 
@@ -200,11 +222,12 @@ const applyFilter = () => {
   setStartMonth(startMonthName);
   setEndMonth(endMonthName);
 
+   setSupplierId(tempSupplierId);
+  setSerialTitle(tempSerialTitle);
+  setFiltersApplied(true);
+
   setShowFilterModal(false);
 };
-
-
-  /* AUTO-SYNC DATES WHEN MONTH/YEAR CHANGES */
 
   useEffect(() => {
   if (filterMode === "week") {
@@ -225,7 +248,6 @@ const applyFilter = () => {
   const months = monthRange(startMonth, endMonth);
 const yFactor = yearWeight(year);
 
-// ✅ THIS is what makes KPIs react to Start Date / End Date
 const dFactor = dateRangeFactor(startDate, endDate);
 const selectedMonthIndex =
   MONTHS.includes(startMonth) ? monthIndex(startMonth) : 0;
@@ -233,22 +255,17 @@ const selectedMonthIndex =
 
   /* ================= KPI DATA (FROM DATABASE) ================= */
 
-// Use real data from database
 const approvalBacklog = dashboardStats.suppliers.approval_backlog || 0;
 const avgApprovalTime = dashboardStats.suppliers.avg_approval_time || 0;
-const inactiveSuppliers = dashboardStats.suppliers.inactive_suppliers || 0;
-
+const disabledSupplierAccounts = dashboardStats.suppliers.disabled_supplier_accounts || 0;
 
   /* ================= CHART DATA (FROM DATABASE) ================= */
 
-// Use monthly chart data from database, filtered by selected month range
 const approvalTrend = useMemo(() => {
   if (!chartData.monthly || chartData.monthly.length === 0) {
-    // Return placeholder data if no data from database
     return months.map(m => ({ month: m, approved: 0 }));
   }
   
-  // Filter chart data by selected months
   const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
   return months.map(month => ({
     month,
@@ -257,7 +274,6 @@ const approvalTrend = useMemo(() => {
 }, [chartData.monthly, months]);
 
 
-// Approval vs Pending chart data from database
 const approvalVsPending = useMemo(() => {
   if (!chartData.monthly || chartData.monthly.length === 0) {
     return months.map(m => ({ month: m, approved: 0, pending: 0 }));
@@ -272,7 +288,6 @@ const approvalVsPending = useMemo(() => {
 }, [chartData.monthly, months]);
 
 
-// Supplier creation chart data from database
 const supplierCreation = useMemo(() => {
   if (!chartData.monthly || chartData.monthly.length === 0) {
     return months.map(m => ({ month: m, created: 0 }));
@@ -286,12 +301,10 @@ const supplierCreation = useMemo(() => {
 }, [chartData.monthly, months]);
 
 
-// Pie chart data from database - supplier account status distribution
 const pieData = useMemo(() => {
   if (chartData.supplier_status_pie && chartData.supplier_status_pie.length > 0) {
     return chartData.supplier_status_pie;
   }
-  // Fallback to live stats
   return [
     { name: "Approved", value: dashboardStats.suppliers.approved || 0 },
     { name: "Pending", value: dashboardStats.suppliers.pending || 0 },
@@ -299,7 +312,29 @@ const pieData = useMemo(() => {
   ];
 }, [chartData.supplier_status_pie, dashboardStats.suppliers]);
 
-const kpiCards = useMemo(() => ([
+const kpiCards = useMemo(() => {
+  const cards = [];
+
+  if (filtersApplied) {
+    cards.push({
+      id: "totalSubscriptions",
+      title: "Total Subscriptions",
+      value: isLoading ? '...' : dashboardStats.subscriptions.total,
+      sourceLabel: "Subscription",
+      sourcePath: "/dashboard-tpu-subscriptiontracking",
+      chartIds: [],
+    });
+    cards.push({
+      id: "activeSubscriptions",
+      title: "Active Subscriptions",
+      value: isLoading ? '...' : dashboardStats.subscriptions.active,
+      sourceLabel: "Subscription",
+      sourcePath: "/dashboard-tpu-subscriptiontracking",
+      chartIds: [],
+    });
+  }
+
+  cards.push(
   {
     id: "totalUsers",
     title: "Total Users",
@@ -308,12 +343,12 @@ const kpiCards = useMemo(() => ([
     sourcePath: "/list-of-user",
     chartIds: ["approvalTrend", "approvalVsPending", "statusDistribution"],
   },
-  {
+   {
     id: "approvedUsers",
     title: "Approved Users",
     value: isLoading ? '...' : dashboardStats.users.approved,
-    sourceLabel: "Account Approval",
-    sourcePath: "/account-approval",
+    sourceLabel: "List of User",
+    sourcePath: "/list-of-user",
     chartIds: ["approvalTrend", "approvalVsPending", "statusDistribution"],
   },
   {
@@ -340,15 +375,18 @@ const kpiCards = useMemo(() => ([
     sourcePath: "/account-approval",
     chartIds: ["approvalTrend"],
   },
-  {
-    id: "inactiveSuppliers",
-    title: "Inactive Approved Suppliers",
-    value: isLoading ? '...' : inactiveSuppliers,
+   {
+    id: "disabledSupplierAccounts",
+    title: "Disabled Supplier Accounts",
+    value: isLoading ? '...' : disabledSupplierAccounts,
     sourceLabel: "List of Supplier",
     sourcePath: "/list-of-supplier",
     chartIds: ["supplierCreation", "statusDistribution"],
-  },
-]), [isLoading, dashboardStats, approvalBacklog, avgApprovalTime, inactiveSuppliers]);
+  }
+  );
+
+  return cards;
+}, [isLoading, dashboardStats, approvalBacklog, avgApprovalTime, disabledSupplierAccounts, supplierId, serialTitle, filtersApplied]);
 
 const selectedKpi = activeKpi
   ? kpiCards.find((card) => card.id === activeKpi) || null
@@ -376,13 +414,14 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               <button
                 onClick={() => {
                   setShowFilterModal(!showFilterModal);
-                  // Sync temp values when opening
                   if (!showFilterModal) {
                     setTempYear(year);
                     setTempStartMonth(startMonth);
                     setTempEndMonth(endMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierId(supplierId);
+                    setTempSerialTitle(serialTitle);
                     if (filterMode === "week") {
                       setCalendarYear(year);
                       setCalendarMonth(monthIndex(startMonth));
@@ -393,7 +432,7 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               >
                 <FaFilter size={14} />
                 Filters
-                {(filterMode !== 'year' || year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
+                {(filterMode !== 'year' || year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -401,10 +440,12 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
               <button
                 onClick={async () => {
                   try {
-                    const response = await axios.get('/api/admin/export-report', {
+                      const response = await axios.get('/api/admin/export-report', {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_id: supplierId || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Admin Dashboard',
                       },
                       responseType: 'blob',
@@ -487,7 +528,6 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                     onChange={(e) => {
                       const weekNum = parseInt(e.target.value);
                       if (weekNum) {
-                        // Calculate week start date
                         const janFirst = new Date(tempYear, 0, 1);
                         const daysOffset = (weekNum - 1) * 7;
                         const weekStart = new Date(janFirst);
@@ -529,24 +569,74 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Supplier Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierId}
+                    onChange={(e) => {
+                      setTempSupplierId(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Serial Title Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
+
+              <p className="text-xs text-gray-400 mt-2">
+                Supplier and Serial Title filters apply only to subscription-related metrics.
+              </p>
 
               {/* Filter Actions */}
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   onClick={() => {
-                    // Clear/Reset filters to defaults
                     setFilterMode('year');
                     setTempYear(CURRENT_YEAR);
                     setTempStartMonth('January');
                     setTempEndMonth('December');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSupplierId('');
+                    setTempSerialTitle('');
                     setYear(CURRENT_YEAR);
                     setStartMonth('January');
-                    setEndMonth('December');
                     setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSupplierId('');
+                    setSerialTitle('');
+                    setFiltersApplied(false);
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >

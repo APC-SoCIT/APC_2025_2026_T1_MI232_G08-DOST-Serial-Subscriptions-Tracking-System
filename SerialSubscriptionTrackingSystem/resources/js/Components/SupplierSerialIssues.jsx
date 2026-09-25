@@ -175,8 +175,8 @@ const SupplierSerialIssues = ({ supplierName }) => {
     const filteredIssues = sub.issues.filter(issue => {
       if (filter === 'all') return true;
       if (filter === 'pending') return issue.status === 'pending';
-      if (filter === 'active') return ['prepare', 'for_delivery'].includes(issue.status);
-      if (filter === 'completed') return ['received', 'delivered'].includes(issue.status);
+      if (filter === 'active') return ['prepare', 'for_delivery', 'received'].includes(issue.status);
+      if (filter === 'completed') return issue.status === 'delivered';
       if (filter === 'for_return') return issue.status === 'for_return';
       return issue.status === filter;
     });
@@ -187,8 +187,8 @@ const SupplierSerialIssues = ({ supplierName }) => {
 
   // Stats
   const pendingCount = issues.filter(i => i.status === 'pending').length;
-  const activeCount = issues.filter(i => ['prepare', 'for_delivery'].includes(i.status)).length;
-  const completedCount = issues.filter(i => ['received', 'delivered'].includes(i.status)).length;
+  const activeCount = issues.filter(i => ['prepare', 'for_delivery', 'received'].includes(i.status)).length;
+  const completedCount = issues.filter(i => i.status === 'delivered').length;
   const forReturnCount = issues.filter(i => i.status === 'for_return').length;
 
   if (loading) {
@@ -497,6 +497,10 @@ const SupplierSerialIssues = ({ supplierName }) => {
                     : 'N/A'}
                 </span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ color: '#666', fontSize: '14px' }}>Cost:</span>
+                <span style={{ fontWeight: 600, color: '#004A98' }}>{formatCurrency(inspectionModal.issue.cost)}</span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666', fontSize: '14px' }}>Condition:</span>
                 <span style={{ fontWeight: 600, color: '#721c24' }}>{inspectionModal.issue.condition || 'For Return'}</span>
@@ -586,8 +590,8 @@ const SupplierSerialIssues = ({ supplierName }) => {
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      display: 'inline-block',
-                      padding: '10px 16px',
+                      display: 'inline-block',S
+                      : '10px 16px',
                       background: '#004A98',
                       color: '#fff',
                       borderRadius: '6px',

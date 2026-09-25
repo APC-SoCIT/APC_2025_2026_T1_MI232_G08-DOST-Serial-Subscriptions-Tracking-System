@@ -5,6 +5,15 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
 
+const ROLE_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'admin', label: 'Admin' },
+  { key: 'tpu', label: 'TPU' },
+  { key: 'gsps', label: 'GSPS' },
+  { key: 'inspection', label: 'Inspection' },
+  { key: 'supplier', label: 'Suppliers' },
+];
+
 export default function UserList() {
   // Get current logged-in user
   const { auth } = usePage().props;
@@ -78,6 +87,16 @@ export default function UserList() {
     return colors[role?.toLowerCase()] || 'bg-gray-100 text-gray-600';
   };
 
+  const roleCounts = React.useMemo(() => {
+    const counts = { all: allUsers.length };
+    ROLE_OPTIONS.forEach(opt => {
+      if (opt.key !== 'all') {
+        counts[opt.key] = allUsers.filter(u => u.role?.toLowerCase() === opt.key).length;
+      }
+    });
+    return counts;
+  }, [allUsers]);
+
   const filteredUsers = allUsers.filter((user) => {
     const matchesSearch = [user.name, user.email, user.role]
       .join(' ')
@@ -109,9 +128,9 @@ export default function UserList() {
         </p>
 
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200 w-full">
-  
+
           {/* Filters and Count */}
-          <div className="flex flex-col gap-4 px-8 py-4 border-b border-gray-100 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 px-8 py-6 border-b border-gray-100 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 type="text"
@@ -120,18 +139,23 @@ export default function UserList() {
                 placeholder="Search name, email, or role"
                 className="border rounded-lg px-4 py-2 text-sm w-full sm:w-80"
               />
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="border rounded-lg px-4 py-2 text-sm bg-white"
-              >
-                <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="tpu">TPU</option>
-                <option value="gsps">GSPS</option>
-                <option value="supplier">Supplier</option>
-                <option value="inspection">Inspection</option>
-              </select>
+
+              <div className="flex items-center gap-2">
+                <label htmlFor="roleFilter" className="text-sm text-gray-600 whitespace-nowrap">Role:</label>
+                <select
+                  id="roleFilter"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="border rounded-lg px-4 py-2 text-sm bg-white w-full sm:w-auto"
+                >
+                  {ROLE_OPTIONS.map(opt => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label} ({roleCounts[opt.key] ?? 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
                 onClick={() => {
                   setSearchTerm('');

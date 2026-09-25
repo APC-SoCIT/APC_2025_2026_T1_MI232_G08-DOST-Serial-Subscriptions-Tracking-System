@@ -28,6 +28,7 @@ const COLORS = {
   forDelivery: "#22c55e",
   delivered: "#16a34a",
   returned: "#ef4444",
+  completed: "#0d9488",
 };
 
 /* ================= HELPERS ================= */
@@ -84,6 +85,7 @@ export default function SupplierDashboard() {
     preparing: 0,
     for_delivery: 0,
     delivered: 0,
+    completed: 0,
     returned: 0,
     success_rate: 0,
   });
@@ -101,6 +103,28 @@ export default function SupplierDashboard() {
   const [activeKpi, setActiveKpi] = useState(null);
 
   const [showFilter, setShowFilter] = useState(false);
+
+  /* ===== SERIAL TITLE FILTER STATE (no Supplier filter — already scoped to self) ===== */
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options');
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, []);
 
   /* ===== TEMP STATE (LIKE ADMIN) ===== */
 
@@ -124,6 +148,8 @@ export default function SupplierDashboard() {
 
     setStartMonth(MONTHS[s.getMonth()]);
     setEndMonth(MONTHS[e.getMonth()]);
+
+    setSerialTitle(tempSerialTitle);
 
     setShowFilter(false);
   };
@@ -153,6 +179,7 @@ export default function SupplierDashboard() {
           params: {
             start_date: startDate,
             end_date: endDate,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -166,7 +193,9 @@ export default function SupplierDashboard() {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -185,15 +214,18 @@ export default function SupplierDashboard() {
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+
+      
+  const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
       return months.map(month => ({
         month,
         awarded: monthlyByMonth.get(month)?.awarded || 0,
         preparing: monthlyByMonth.get(month)?.preparing || 0,
         forDelivery: monthlyByMonth.get(month)?.forDelivery || 0,
         delivered: monthlyByMonth.get(month)?.delivered || 0,
+        completed: monthlyByMonth.get(month)?.completed || 0,
         returned: monthlyByMonth.get(month)?.returned || 0,
-      }));
+      }));    
     }
     return months.map((m) => ({
       month: m,
@@ -201,41 +233,44 @@ export default function SupplierDashboard() {
       preparing: 0,
       forDelivery: 0,
       delivered: 0,
+      completed: 0,
       returned: 0,
     }));
   }, [chartData.monthly, months]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  // Read success_rate and completed directly from dashboardStats — the real
+  // backend totals — instead of recomputing a different formula locally from
+  // the monthly chart buckets, which previously produced a mismatched number
+  // ((Delivered - Returned) / Awarded) versus the backend's and export's
+  // Delivered / (Delivered + Returned) formula.
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      awarded: acc.awarded + (month.awarded || 0),
-      preparing: acc.preparing + (month.preparing || 0),
-      forDelivery: acc.forDelivery + (month.forDelivery || 0),
-      delivered: acc.delivered + (month.delivered || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { awarded: 0, preparing: 0, forDelivery: 0, delivered: 0, returned: 0 });
-    
-    const successRate = totals.awarded > 0 
-      ? Math.round(((totals.delivered - totals.returned) / totals.awarded) * 100) 
-      : 0;
-    
     return {
-      awarded: totals.awarded,
-      preparing: totals.preparing,
-      forDelivery: totals.forDelivery,
-      delivered: totals.delivered,
-      returned: totals.returned,
-      success: Math.max(0, successRate),
+      awarded: dashboardStats.awarded || 0,
+      preparing: dashboardStats.preparing || 0,
+      forDelivery: dashboardStats.for_delivery || 0,
+      delivered: dashboardStats.delivered || 0,
+      completed: dashboardStats.completed || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
-  // Derive deliveryTrend from pipelineData to ensure consistency
+  // Derive deliveryTrend from pipelineData for consistency
   const deliveryTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
       delivered: item.delivered || 0,
+    }));
+  }, [pipelineData]);
+
+  // Completed Issues trend — same "completed" field the KPI card and the
+  // export's "Completed Issues" line read, so chart/KPI/export always agree.
+  const completedTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      completed: item.completed || 0,
     }));
   }, [pipelineData]);
 
@@ -247,22 +282,14 @@ export default function SupplierDashboard() {
   }, [pipelineData]);
 
   const pieData = [
-    { name: "Delivered (Passed)", value: kpis.delivered },
+    { name: "Delivered (Passed)", value: kpis.completed },
     { name: "Returned", value: kpis.returned }
   ];
 
   const kpiCards = useMemo(() => ([
     {
-      id: "awarded",
-      title: "Awarded Serials",
-      value: kpis.awarded,
-      sourceLabel: "List of Serials",
-      sourcePath: "/dashboard-supplier-listofserial",
-      chartIds: ["pipeline", "volume"],
-    },
-    {
       id: "preparing",
-      title: "Preparing Delivery",
+      title: "Serial Issues For Preparing",
       value: kpis.preparing,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -270,7 +297,7 @@ export default function SupplierDashboard() {
     },
     {
       id: "forDelivery",
-      title: "For Delivery",
+      title: "Serial Issues For Delivery",
       value: kpis.forDelivery,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -278,15 +305,23 @@ export default function SupplierDashboard() {
     },
     {
       id: "delivered",
-      title: "Delivered to GSPS",
+      title: "Serial Issues Delivered to GSPS",
       value: kpis.delivered,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
       chartIds: ["pipeline", "deliveredTrend", "outcome"],
     },
     {
+      id: "completed",
+      title: "Delivered Issues",
+      value: kpis.completed,
+      sourceLabel: "List of Serials",
+      sourcePath: "/dashboard-supplier-listofserial",
+      chartIds: ["completedTrend", "outcome"],
+    },
+    {
       id: "returned",
-      title: "Returned",
+      title: "Serial Issues For Returned",
       value: kpis.returned,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -298,7 +333,7 @@ export default function SupplierDashboard() {
       value: `${kpis.success}%`,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
-      chartIds: ["deliveredTrend", "outcome"],
+      chartIds: ["deliveredTrend", "completedTrend", "outcome"],
     },
   ]), [kpis]);
 
@@ -336,13 +371,14 @@ export default function SupplierDashboard() {
                     setTempStartMonth(startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -354,6 +390,7 @@ export default function SupplierDashboard() {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Supplier Dashboard',
                       },
                       responseType: 'blob',
@@ -476,6 +513,31 @@ export default function SupplierDashboard() {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Serial Title Selector (no Supplier filter — already scoped to self) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -487,11 +549,13 @@ export default function SupplierDashboard() {
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSerialTitle('');
                     setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -621,6 +685,19 @@ export default function SupplierDashboard() {
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </Chart>
+          )}
+
+          {shouldShowChart("completedTrend") && (
+          <Chart title="Completed Issues Trend">
+            <ResponsiveContainer height={300}>
+              <LineChart data={completedTrend}>
+                <XAxis dataKey="month"/>
+                <YAxis/>
+                <Tooltip/>
+                <Line dataKey="completed" stroke={COLORS.completed} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>

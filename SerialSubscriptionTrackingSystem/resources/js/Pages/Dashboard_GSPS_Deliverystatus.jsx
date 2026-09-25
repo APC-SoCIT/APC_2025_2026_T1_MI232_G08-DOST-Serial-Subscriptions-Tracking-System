@@ -713,7 +713,7 @@ function DeliveryStatus() {
                         fontWeight: selectedIssueView?.id === issue.id ? 600 : 400,
                       }}
                     >
-                      Issue #{issue.issue_number}
+                      Issue #{issue.issue_number} {issue.status === 'for_return' && <span style={{ color: '#dc3545' }}>⚠</span>}
                     </button>
                   ))
                 )}

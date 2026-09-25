@@ -160,6 +160,9 @@ export default function ListOfSerials() {
   // Normalize date to YYYY-MM-DD format
   const normalizeDate = (dateString) => {
     if (!dateString) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(dateString))) {
+      return String(dateString).slice(0, 10);
+    }
     // Handle various date formats and extract just the date part
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return null;

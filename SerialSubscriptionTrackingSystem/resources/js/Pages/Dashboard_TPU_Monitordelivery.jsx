@@ -172,9 +172,11 @@ function MonitorDelivery() {
             <h2 style={{ color: '#004A98', margin: '0 0 8px 0', fontSize: 20 }}>Monitor Delivery</h2>
             <p style={{ color: '#666', margin: 0, fontSize: 14 }}>Click ISSN to view serial issues and track progress</p>
           </div>
-          <button onClick={fetchTPUData} disabled={loading} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={fetchTPUData} disabled={loading} style={{ background: '#004A98', border: 'none', color: '#fff', padding: '12px 20px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MdRefresh /> {loading ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
@@ -200,16 +202,17 @@ function MonitorDelivery() {
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>ISSN</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Serial Title</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, fontSize: 14 }}>Supplier</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Issues</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>No. of Volumes</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>No. of Issues</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Status</th>
                 <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading...</td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading...</td></tr>
               ) : error ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>{error} <button onClick={fetchTPUData} style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Retry</button></td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#dc3545' }}>{error} <button onClick={fetchTPUData} style={{ marginLeft: 16, padding: '8px 16px', background: '#004A98', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Retry</button></td></tr>
               ) : filteredSubscriptions.length > 0 ? (
                 filteredSubscriptions.map((sub, index) => {
                   const isExpanded = expandedRow === sub.id;
@@ -226,6 +229,9 @@ function MonitorDelivery() {
                         </td>
                         <td style={{ padding: '16px' }}>{sub.serialTitle}</td>
                         <td style={{ padding: '16px' }}>{sub.supplierName}</td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <span style={{ fontWeight: 600, color: '#004A98' }}>{sub.totalVolumes ?? 'N/A'}</span>
+                        </td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           <span style={{ fontWeight: 600, color: '#004A98' }}>{sub.deliveredIssues}</span>
                           <span style={{ color: '#666' }}> / {sub.totalIssues}</span>
@@ -251,7 +257,7 @@ function MonitorDelivery() {
                       {/* Expanded Issues Row */}
                       {isExpanded && (
                         <tr>
-                          <td colSpan="6" style={{ padding: 0 }}>
+                          <td colSpan="7" style={{ padding: 0 }}>
                             <div style={{ background: '#f8f9fa', padding: '16px 24px', borderBottom: '2px solid #004A98' }}>
                               <h4 style={{ margin: '0 0 12px', color: '#004A98', fontSize: 14, fontWeight: 600 }}>Serial Issues for {sub.serialTitle}</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>
@@ -293,7 +299,7 @@ function MonitorDelivery() {
                   );
                 })
               ) : (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No subscriptions with issues found.</td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No subscriptions with issues found.</td></tr>
               )}
             </tbody>
           </table>
@@ -364,7 +370,7 @@ function MonitorDelivery() {
                           onClick={() => window.open(fileUrl, '_blank')}
                           onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<div style="padding:20px;text-align:center;background:#fff;borderRadius:8px;color:#999;fontSize:12px;">Image failed to load</div>'; }}
                         />
-                      ) : (
+                        ) : (
                         <a
                           href={fileUrl}
                           target="_blank"

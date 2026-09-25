@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
-import { HiUsers, HiMenu, HiX } from "react-icons/hi";
+import { HiUsers, HiMenu, HiX, HiChevronDown, HiChevronRight } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
 import { FaTruck, FaUserPlus, FaUserCircle } from "react-icons/fa";
 import { MdMarkEmailRead } from "react-icons/md";
 import { BsFillChatTextFill } from "react-icons/bs";
+import { MdRateReview } from "react-icons/md";
 import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -15,20 +16,31 @@ const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
 );
 
+// Flat items stay flat; "Subscriptions" is now a parent with children instead
+// of two separate top-level entries. Everything else (icons, routes, labels)
+// is unchanged from before.
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: 'tpu.dashboard' },
   { icon: <BsFillChatTextFill />, label: 'Chat', route: 'tpu.chat' },
   { icon: <HiUsers />, label: 'Supplier Info', route: 'tpu.supplierinfo' },
-  { icon: <ImStatsBars />, label: 'Subscription', route: 'tpu.subscriptiontracking' },
-  { icon: <FaTruck />, label: 'Monitor Delivery', route: 'tpu.monitordelivery' },
-  { icon: <FaUserPlus />, label: 'Add Account', route: 'tpu.addaccount' },
+  {
+    icon: <ImStatsBars />,
+    label: 'Subscriptions',
+    children: [
+      { label: 'Subscription Tracking', route: 'tpu.subscriptiontracking' },
+      { label: 'Monitor Delivery', route: 'tpu.monitordelivery' },
+    ],
+  },
+   { icon: <HiMenu />, label: 'Archive', route: 'archive.page' },
+  { icon: <MdRateReview />, label: 'Performance Feedback', route: 'customer-satisfaction.page' },
 ];
 
 function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
   const currentUrl = usePage().url;
   const sidebarWidth = isMobile ? 200 : 160;
   const [hoveredItem, setHoveredItem] = useState(null);
-  
+  const [expandedItem, setExpandedItem] = useState(null);
+
   // Map routes to their URL paths for exact matching (based on routes/web.php)
   const routeToPath = {
     'tpu.dashboard': '/dashboard-tpu',
@@ -36,9 +48,36 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
     'tpu.supplierinfo': '/dashboard-tpu-supplierinfo',
     'tpu.subscriptiontracking': '/dashboard-tpu-subscriptiontracking',
     'tpu.monitordelivery': '/dashboard-tpu-monitordelivery',
+    'archive.page': '/archive',
     'tpu.addaccount': '/dashboard-tpu-addaccount',
+    'customer-satisfaction.page': '/customer-satisfaction',
   };
-  
+
+  const isRouteActive = (routeName) => {
+    const expectedPath = routeToPath[routeName] || '';
+    return currentUrl === expectedPath || currentUrl.startsWith(expectedPath + '/');
+  };
+
+  // A parent with children is "active" if the user is currently on any of
+  // its sub-pages — used both for highlighting and to auto-expand it so the
+  // person can immediately tell where they are in the sidebar.
+  const isParentActive = (item) =>
+    Array.isArray(item.children) && item.children.some((child) => isRouteActive(child.route));
+
+  // Keep the parent expanded automatically whenever the current page is one
+  // of its children (e.g. landing on Monitor Delivery via a direct link,
+  // a refresh, or navigating from elsewhere) — not just when clicked.
+  useEffect(() => {
+    const activeParent = sidebarItems.find((item) => isParentActive(item));
+    if (activeParent) {
+      setExpandedItem(activeParent.label);
+    }
+  }, [currentUrl]);
+
+  const toggleExpanded = (label) => {
+    setExpandedItem((prev) => (prev === label ? null : label));
+  };
+
   return (
     <div style={{
       background: '#004A98',
@@ -109,38 +148,127 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
       <nav style={{ width: '100%' }}>
         <ul style={{ listStyle: 'none', padding: 0, width: '100%' }}>
           {sidebarItems.map((item, idx) => {
-            const expectedPath = routeToPath[item.route] || '';
-            const isActive = currentUrl === expectedPath || currentUrl.startsWith(expectedPath + '/');
-            
+            const hasChildren = Array.isArray(item.children);
+
+            if (!hasChildren) {
+              const isActive = isRouteActive(item.route);
+
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={item.route !== '#' ? route(item.route) : '#'}
+                    onClick={() => isMobile && setSidebarOpen(false)}
+                    onMouseEnter={() => setHoveredItem(idx)}
+                    onMouseLeave={() => setHoveredItem(null)}
+                    style={{
+                      margin: '10px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: item.route !== '#' ? 'pointer' : 'not-allowed',
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: 500,
+                      color: '#fff',
+                      background: isActive ? '#0062f4' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      width: isMobile ? '170px' : '140px',
+                      marginLeft: '10px',
+                      transition: 'background 0.2s, transform 0.1s',
+                      boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
+                      textDecoration: 'none',
+                      opacity: item.route === '#' ? 0.6 : 1
+                    }}
+                  >
+                    <Icon>{item.icon}</Icon>
+                    <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            }
+
+            // Parent item with sub-items (e.g. Subscriptions)
+            const parentActive = isParentActive(item);
+            const isExpanded = expandedItem === item.label;
+
             return (
               <li key={item.label}>
-                <Link
-                  href={item.route !== '#' ? route(item.route) : '#'}
-                  onClick={() => isMobile && setSidebarOpen(false)}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleExpanded(item.label)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleExpanded(item.label);
+                    }
+                  }}
                   onMouseEnter={() => setHoveredItem(idx)}
                   onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     margin: '10px 0',
                     display: 'flex',
                     alignItems: 'center',
-                    cursor: item.route !== '#' ? 'pointer' : 'not-allowed',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
                     fontSize: isMobile ? 14 : 16,
                     fontWeight: 500,
                     color: '#fff',
-                    background: isActive ? '#0062f4' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
+                    background: parentActive ? '#0062f4' : (hoveredItem === idx ? 'rgba(255,255,255,0.15)' : 'transparent'),
                     borderRadius: 6,
                     padding: '8px 12px',
                     width: isMobile ? '170px' : '140px',
                     marginLeft: '10px',
                     transition: 'background 0.2s, transform 0.1s',
-                    boxShadow: isActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
-                    textDecoration: 'none',
-                    opacity: item.route === '#' ? 0.6 : 1
+                    boxShadow: parentActive ? '0 3px 6px rgba(0,0,0,0.15)' : 'none',
                   }}
                 >
-                  <Icon>{item.icon}</Icon>
-                  <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
-                </Link>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Icon>{item.icon}</Icon>
+                    <span style={{ fontSize: isMobile ? 13 : 15 }}>{item.label}</span>
+                  </div>
+                  {isExpanded ? <HiChevronDown size={16} /> : <HiChevronRight size={16} />}
+                </div>
+
+                {isExpanded && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {item.children.map((child) => {
+                      const childActive = isRouteActive(child.route);
+                      return (
+                        <li key={child.label}>
+                          <Link
+                            href={route(child.route)}
+                            onClick={() => isMobile && setSidebarOpen(false)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              cursor: 'pointer',
+                              fontSize: isMobile ? 13 : 14,
+                              fontWeight: 500,
+                              color: '#fff',
+                              background: childActive ? 'rgba(255,255,255,0.25)' : 'transparent',
+                              borderRadius: 6,
+                              padding: '7px 12px 7px 30px',
+                              width: isMobile ? '170px' : '140px',
+                              marginLeft: '10px',
+                              marginTop: 4,
+                              transition: 'background 0.2s',
+                              boxShadow: childActive ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                              textDecoration: 'none',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!childActive) e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!childActive) e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <span>{child.label}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             );
           })}
@@ -305,10 +433,18 @@ export default function TPULayout({ children, title, hideTitle = false }) {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
   
-  // Get page title from sidebarItems based on current URL, or use passed title prop
+  // Get page title based on current URL — flattens sidebarItems (including
+  // the Subscriptions parent's children) so titles resolve correctly for
+  // both top-level pages and the new nested Subscription Tracking /
+  // Monitor Delivery routes.
   const getPageTitle = () => {
     if (title) return title;
-    const currentNav = sidebarItems.find(item => {
+
+    const flatItems = sidebarItems.flatMap((item) =>
+      Array.isArray(item.children) ? item.children : [item]
+    );
+
+    const currentNav = flatItems.find(item => {
       const routePath = item.route.split('.').pop();
       return currentUrl.includes(routePath);
     });
@@ -317,7 +453,7 @@ export default function TPULayout({ children, title, hideTitle = false }) {
   
   const pageTitle = getPageTitle();
   const isChatPage = pageTitle?.toLowerCase().includes('chat');
-  const isFullPage = hideTitle || isChatPage || pageTitle === 'Dashboard' || pageTitle === 'Add Account' || pageTitle === 'Supplier Info' || pageTitle === 'Subscription' || pageTitle === 'Monitor Delivery';
+  const isFullPage = hideTitle || isChatPage || pageTitle === 'Dashboard' || pageTitle === 'Create Account' || pageTitle === 'Supplier Info' || pageTitle === 'Subscription Tracking' || pageTitle === 'Monitor Delivery';
   
   // Role verification - redirect if not TPU
   useEffect(() => {

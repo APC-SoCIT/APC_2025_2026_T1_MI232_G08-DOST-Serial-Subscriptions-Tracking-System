@@ -11,7 +11,7 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi"; // Added for sort icon
 import { FaTruckFast } from "react-icons/fa6";
 import { FaHistory } from "react-icons/fa";
-import { MdListAlt, MdViewList } from "react-icons/md";
+import { MdListAlt, MdViewList, MdRateReview } from "react-icons/md";
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 import { getDateRangeParams } from '@/Utils/dateRangeParams';
 import SerialsNotification from "@/Components/SerialsNotification";
@@ -22,6 +22,7 @@ const sidebarItems = [
   { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
   { icon: <FaTruckFast />, label: 'Delivery', route: '/dashboard-supplier-delivery' },
+  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: '/customer-satisfaction' },
 ];
 
 function Sidebar({ active, setActive }) {

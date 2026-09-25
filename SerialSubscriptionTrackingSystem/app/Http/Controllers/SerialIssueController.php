@@ -28,6 +28,7 @@ class SerialIssueController extends Controller
         }
 
         $query = SerialIssue::forSubscription($subscriptionId)
+            ->whereNull('archived_at')
             ->orderBy('issue_number', 'asc');
 
         // Filter by status if provided
@@ -95,6 +96,10 @@ class SerialIssueController extends Controller
                 'success' => false,
                 'message' => 'Serial issue not found',
             ], 404);
+        }
+
+        if ($issue->archived_at) {
+            return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
         }
 
         $validated = $request->validate([
@@ -200,6 +205,10 @@ class SerialIssueController extends Controller
                 'success' => false,
                 'message' => 'Serial issue not found',
             ], 404);
+        }
+
+        if ($issue->archived_at) {
+            return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
         }
 
         // Validate current status allows receiving
@@ -312,6 +321,10 @@ class SerialIssueController extends Controller
                 'success' => false,
                 'message' => 'Serial issue not found',
             ], 404);
+        }
+
+        if ($issue->archived_at) {
+            return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
         }
 
         // Validate current status allows inspection
@@ -463,6 +476,10 @@ class SerialIssueController extends Controller
                 'success' => false,
                 'message' => 'Serial issue not found',
             ], 404);
+        }
+
+        if ($issue->archived_at) {
+            return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
         }
 
         $validated = $request->validate([
@@ -629,6 +646,7 @@ class SerialIssueController extends Controller
         $subscriptionIds = $subscriptions->pluck('_id')->map(fn($id) => (string) $id)->toArray();
 
         $issues = SerialIssue::whereIn('subscription_id', $subscriptionIds)
+            ->whereNull('archived_at')
             ->orderBy('expected_delivery_date', 'asc')
             ->get()
             ->filter(fn ($issue) => $this->issueMatchesDateRange($issue, $request));
@@ -736,18 +754,18 @@ class SerialIssueController extends Controller
      */
     public function getStats(Request $request)
     {
-        $totalIssues = SerialIssue::count();
-        $pendingIssues = SerialIssue::whereNotIn('status', [
+        $totalIssues = SerialIssue::whereNull('archived_at')->count();
+        $pendingIssues = SerialIssue::whereNull('archived_at')->whereNotIn('status', [
             SerialIssue::STATUS_DELIVERED, 
             SerialIssue::STATUS_FOR_RETURN
         ])->count();
-        $deliveredIssues = SerialIssue::where('status', SerialIssue::STATUS_DELIVERED)->count();
-        $returnedIssues = SerialIssue::where('status', SerialIssue::STATUS_FOR_RETURN)->count();
+        $deliveredIssues = SerialIssue::whereNull('archived_at')->where('status', SerialIssue::STATUS_DELIVERED)->count();
+        $returnedIssues = SerialIssue::whereNull('archived_at')->where('status', SerialIssue::STATUS_FOR_RETURN)->count();
         $awaitingInspection = SerialIssue::needsInspection()->count();
         $overdueIssues = SerialIssue::overdue()->count();
         $upcomingIssues = SerialIssue::upcoming(7)->count();
 
-        $totalDeliveredCost = SerialIssue::where('status', SerialIssue::STATUS_DELIVERED)->sum('cost');
+        $totalDeliveredCost = SerialIssue::whereNull('archived_at')->where('status', SerialIssue::STATUS_DELIVERED)->sum('cost');
 
         return response()->json([
             'success' => true,
@@ -769,7 +787,7 @@ class SerialIssueController extends Controller
      */
     public function getAllIssues(Request $request)
     {
-        $query = SerialIssue::orderBy('expected_delivery_date', 'asc');
+        $query = SerialIssue::whereNull('archived_at')->orderBy('expected_delivery_date', 'asc');
 
         // Filter by status if provided
         if ($request->has('status') && $request->status !== 'all') {
@@ -812,6 +830,10 @@ class SerialIssueController extends Controller
 
     private function issueMatchesDateRange(SerialIssue $issue, Request $request): bool
     {
+        if (!$request->filled('start_date') && !$request->filled('end_date')) {
+            return true;
+        }
+
         $start = Carbon::parse($request->input('start_date', Carbon::now()->startOfMonth()->toDateString()))->startOfDay();
         $end = Carbon::parse($request->input('end_date', Carbon::now()->endOfMonth()->toDateString()))->endOfDay();
 

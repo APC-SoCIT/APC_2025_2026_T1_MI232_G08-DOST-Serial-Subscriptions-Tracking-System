@@ -106,6 +106,32 @@ export default function DashboardGSPS() {
   const [showFilter, setShowFilter] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
 
+  /* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+  const [supplierId, setSupplierId] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierId, setTempSupplierId] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_id: tempSupplierId || undefined }
+        });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierId]);
+
   /* ===== TEMP STATE ===== */
 
   const [tempYear, setTempYear] = useState(year);
@@ -143,6 +169,9 @@ export default function DashboardGSPS() {
     setStartMonth(MONTHS[s.getMonth()]);
     setEndMonth(MONTHS[e.getMonth()]);
 
+    setSupplierId(tempSupplierId);
+    setSerialTitle(tempSerialTitle);
+
     setShowFilter(false);
   };
 
@@ -171,6 +200,8 @@ export default function DashboardGSPS() {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_id: supplierId || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -184,7 +215,9 @@ export default function DashboardGSPS() {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -255,29 +288,17 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     }));
   }, [pipelineData]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      received: acc.received + (month.received || 0),
-      forwarded: acc.forwarded + (month.forwarded || 0),
-      pending: acc.pending + (month.pending || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { received: 0, forwarded: 0, pending: 0, returned: 0 });
-    
-    const successRate = totals.received > 0 
-      ? Math.round((totals.forwarded / totals.received) * 100) 
-      : 0;
-    
     return {
-      received: totals.received,
-      forwarded: totals.forwarded,
-      pending: totals.pending,
-      returned: totals.returned,
-      success: successRate,
+      received: dashboardStats.received || 0,
+      forwarded: dashboardStats.forwarded || 0,
+      pending: dashboardStats.pending || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
   const forwardedMonthly = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
@@ -298,7 +319,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
   const kpiCards = useMemo(() => ([
     {
       id: "received",
-      title: "Received Deliveries",
+      title: "Received Serial Issues",
       value: kpis.received,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
@@ -306,7 +327,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     },
     {
       id: "forwarded",
-      title: "Forwarded to Inspection",
+      title: "Serial Issues forwarded to Inspection",
       value: kpis.forwarded,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
@@ -314,30 +335,21 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     },
     {
       id: "pending",
-      title: "Pending Forwarding",
+      title: "Pending Receipt Confirmation",
       value: kpis.pending,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
       chartIds: ["pipeline"],
     },
-    {
+  {
       id: "returned",
-      title: "Returned / Issues",
+      title: "Returned Issues",
       value: kpis.returned,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
       chartIds: ["pipeline", "outcome"],
     },
-    {
-      id: "success",
-      title: "Handling Success Rate",
-      value: `${kpis.success}%`,
-      sourceLabel: "Delivery Status",
-      sourcePath: "/dashboard-gsps-deliverystatus",
-      chartIds: ["pipeline", "outcome"],
-    },
   ]), [kpis]);
-
   const selectedKpi = activeKpi
     ? kpiCards.find((card) => card.id === activeKpi) || null
     : null;
@@ -375,13 +387,15 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     setTempStartMonth(startDate === fullYearStart && endDate === fullYearEnd ? "" : startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierId(supplierId);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -393,6 +407,8 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_id: supplierId || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'GSPS Dashboard',
                       },
                       responseType: 'blob',
@@ -525,6 +541,49 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Supplier Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierId}
+                    onChange={(e) => {
+                      setTempSupplierId(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Serial Title Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -536,11 +595,15 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     setTempStartMonth('January');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSupplierId('');
+                    setTempSerialTitle('');
                     setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
                     setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSupplierId('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >

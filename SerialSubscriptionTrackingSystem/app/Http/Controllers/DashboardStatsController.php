@@ -5,642 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
 use App\Models\User;
+use App\Models\SerialIssue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
 class DashboardStatsController extends Controller
 {
-    /**
-     * Get TPU Dashboard Statistics
-     */
-    public function tpuStats(Request $request)
-    {
-        try {
-            $startDate = $request->input('start_date') 
-                ? Carbon::parse($request->input('start_date'))->startOfDay() 
-                : Carbon::now()->startOfYear();
-            $endDate = $request->input('end_date') 
-                ? Carbon::parse($request->input('end_date'))->endOfDay() 
-                : Carbon::now()->endOfDay();
+    /** Subscription statuses that count as "in the delivery pipeline" for TPU/GSPS/Inspection tracking. */
+    private const QUALIFYING_STATUSES = ['Active', 'accepted', 'Delivered', 'delivered'];
 
-            $subscriptions = Subscription::all();
-            
-            // Calculate serial statistics (filtered by date range)
-            $totalSerials = 0;
-            $awardedCount = 0;
-            $deliveredCount = 0;
-            $forDeliveryCount = 0;
-            $inspectedCount = 0;
-            $returnedCount = 0;
-            $pendingCount = 0;
-            $prepareCount = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    // Filter serials by delivery date within date range
-                    // Use subscription created_at as fallback if no delivery date
-                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
-                    $serialCarbon = Carbon::parse($serialDate);
-                    if ($serialCarbon < $startDate || $serialCarbon > $endDate) {
-                        continue; // Skip serials outside date range
-                    }
-                    
-                    $totalSerials++;
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                    // Count awarded (all assigned serials)
-                    $awardedCount++;
-
-                    switch ($status) {
-                        case 'pending':
-                            $pendingCount++;
-                            break;
-                        case 'prepare':
-                            $prepareCount++;
-                            break;
-                        case 'for_delivery':
-                            $forDeliveryCount++;
-                            break;
-                        case 'received':
-                            $deliveredCount++;
-                            // Check inspection status (uses 'for_return' from SubscriptionController)
-                            if ($inspectionStatus === 'inspected') {
-                                $inspectedCount++;
-                            } elseif ($inspectionStatus === 'for_return') {
-                                $returnedCount++;
-                            }
-                            break;
-                    }
-                }
-            }
-
-            // Calculate efficiency
-            $efficiency = $awardedCount > 0 
-                ? round(($inspectedCount / $awardedCount) * 100) 
-                : 0;
-
-            // Get monthly chart data
-            $chartData = $this->getTPUChartData($subscriptions, $startDate, $endDate);
-
-            return response()->json([
-                'success' => true,
-                'stats' => [
-                    'total_serials' => $totalSerials,
-                    'awarded' => $awardedCount,
-                    'delivered' => $deliveredCount,
-                    'for_delivery' => $forDeliveryCount,
-                    'inspected' => $inspectedCount,
-                    'returned' => $returnedCount,
-                    'pending' => $pendingCount,
-                    'prepare' => $prepareCount,
-                    'efficiency' => $efficiency,
-                    'total_subscriptions' => $subscriptions->count(),
-                    'active_subscriptions' => $subscriptions->where('status', 'Active')->count(),
-                    'total_award_cost' => $subscriptions->sum('award_cost') ?? 0,
-                    'total_delivered_cost' => $subscriptions->sum('delivered_cost') ?? 0,
-                ],
-                'charts' => $chartData,
-            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch TPU statistics: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Get GSPS Dashboard Statistics
-     */
-    public function gspsStats(Request $request)
-    {
-        try {
-            $startDate = $request->input('start_date') 
-                ? Carbon::parse($request->input('start_date'))->startOfDay() 
-                : Carbon::now()->startOfYear();
-            $endDate = $request->input('end_date') 
-                ? Carbon::parse($request->input('end_date'))->endOfDay() 
-                : Carbon::now()->endOfDay();
-
-            $subscriptions = Subscription::all();
-            
-            // Calculate serial statistics for GSPS
-            $receivedCount = 0;
-            $forwardedCount = 0; // forwarded to inspection
-            $pendingCount = 0;
-            $returnedCount = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                    // GSPS receives serials with "received" status
-                    if ($status === 'received') {
-                        $receivedCount++;
-                        
-                        // Count forwarded (has been inspected - either approved or for_return)
-                        if ($inspectionStatus === 'inspected') {
-                            $forwardedCount++;
-                        } elseif ($inspectionStatus === 'for_return') {
-                            $returnedCount++;
-                        } else {
-                            // Pending inspection
-                            $pendingCount++;
-                        }
-                    }
-                    
-                    // For deliveries still in transit
-                    if ($status === 'for_delivery') {
-                        $pendingCount++;
-                    }
-                }
-            }
-
-            // Calculate success rate
-            $successRate = $receivedCount > 0 
-                ? round(($forwardedCount / $receivedCount) * 100) 
-                : 0;
-
-            // Get chart data
-            $chartData = $this->getGSPSChartData($subscriptions, $startDate, $endDate);
-
-            return response()->json([
-                'success' => true,
-                'stats' => [
-                    'received' => $receivedCount,
-                    'forwarded' => $forwardedCount,
-                    'pending' => $pendingCount,
-                    'returned' => $returnedCount,
-                    'success_rate' => $successRate,
-                ],
-                'charts' => $chartData,
-            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch GSPS statistics: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Get Supplier Dashboard Statistics
-     */
-    public function supplierStats(Request $request)
-    {
-        try {
-            $user = Auth::user();
-            $startDate = $request->input('start_date') 
-                ? Carbon::parse($request->input('start_date'))->startOfDay() 
-                : Carbon::now()->startOfYear();
-            $endDate = $request->input('end_date') 
-                ? Carbon::parse($request->input('end_date'))->endOfDay() 
-                : Carbon::now()->endOfDay();
-
-            // Get supplier's subscriptions
-            $query = Subscription::query();
-
-            // Scope by supplier account ID to prevent same-company accounts from sharing data.
-            if ($user && strtolower($user->role ?? '') === 'supplier') {
-                $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
-                    ->orWhere('email', $user->email)
-                    ->first();
-
-                if ($supplierAccount) {
-                    $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
-                    $query->where('supplier_id', $supplierAccountId);
-                } else {
-                    // Legacy fallback if supplier account link is missing.
-                    $query->where('supplier_name', $user->name);
-                }
-            }
-            
-            $subscriptions = $query->get();
-            
-            // Calculate statistics
-            $awardedCount = 0;
-            $preparingCount = 0;
-            $forDeliveryCount = 0;
-            $deliveredCount = 0;
-            $returnedCount = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                    $awardedCount++;
-
-                    switch ($status) {
-                        case 'pending':
-                        case 'prepare':
-                            $preparingCount++;
-                            break;
-                        case 'for_delivery':
-                            $forDeliveryCount++;
-                            break;
-                        case 'received':
-                            $deliveredCount++;
-                            if ($inspectionStatus === 'for_return') {
-                                $returnedCount++;
-                            }
-                            break;
-                    }
-                }
-            }
-
-            // Calculate success rate
-            $successRate = $awardedCount > 0 
-                ? round((($deliveredCount - $returnedCount) / $awardedCount) * 100) 
-                : 0;
-
-            // Get chart data
-            $chartData = $this->getSupplierChartData($subscriptions, $startDate, $endDate);
-
-            return response()->json([
-                'success' => true,
-                'stats' => [
-                    'awarded' => $awardedCount,
-                    'preparing' => $preparingCount,
-                    'for_delivery' => $forDeliveryCount,
-                    'delivered' => $deliveredCount,
-                    'returned' => $returnedCount,
-                    'success_rate' => $successRate,
-                    'total_subscriptions' => $subscriptions->count(),
-                    'total_award_cost' => $subscriptions->sum('award_cost') ?? 0,
-                ],
-                'charts' => $chartData,
-            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch Supplier statistics: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Get Inspection Dashboard Statistics
-     */
-    public function inspectionStats(Request $request)
-    {
-        try {
-            $startDate = $request->input('start_date') 
-                ? Carbon::parse($request->input('start_date'))->startOfDay() 
-                : Carbon::now()->startOfYear();
-            $endDate = $request->input('end_date') 
-                ? Carbon::parse($request->input('end_date'))->endOfDay() 
-                : Carbon::now()->endOfDay();
-
-            $subscriptions = Subscription::all();
-            
-            // Calculate inspection statistics
-            $receivedCount = 0;  // received for inspection
-            $inspectedCount = 0;
-            $pendingCount = 0;
-            $returnedCount = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                    // Only count serials that have been received (available for inspection)
-                    if ($status === 'received') {
-                        $receivedCount++;
-                        
-                        if ($inspectionStatus === 'inspected') {
-                            $inspectedCount++;
-                        } elseif ($inspectionStatus === 'for_return') {
-                            $returnedCount++;
-                        } else {
-                            $pendingCount++;
-                        }
-                    }
-                }
-            }
-
-            // Calculate success rate
-            $successRate = $receivedCount > 0 
-                ? round(($inspectedCount / $receivedCount) * 100) 
-                : 0;
-
-            // Get chart data
-            $chartData = $this->getInspectionChartData($subscriptions, $startDate, $endDate);
-
-            return response()->json([
-                'success' => true,
-                'stats' => [
-                    'received' => $receivedCount,
-                    'inspected' => $inspectedCount,
-                    'pending' => $pendingCount,
-                    'returned' => $returnedCount,
-                    'success_rate' => $successRate,
-                ],
-                'charts' => $chartData,
-            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch Inspection statistics: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Generate TPU chart data
-     */
-    private function getTPUChartData($subscriptions, $startDate, $endDate)
-    {
-        $months = $this->getMonthsBetween($startDate, $endDate);
-        $monthlyData = [];
-
-        foreach ($months as $monthData) {
-            $monthName = $monthData['name'];
-            $monthStart = $monthData['start'];
-            $monthEnd = $monthData['end'];
-
-            $awarded = 0;
-            $delivered = 0;
-            $forDelivery = 0;
-            $inspected = 0;
-            $returned = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    // Check if serial was created/updated in this month
-                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
-                    if ($serialDate) {
-                        $serialCarbon = Carbon::parse($serialDate);
-                        if ($serialCarbon >= $monthStart && $serialCarbon <= $monthEnd) {
-                            $status = $serial['status'] ?? 'pending';
-                            $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                            $awarded++;
-                            
-                            if ($status === 'received') {
-                                $delivered++;
-                                if ($inspectionStatus === 'inspected') $inspected++;
-                                if ($inspectionStatus === 'for_return') $returned++;
-                            }
-                            if ($status === 'for_delivery') $forDelivery++;
-                        }
-                    }
-                }
-            }
-
-            $monthlyData[] = [
-                'month' => $monthName,
-                'awarded' => $awarded,
-                'delivered' => $delivered,
-                'forDelivery' => $forDelivery,
-                'inspected' => $inspected,
-                'returned' => $returned,
-            ];
-        }
-
-        // Pipeline data for pie chart (filtered by date range)
-        $pipelineData = $this->calculatePipelineTotals($subscriptions, $startDate, $endDate);
-
-        return [
-            'monthly' => $monthlyData,
-            'pipeline' => $pipelineData,
-        ];
-    }
-
-    /**
-     * Generate GSPS chart data
-     */
-    private function getGSPSChartData($subscriptions, $startDate, $endDate)
-    {
-        $months = $this->getMonthsBetween($startDate, $endDate);
-        $monthlyData = [];
-
-        foreach ($months as $monthData) {
-            $monthName = $monthData['name'];
-            $monthStart = $monthData['start'];
-            $monthEnd = $monthData['end'];
-            
-            $received = 0;
-            $forwarded = 0;
-            $pending = 0;
-            $returned = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    // Filter serials by date
-                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $serial['receivedDate'] ?? $subscription->created_at;
-                    $serialCarbon = Carbon::parse($serialDate);
-                    
-                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
-                        continue;
-                    }
-                    
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-                    
-                    if ($status === 'received' || $status === 'for_delivery') {
-                        $received++;
-                        if ($inspectionStatus === 'inspected') $forwarded++;
-                        elseif ($inspectionStatus === 'for_return') $returned++;
-                        else $pending++;
-                    }
-                }
-            }
-
-            $monthlyData[] = [
-                'month' => $monthName,
-                'received' => $received,
-                'forwarded' => $forwarded,
-                'pending' => $pending,
-                'returned' => $returned,
-            ];
-        }
-
-        return [
-            'monthly' => $monthlyData,
-        ];
-    }
-
-    /**
-     * Generate Supplier chart data
-     */
-    private function getSupplierChartData($subscriptions, $startDate, $endDate)
-    {
-        $months = $this->getMonthsBetween($startDate, $endDate);
-        $monthlyData = [];
-
-        foreach ($months as $monthData) {
-            $monthName = $monthData['name'];
-            $monthStart = $monthData['start'];
-            $monthEnd = $monthData['end'];
-            
-            $awarded = 0;
-            $preparing = 0;
-            $forDelivery = 0;
-            $delivered = 0;
-            $returned = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    // Filter serials by date
-                    $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
-                    $serialCarbon = Carbon::parse($serialDate);
-                    
-                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
-                        continue;
-                    }
-                    
-                    $status = $serial['status'] ?? 'pending';
-                    $awarded++;
-                    
-                    if (in_array($status, ['pending', 'prepare'])) $preparing++;
-                    if ($status === 'for_delivery') $forDelivery++;
-                    if ($status === 'received') {
-                        $delivered++;
-                        if (($serial['inspection_status'] ?? null) === 'for_return') {
-                            $returned++;
-                        }
-                    }
-                }
-            }
-
-            $monthlyData[] = [
-                'month' => $monthName,
-                'awarded' => $awarded,
-                'preparing' => $preparing,
-                'forDelivery' => $forDelivery,
-                'delivered' => $delivered,
-                'returned' => $returned,
-            ];
-        }
-
-        return [
-            'monthly' => $monthlyData,
-        ];
-    }
-
-    /**
-     * Generate Inspection chart data
-     */
-    private function getInspectionChartData($subscriptions, $startDate, $endDate)
-    {
-        $months = $this->getMonthsBetween($startDate, $endDate);
-        $monthlyData = [];
-
-        foreach ($months as $monthData) {
-            $monthName = $monthData['name'];
-            $monthStart = $monthData['start'];
-            $monthEnd = $monthData['end'];
-            
-            $received = 0;
-            $inspected = 0;
-            $pending = 0;
-            $returned = 0;
-
-            foreach ($subscriptions as $subscription) {
-                $serials = $subscription->serials ?? [];
-                
-                foreach ($serials as $serial) {
-                    // Filter by inspection date or delivery date
-                    $serialDate = $serial['inspection_date'] ?? $serial['receivedDate'] ?? $serial['deliveryDate'] ?? $subscription->created_at;
-                    $serialCarbon = Carbon::parse($serialDate);
-                    
-                    if ($serialCarbon < $monthStart || $serialCarbon > $monthEnd) {
-                        continue;
-                    }
-                    
-                    $status = $serial['status'] ?? 'pending';
-                    $inspectionStatus = $serial['inspection_status'] ?? null;
-                    
-                    if ($status === 'received') {
-                        $received++;
-                        if ($inspectionStatus === 'inspected') $inspected++;
-                        elseif ($inspectionStatus === 'for_return') $returned++;
-                        else $pending++;
-                    }
-                }
-            }
-
-            $monthlyData[] = [
-                'month' => $monthName,
-                'received' => $received,
-                'inspected' => $inspected,
-                'pending' => $pending,
-                'returned' => $returned,
-            ];
-        }
-
-        return [
-            'monthly' => $monthlyData,
-        ];
-    }
-
-    /**
-     * Calculate pipeline totals for pie chart (filtered by date range)
-     */
-    private function calculatePipelineTotals($subscriptions, $startDate, $endDate)
-    {
-        $awarded = 0;
-        $delivered = 0;
-        $forDelivery = 0;
-        $inspected = 0;
-        $returned = 0;
-
-        foreach ($subscriptions as $subscription) {
-            $serials = $subscription->serials ?? [];
-            
-            foreach ($serials as $serial) {
-                // Filter by date range
-                $serialDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? $subscription->created_at;
-                $serialCarbon = Carbon::parse($serialDate);
-                if ($serialCarbon < $startDate || $serialCarbon > $endDate) {
-                    continue;
-                }
-                
-                $status = $serial['status'] ?? 'pending';
-                $inspectionStatus = $serial['inspection_status'] ?? null;
-
-                $awarded++;
-                
-                if ($status === 'for_delivery') $forDelivery++;
-                if ($status === 'received') {
-                    $delivered++;
-                    if ($inspectionStatus === 'inspected') $inspected++;
-                    if ($inspectionStatus === 'for_return') $returned++;
-                }
-            }
-        }
-
-        return [
-            ['name' => 'Awarded', 'value' => $awarded],
-            ['name' => 'Delivered', 'value' => $delivered],
-            ['name' => 'For Delivery', 'value' => $forDelivery],
-            ['name' => 'Inspected', 'value' => $inspected],
-            ['name' => 'Returned', 'value' => $returned],
-        ];
-    }
-
-    /**
-     * Get months between two dates
-     */
     private function getMonthsBetween($startDate, $endDate)
     {
         $months = [];
@@ -658,5 +32,520 @@ class DashboardStatsController extends Controller
         }
 
         return $months;
+    }
+
+    private function monthlyData($rows, Carbon $startDate, Carbon $endDate, callable $dateGetter, callable $mapper): array
+    {
+        $months = $this->getMonthsBetween($startDate, $endDate);
+        return array_map(function ($month) use ($rows, $mapper, $dateGetter) {
+            $bucketRows = $rows->filter(function ($row) use ($month, $dateGetter) {
+                $raw = $dateGetter($row);
+                if (!$raw) return false;
+                try {
+                    $date = Carbon::parse($raw);
+                } catch (\Exception $e) {
+                    return false;
+                }
+                return $date >= $month['start'] && $date <= $month['end'];
+            });
+            return array_merge(['month' => $month['name']], $mapper($bucketRows));
+        }, $months);
+    }
+
+    /**
+     * Serial Titles with active records — replicates SubscriptionController::index()
+     * EXACTLY, including its mutate-then-check sequence.
+     */
+    private function totalSerialTitles($subscriptions): int
+    {
+        return $subscriptions->filter(function ($subscription) {
+            $subscription->serials = $subscription->activeSerials();
+            return $subscription->hasActiveRecords();
+        })->count();
+    }
+
+    /**
+     * Eligible supplier ACCOUNTS (not just names) for dashboard filtering:
+     * approved AND not disabled. Two different supplier accounts that share
+     * the same company_name are kept as SEPARATE entries — each is a real,
+     * independent account — with id + label ("Company - Contact") so the
+     * dropdown can distinguish them, matching the Add Serial form's pattern.
+     */
+    private function eligibleSuppliers()
+    {
+        $approvedAccounts = SupplierAccount::where('status', 'approved')->get();
+
+        $usersById = User::all()->keyBy(fn ($u) => (string) $u->_id);
+        $usersByEmail = User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
+
+        return $approvedAccounts->filter(function ($account) use ($usersById, $usersByEmail) {
+            $userId = (string) ($account->user_id ?? '');
+            $email = strtolower($account->email ?? '');
+
+            $matchedUser = null;
+            if ($userId && $usersById->has($userId)) {
+                $matchedUser = $usersById->get($userId);
+            } elseif ($email && $usersByEmail->has($email)) {
+                $matchedUser = $usersByEmail->get($email);
+            }
+
+            if (!$matchedUser) {
+                return false;
+            }
+
+            return !($matchedUser->is_disabled ?? false);
+        })->map(function ($account) {
+            $id = (string) ($account->_id ?? $account->id);
+            $name = $account->company_name ?? '';
+            $contact = $account->contact_person ?? '';
+            return [
+                'id' => $id,
+                'name' => $name,
+                'contact_person' => $contact,
+                'label' => $contact ? "{$name} - {$contact}" : $name,
+            ];
+        })->filter(fn ($s) => $s['id'] && $s['name'])->values();
+    }
+
+    /**
+     * Filter options for dashboard Supplier/Serial Title dropdowns.
+     * Suppliers are returned as {id, name, contact_person, label} objects —
+     * never collapsed to a bare name string — so two accounts sharing a
+     * company name both appear as distinct, selectable options.
+     */
+    public function filterOptions(Request $request)
+    {
+        $suppliers = $this->eligibleSuppliers();
+
+        $user = Auth::user();
+        $serialTitleQuery = Subscription::query();
+
+        if ($user && strtolower($user->role ?? '') === 'supplier') {
+            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
+
+            if ($supplierAccount) {
+                $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+                $serialTitleQuery->where('supplier_id', $supplierAccountId);
+            } else {
+                $serialTitleQuery->whereRaw(['_id' => null]);
+            }
+        } else {
+            // Scope by the selected Supplier ACCOUNT id — never by name, so
+            // two accounts sharing a company name are never conflated.
+            $supplierId = $request->input('supplier_id') ?: null;
+            if ($supplierId) {
+                $serialTitleQuery->where('supplier_id', $supplierId);
+            }
+        }
+
+        $serialTitles = $serialTitleQuery->get()
+            ->filter(function ($subscription) {
+                $subscription->serials = $subscription->activeSerials();
+                return $subscription->hasActiveRecords();
+            })
+            ->pluck('serial_title')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'suppliers' => $suppliers,
+            'serial_titles' => $serialTitles,
+        ]);
+    }
+
+    /**
+     * Supplier reliability ranking, grouped by supplier ACCOUNT id (not
+     * name) so two accounts with the same company name rank separately.
+     * Label is disambiguated with the contact person only when a name
+     * collision is actually detected among the ranked suppliers.
+     */
+    private function supplierReliabilityRanking(): array
+    {
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues();
+
+        $bySupplierId = [];
+        foreach ($bySubscription as $entry) {
+            $supplierId = (string) ($entry['subscription']->supplier_id ?? '');
+            if (!$supplierId) {
+                continue;
+            }
+            if (!isset($bySupplierId[$supplierId])) {
+                $bySupplierId[$supplierId] = [
+                    'label' => $entry['subscription']->supplier_name ?? 'Unknown',
+                    'delivered' => 0,
+                    'for_return' => 0,
+                ];
+            }
+            foreach ($entry['issues'] as $issue) {
+                if ($issue->status === SerialIssue::STATUS_DELIVERED) {
+                    $bySupplierId[$supplierId]['delivered']++;
+                } elseif ($issue->status === SerialIssue::STATUS_FOR_RETURN) {
+                    $bySupplierId[$supplierId]['for_return']++;
+                }
+            }
+        }
+
+        // Detect name collisions among the suppliers that actually made the
+        // ranking, and disambiguate only those with a contact person suffix.
+        $nameCounts = [];
+        foreach ($bySupplierId as $data) {
+            $nameCounts[$data['label']] = ($nameCounts[$data['label']] ?? 0) + 1;
+        }
+        $hasCollision = collect($nameCounts)->contains(fn ($c) => $c > 1);
+        if ($hasCollision) {
+            $accountsById = SupplierAccount::whereIn('_id', array_keys($bySupplierId))
+                ->get()
+                ->keyBy(fn ($a) => (string) ($a->_id ?? $a->id));
+            foreach ($bySupplierId as $id => &$data) {
+                if (($nameCounts[$data['label']] ?? 0) > 1) {
+                    $contact = $accountsById->get($id)->contact_person ?? null;
+                    if ($contact) {
+                        $data['label'] = "{$data['label']} - {$contact}";
+                    }
+                }
+            }
+            unset($data);
+        }
+
+        $ranking = [];
+        foreach ($bySupplierId as $data) {
+            $total = $data['delivered'] + $data['for_return'];
+            if ($total === 0) {
+                continue;
+            }
+            $ranking[] = [
+                'name' => $data['label'],
+                'value' => round(($data['delivered'] / $total) * 100),
+            ];
+        }
+
+        usort($ranking, fn ($a, $b) => $b['value'] <=> $a['value']);
+
+        return array_slice($ranking, 0, 6);
+    }
+
+    /**
+     * Subscriptions in the qualifying status list, each with its non-archived
+     * SerialIssue records. Scoped by supplier ACCOUNT id (not name) so two
+     * accounts sharing a company name are never conflated together.
+     */
+    private function qualifyingSubscriptionIssues(?string $supplierId = null, ?string $serialTitle = null): array
+    {
+        $query = Subscription::whereIn('status', self::QUALIFYING_STATUSES);
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
+        }
+        if ($serialTitle) {
+            $query->where('serial_title', $serialTitle);
+        }
+        $subscriptions = $query->get();
+        $bySubscription = [];
+        $allIssues = collect();
+
+        foreach ($subscriptions as $subscription) {
+            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($issues->isEmpty()) {
+                continue;
+            }
+
+            $bySubscription[] = ['subscription' => $subscription, 'issues' => $issues];
+            $allIssues = $allIssues->merge($issues->map(function ($issue) use ($subscription) {
+                return [
+                    'issue' => $issue,
+                    'subscription_id' => (string) ($subscription->_id ?? $subscription->id),
+                    'date' => $issue->received_at ?? $issue->inspected_at ?? $issue->for_delivery_at ?? $issue->created_at,
+                ];
+            }));
+        }
+
+        return [$bySubscription, $allIssues];
+    }
+
+    // =====================================================================
+    // TPU
+    // =====================================================================
+    public function tpuStats(Request $request)
+    {
+        return $this->liveTpuStats($request);
+    }
+
+    private function liveTpuStats(Request $request)
+    {
+        $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
+        $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
+        $supplierId = $request->input('supplier_id') ?: null;
+        $serialTitle = $request->input('serial_title') ?: null;
+
+        $subscriptionQuery = Subscription::query();
+        if ($supplierId) {
+            $subscriptionQuery->where('supplier_id', $supplierId);
+        }
+        if ($serialTitle) {
+            $subscriptionQuery->where('serial_title', $serialTitle);
+        }
+        $allSubscriptions = $subscriptionQuery->get();
+        $totalSerialTitles = $this->totalSerialTitles($allSubscriptions);
+
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
+
+        $reachedGspsRows = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
+            SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN,
+        ], true));
+        // "Serial Issue awaiting Delivery" — Pending and Preparing only.
+        // "For Delivery" status is intentionally excluded here since it now
+        // has its own separate metric (for_delivery_status below) and would
+        // otherwise be double-counted across both cards.
+        $awaitingRows = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
+            SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE,
+        ], true));
+        // Matches Monitor Delivery's own "For Delivery" status exactly — issues
+        // whose status is literally for_delivery, not the broader "awaiting"
+        // bucket above (which also includes Pending and Preparing).
+        $forDeliveryStatusRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
+        $deliveredRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED);
+        $returnedRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $successBase = $deliveredRows->count() + $returnedRows->count();
+
+        $pipeline = [
+            ['name' => 'Awarded', 'value' => $allIssues->count()],
+            ['name' => 'Preparing', 'value' => $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE], true))->count()],
+            ['name' => 'For Delivery', 'value' => $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count()],
+            ['name' => 'Returned', 'value' => $returnedRows->count()],
+            ['name' => 'Delivered', 'value' => $deliveredRows->count()],
+        ];
+
+        $dateRows = $allIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], function ($rows) {
+            return [
+                'awarded' => $rows->count(),
+                'delivered' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true))->count(),
+                'forDelivery' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+                'inspected' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
+                'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+            ];
+        });
+
+          return response()->json(['success' => true, 'stats' => [
+            'total_serials' => $totalSerialTitles,
+            'awarded' => $allIssues->count(),
+            'delivered' => $reachedGspsRows->count(),
+            'for_delivery' => $awaitingRows->count(),
+            'for_delivery_status' => $forDeliveryStatusRows->count(),
+            'inspected' => $deliveredRows->count(),
+            'returned' => $returnedRows->count(),
+            'pending' => $awaitingRows->count(),
+            'prepare' => $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE], true))->count(),
+            'efficiency' => $successBase ? round(($deliveredRows->count() / $successBase) * 100) : 0,
+            'total_subscriptions' => $totalSerialTitles,
+            'active_subscriptions' => $allSubscriptions->where('status', 'Active')->count(),
+            'total_award_cost' => $allIssues->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
+            'total_delivered_cost' => $deliveredRows->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
+        ], 'charts' => ['monthly' => $monthly, 'pipeline' => $pipeline, 'supplierRanking' => $this->supplierReliabilityRanking()]]);
+    }
+
+    // =====================================================================
+    // GSPS
+    // =====================================================================
+    public function gspsStats(Request $request)
+    {
+        return $this->liveGspsStats($request);
+    }
+
+    private function liveGspsStats(Request $request)
+    {
+        $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
+        $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
+        $supplierId = $request->input('supplier_id') ?: null;
+        $serialTitle = $request->input('serial_title') ?: null;
+
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
+        $subsWithIssues = count($bySubscription);
+
+        // Received Serial Issues — counts individual serial issues whose
+        // status is exactly "received" in the Delivery Status flow, not the
+        // broader "reached GSPS" tier below and not a subscription count.
+        $receivedStatusRows = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED);
+
+        $forwardedTier = $allIssues->filter(fn ($r) => in_array($r['issue']->status, [
+            SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN,
+        ], true));
+        $returned = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $successNumerator = $forwardedTier->count() - $returned->count();
+        $pending = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
+
+        $dateRows = $allIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
+            'received' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true))->count(),
+            'pending' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+            'forwarded' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true))->count(),
+            'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+        ]);
+
+        return response()->json(['success' => true, 'stats' => [
+            'received' => $receivedStatusRows->count(),
+            'total_subscriptions' => $subsWithIssues,
+            'forwarded' => $forwardedTier->count(),
+            'pending' => $pending->count(),
+            'returned' => $returned->count(),
+            'success_rate' => $forwardedTier->count() ? round(($successNumerator / $forwardedTier->count()) * 100) : 0,
+        ], 'charts' => ['monthly' => $monthly, 'pipeline' => [
+            ['name' => 'Pending', 'value' => $pending->count()],
+            ['name' => 'Received', 'value' => $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED)->count()],
+            ['name' => 'Forwarded', 'value' => $forwardedTier->count()],
+            ['name' => 'Returned', 'value' => $returned->count()],
+        ]]]);
+    }
+
+    // =====================================================================
+    // Inspection
+    // =====================================================================
+    public function inspectionStats(Request $request)
+    {
+        return $this->liveInspectionStats($request);
+    }
+
+    private function liveInspectionStats(Request $request)
+    {
+        $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
+        $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
+        $supplierId = $request->input('supplier_id') ?: null;
+        $serialTitle = $request->input('serial_title') ?: null;
+
+        $subscriptionQuery = Subscription::whereIn('status', self::QUALIFYING_STATUSES);
+        if ($supplierId) {
+            $subscriptionQuery->where('supplier_id', $supplierId);
+        }
+        if ($serialTitle) {
+            $subscriptionQuery->where('serial_title', $serialTitle);
+        }
+        $subscriptions = $subscriptionQuery->get();
+        $receivedTier = [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN];
+
+        $qualifyingSubs = 0;
+        $inspectionIssues = collect();
+        foreach ($subscriptions as $subscription) {
+            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
+                ->whereNull('archived_at')
+                ->get();
+            $tierIssues = $issues->whereIn('status', $receivedTier);
+            if ($tierIssues->count() === 0) {
+                continue;
+            }
+            $qualifyingSubs++;
+            $inspectionIssues = $inspectionIssues->merge($tierIssues->map(function ($issue) {
+                return [
+                    'issue' => $issue,
+                    'date' => $issue->inspected_at ?? $issue->received_at ?? $issue->created_at,
+                ];
+            }));
+        }
+
+        $inspected = $inspectionIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED);
+        $returned = $inspectionIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $pending = $inspectionIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED);
+        $successBase = $inspected->count() + $returned->count();
+
+        $dateRows = $inspectionIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
+            'received' => $rows->count(),
+            'inspected' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
+            'pending' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED)->count(),
+            'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+        ]);
+
+        return response()->json(['success' => true, 'stats' => [
+            // "Serial Issues received from GSPS" — the FULL tier of issues
+            // that have ever reached Inspection: received (awaiting
+            // inspection), delivered (passed), and for_return (failed).
+            // This intentionally does NOT shrink as issues get inspected —
+            // an issue that moves from received to delivered/for_return is
+            // still counted here, since it still "was received from GSPS".
+            'received' => $inspectionIssues->count(),
+            'total_subscriptions' => $qualifyingSubs,
+            'inspected' => $inspected->count(),
+            'pending' => $pending->count(),
+            'returned' => $returned->count(),
+            'success_rate' => $successBase ? round(($inspected->count() / $successBase) * 100) : 0,
+        ], 'charts' => ['monthly' => $monthly, 'pipeline' => [
+            ['name' => 'Received', 'value' => $inspectionIssues->count()],
+            ['name' => 'Pending', 'value' => $pending->count()],
+            ['name' => 'Inspected', 'value' => $inspected->count()],
+            ['name' => 'Returned', 'value' => $returned->count()],
+        ]]]);
+    }
+
+    // =====================================================================
+    // Supplier — scoped by the logged-in supplier's account (no supplier
+    // filter needed here — already scoped to self).
+    // =====================================================================
+    public function supplierStats(Request $request)
+    {
+        return $this->liveSupplierStats($request);
+    }
+
+    private function liveSupplierStats(Request $request)
+    {
+        $user = Auth::user();
+        $account = $user ? SupplierAccount::where('user_id', $user->_id ?? $user->id)->orWhere('email', $user->email)->first() : null;
+        $supplierId = $account ? (string) ($account->_id ?? $account->id) : null;
+
+        $serialTitle = $request->input('serial_title') ?: null;
+
+        $subscriptions = Subscription::query()
+            ->when($supplierId, fn ($q) => $q->where('supplier_id', $supplierId))
+            ->when($serialTitle, fn ($q) => $q->where('serial_title', $serialTitle))
+            ->get();
+        $subscriptionIds = $subscriptions->map(fn ($s) => (string) ($s->_id ?? $s->id))->all();
+
+        $issues = SerialIssue::whereIn('subscription_id', $subscriptionIds)
+            ->whereNull('archived_at')
+            ->get()
+            ->map(fn ($issue) => [
+                'issue' => $issue,
+                'date' => $issue->received_at ?? $issue->for_delivery_at ?? $issue->created_at,
+            ]);
+
+        $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
+        $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
+
+        $counts = [
+            'awarded' => $issues->count(),
+            'preparing' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
+            'for_delivery' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+            'delivered' => $issues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
+            'delivered_only' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
+            'returned' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+        ];
+        $successBase = $counts['delivered_only'] + $counts['returned'];
+
+        $dateRows = $issues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
+            'awarded' => $rows->count(),
+            'preparing' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
+            'forDelivery' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+            'delivered' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
+            'completed' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
+            'returned' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+        ]);
+
+        return response()->json(['success' => true, 'stats' => [
+            'awarded' => $counts['awarded'],
+            'preparing' => $counts['preparing'],
+            'for_delivery' => $counts['for_delivery'],
+            'delivered' => $counts['delivered'],
+            'completed' => $counts['delivered_only'],
+            'returned' => $counts['returned'],
+            'success_rate' => $successBase ? round(($counts['delivered_only'] / $successBase) * 100) : 0,
+            'total_subscriptions' => $subscriptions->count(),
+            'total_award_cost' => $issues->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
+        ], 'charts' => ['monthly' => $monthly]]);
     }
 }
