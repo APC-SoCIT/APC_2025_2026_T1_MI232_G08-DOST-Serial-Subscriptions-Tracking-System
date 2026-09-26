@@ -182,8 +182,13 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Addaccount');
     })->name('tpu.addaccount');
 
-     Route::get('/performance-feedback', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
+  Route::get('/performance-feedback', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
     Route::get('/tpu/performance-feedback-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
+
+    // Performance feedback form — active suppliers dropdown + submission.
+    // TPU only (enforced by this group's role:tpu middleware).
+    Route::get('/api/customer-satisfaction/suppliers', [CustomerSatisfactionController::class, 'suppliers'])->name('customer-satisfaction.suppliers');
+    Route::post('/api/customer-satisfaction', [CustomerSatisfactionController::class, 'store'])->name('customer-satisfaction.store');
 });
 
 // ===================== GSPS ROUTES =====================

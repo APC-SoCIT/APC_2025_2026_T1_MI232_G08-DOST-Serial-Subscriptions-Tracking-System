@@ -9,7 +9,7 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
 import SerialsNotification from "@/Components/SerialsNotification";
-import { MdRefresh, MdRateReview } from "react-icons/md";
+import { MdRefresh } from "react-icons/md";
 import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 const sidebarItems = [
@@ -17,7 +17,6 @@ const sidebarItems = [
   { icon: <BsFillChatTextFill />, label: 'Chat', route: '/dashboard-supplier-chat' },
   { icon: <HiUsers />, label: 'List of Serials', route: '/dashboard-supplier-listofserial' },
   { icon: <FaTruckFast />, label: 'Delivery', route: '/dashboard-supplier-delivery' },
-  { icon: <MdRateReview />, label: 'Customer Satisfaction', route: '/customer-satisfaction' },
 ];
 
 function Sidebar({ active, setActive }) {
