@@ -28,19 +28,22 @@ class CustomerSatisfactionController extends Controller
     }
 
     /**
-     * Active supplier accounts eligible for performance feedback — mirrors
-     * DashboardStatsController::eligibleSuppliers() exactly: approved
-     * SupplierAccount whose linked User is not disabled. Two accounts
-     * sharing a company name are kept as separate entries.
+     * Active supplier accounts eligible for performance feedback — this is
+     * the SAME TPU-curated "Active Suppliers" list used by Add Serial /
+     * Subscription Tracking (SupplierAccount::activeSupplier(), driven by
+     * is_active_supplier), not an independently-derived eligibility check.
+     * A supplier only shows up here once TPU has added it under Active
+     * Suppliers, and disappears once TPU removes it — same as everywhere
+     * else in the app.
      */
     private function eligibleSupplierAccounts()
     {
-        $approvedAccounts = SupplierAccount::where('status', 'approved')->get();
+        $activeAccounts = SupplierAccount::activeSupplier()->orderBy('company_name')->get();
 
         $usersById = User::all()->keyBy(fn ($u) => (string) $u->_id);
         $usersByEmail = User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
 
-        return $approvedAccounts->filter(function ($account) use ($usersById, $usersByEmail) {
+        return $activeAccounts->filter(function ($account) use ($usersById, $usersByEmail) {
             $userId = (string) ($account->user_id ?? '');
             $email = strtolower($account->email ?? '');
 
