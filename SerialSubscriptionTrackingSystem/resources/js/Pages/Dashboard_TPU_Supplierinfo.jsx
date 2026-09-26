@@ -18,6 +18,7 @@ function SupplierInfo() {
   const [suppliers, setSuppliers] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
   const itemsPerPage = 10;
 
   // State for Created Supplier Accounts section
@@ -55,25 +56,36 @@ function SupplierInfo() {
   const [createAccountErrors, setCreateAccountErrors] = useState({});
   const [createAccountSubmitting, setCreateAccountSubmitting] = useState(false);
 
-  // Load suppliers from localStorage on mount, filtering out any that no longer exist in approved suppliers
-  useEffect(() => {
-    const savedSuppliers = localStorage.getItem('tpu_suppliers');
-    if (savedSuppliers) {
-      const parsed = JSON.parse(savedSuppliers);
-      // Filter to only keep suppliers that still exist in approvedSuppliers (by email)
-      const approvedEmails = approvedSuppliers.map(s => s.email?.toLowerCase());
-      const validSuppliers = parsed.filter(s => approvedEmails.includes(s.email?.toLowerCase()));
-      setSuppliers(validSuppliers);
-      // Update localStorage if any were removed
-      if (validSuppliers.length !== parsed.length) {
-        if (validSuppliers.length > 0) {
-          localStorage.setItem('tpu_suppliers', JSON.stringify(validSuppliers));
-        } else {
-          localStorage.removeItem('tpu_suppliers');
-        }
+  // Load Active Suppliers from the database — shared across every
+  // browser/device/deployment, replacing the old localStorage-only list
+  // that broke as soon as this app was opened from a fresh browser/deploy.
+  const fetchActiveSuppliers = async () => {
+    setSuppliersLoading(true);
+    try {
+      const response = await axios.get('/api/supplier-accounts/active');
+      if (response.data.success) {
+        const mapped = response.data.accounts.map((acc) => ({
+          id: acc._id || acc.id,
+          contactPerson: acc.contact_person || '',
+          supplierName: acc.company_name || '',
+          email: acc.email || '',
+          phone: acc.phone || '',
+          address: acc.address || '',
+          status: 'Approved',
+          sourceAccountId: acc._id || acc.id,
+        }));
+        setSuppliers(mapped);
       }
+    } catch (error) {
+      console.error('Error fetching active suppliers:', error);
+    } finally {
+      setSuppliersLoading(false);
     }
-  }, [approvedSuppliers]);
+  };
+
+  useEffect(() => {
+    fetchActiveSuppliers();
+  }, []);
 
   // Fetch supplier accounts from API
   useEffect(() => {
@@ -96,13 +108,6 @@ function SupplierInfo() {
       setAccountsLoading(false);
     }
   };
-
-  // Save suppliers to localStorage whenever they change
-  useEffect(() => {
-    if (suppliers.length > 0) {
-      localStorage.setItem('tpu_suppliers', JSON.stringify(suppliers));
-    }
-  }, [suppliers]);
 
   // Filter out already added suppliers from the dropdown options
   const availableSuppliers = approvedSuppliers.filter(approved => {
@@ -127,48 +132,50 @@ function SupplierInfo() {
     setNewSupplier(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Create new supplier entry
-    const supplierEntry = {
-      id: Date.now(),
-      contactPerson: newSupplier.contactPerson,
-      supplierName: newSupplier.supplierName,
-      email: newSupplier.email,
-      phone: newSupplier.phone,
-      address: newSupplier.address,
-      status: 'Approved',
-      addedAt: new Date().toISOString(),
-      sourceAccountId: selectedSupplier?._id || selectedSupplier?.id || null,
-    };
 
-    setSuppliers(prev => [...prev, supplierEntry]);
-    setSuccessMessage('Supplier added successfully!');
-    
-    // Reset form
-    setShowAddSupplier(false);
-    setSelectedSupplier(null);
-    setNewSupplier({
-      contactPerson: '',
-      supplierName: '',
-      email: '',
-      phone: '',
-      address: '',
-      status: 'Approved'
-    });
+    const accountId = selectedSupplier?._id || selectedSupplier?.id;
+    if (!accountId) return;
 
-    // Clear success message after 3 seconds
-    setTimeout(() => setSuccessMessage(''), 3000);
+    try {
+      const response = await axios.post(`/api/supplier-accounts/${accountId}/activate`);
+      if (response.data.success) {
+        setSuccessMessage('Supplier added successfully!');
+        await fetchActiveSuppliers();
+
+        // Reset form
+        setShowAddSupplier(false);
+        setSelectedSupplier(null);
+        setNewSupplier({
+          contactPerson: '',
+          supplierName: '',
+          email: '',
+          phone: '',
+          address: '',
+          status: 'Approved'
+        });
+
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error adding active supplier:', error);
+      Swal.fire({ title: error.response?.data?.message || 'Failed to add supplier. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+    }
   };
 
-  const handleRemoveSupplier = (id) => {
-    if (confirm('Are you sure you want to remove this supplier?')) {
-      const updatedSuppliers = suppliers.filter(s => s.id !== id);
-      setSuppliers(updatedSuppliers);
-      if (updatedSuppliers.length === 0) {
-        localStorage.removeItem('tpu_suppliers');
+  const handleRemoveSupplier = async (id) => {
+    if (!confirm('Are you sure you want to remove this supplier?')) return;
+
+    try {
+      const response = await axios.post(`/api/supplier-accounts/${id}/deactivate`);
+      if (response.data.success) {
+        await fetchActiveSuppliers();
       }
+    } catch (error) {
+      console.error('Error removing active supplier:', error);
+      Swal.fire({ title: 'Failed to remove supplier. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     }
   };
 
@@ -882,7 +889,13 @@ function SupplierInfo() {
             </tr>
           </thead>
           <tbody>
-            {paginatedSuppliers.length === 0 ? (
+            {suppliersLoading ? (
+              <tr>
+                <td colSpan="7" style={{ padding: '40px 16px', textAlign: 'center', color: '#666' }}>
+                  Loading active suppliers...
+                </td>
+              </tr>
+            ) : paginatedSuppliers.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ padding: '40px 16px', textAlign: 'center', color: '#666' }}>
                   {suppliers.length === 0 

@@ -24,8 +24,7 @@ const navItems = [
   },
   { icon: <HiClipboardList size={18} />, label: "Logs", href: "/admin-logs" },
   { icon: <HiClipboardList size={18} />, label: "Archive", href: "/archive" },
-  { icon: <MdRateReview size={18} />, label: "Performance Feedback", href: "/admin/customer-satisfaction" },
-];
+{ icon: <MdRateReview size={18} />, label: "Performance Feedback", href: "/admin/performance-feedback" },];
 
 export default function AdminLayout({ children, header, title }) {
   const { url } = usePage();

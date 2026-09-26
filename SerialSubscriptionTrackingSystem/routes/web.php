@@ -72,8 +72,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         return Inertia::render('Admin_Logs');
     })->name('admin.logs');
 
-    Route::get('/admin/customer-satisfaction', [CustomerSatisfactionController::class, 'adminPage'])->name('admin.customer-satisfaction');
-});
+    Route::get('/admin/performance-feedback', [CustomerSatisfactionController::class, 'adminPage'])->name('admin.customer-satisfaction');});
 
 // ===================== TPU ROUTES =====================
 Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
@@ -116,7 +115,30 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
     })->name('tpu.supplierinfo');
     
     Route::get('/dashboard-tpu-subscriptiontracking', function () {
-        $approvedSuppliers = \App\Models\SupplierAccount::approved()->get();
+        $approvedSuppliers = \App\Models\SupplierAccount::approved()
+            ->get()
+            ->filter(function ($account) {
+                $usersById = \App\Models\User::all()->keyBy(fn ($u) => (string) $u->_id);
+                $usersByEmail = \App\Models\User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
+
+                $userId = (string) ($account->user_id ?? '');
+                $email = strtolower($account->email ?? '');
+
+                $matchedUser = null;
+                if ($userId && $usersById->has($userId)) {
+                    $matchedUser = $usersById->get($userId);
+                } elseif ($email && $usersByEmail->has($email)) {
+                    $matchedUser = $usersByEmail->get($email);
+                }
+
+                if (!$matchedUser) {
+                    return false;
+                }
+
+                return !($matchedUser->is_disabled ?? false);
+            })
+            ->values();
+
         return Inertia::render('Dashboard_TPU_Subscriptiontracking', [
             'approvedSuppliers' => $approvedSuppliers,
         ]);
@@ -126,8 +148,31 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Monitordelivery');
     })->name('tpu.monitordelivery');
     
-    Route::get('/dashboard-tpu-addserial', function () {
-        $approvedSuppliers = \App\Models\SupplierAccount::approved()->get();
+       Route::get('/dashboard-tpu-addserial', function () {
+        $approvedSuppliers = \App\Models\SupplierAccount::approved()
+            ->get()
+            ->filter(function ($account) {
+                $usersById = \App\Models\User::all()->keyBy(fn ($u) => (string) $u->_id);
+                $usersByEmail = \App\Models\User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
+
+                $userId = (string) ($account->user_id ?? '');
+                $email = strtolower($account->email ?? '');
+
+                $matchedUser = null;
+                if ($userId && $usersById->has($userId)) {
+                    $matchedUser = $usersById->get($userId);
+                } elseif ($email && $usersByEmail->has($email)) {
+                    $matchedUser = $usersByEmail->get($email);
+                }
+
+                if (!$matchedUser) {
+                    return false;
+                }
+
+                return !($matchedUser->is_disabled ?? false);
+            })
+            ->values();
+
         return Inertia::render('Dashboard_TPU_AddSerial', [
             'approvedSuppliers' => $approvedSuppliers,
         ]);
@@ -137,8 +182,8 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Addaccount');
     })->name('tpu.addaccount');
 
-    Route::get('/customer-satisfaction', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
-    Route::get('/tpu/customer-satisfaction-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
+     Route::get('/performance-feedback', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
+    Route::get('/tpu/performance-feedback-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
 });
 
 // ===================== GSPS ROUTES =====================
@@ -299,6 +344,7 @@ Route::middleware(['auth', 'role:admin,tpu,gsps'])->group(function () {
         Route::get('/', [SupplierAccountController::class, 'index'])->name('supplier-accounts.index');
         Route::get('/pending', [SupplierAccountController::class, 'pending'])->name('supplier-accounts.pending');
         Route::get('/approved', [SupplierAccountController::class, 'approved'])->name('supplier-accounts.approved');
+        Route::get('/active', [SupplierAccountController::class, 'activeSuppliers'])->name('supplier-accounts.active');
         Route::get('/stats', [SupplierAccountController::class, 'stats'])->name('supplier-accounts.stats');
         Route::get('/{id}', [SupplierAccountController::class, 'show'])->name('supplier-accounts.show');
     });
@@ -342,16 +388,16 @@ Route::middleware(['auth', 'role:tpu'])->group(function () {
         Route::post('/{id}/serials', [SubscriptionController::class, 'addSerial'])->name('subscriptions.addSerial');
         Route::post('/{id}/transactions', [SubscriptionController::class, 'addTransaction'])->name('subscriptions.addTransaction');
     });
+
+    // Active Suppliers management - TPU only can add/remove from the list
+    Route::post('/api/supplier-accounts/{id}/activate', [SupplierAccountController::class, 'activate'])->name('supplier-accounts.activate');
+    Route::post('/api/supplier-accounts/{id}/deactivate', [SupplierAccountController::class, 'deactivate'])->name('supplier-accounts.deactivate');
     
     // TPU Dashboard Statistics API
     Route::get('/api/tpu/dashboard-stats', [DashboardStatsController::class, 'tpuStats'])->name('tpu.dashboard-stats');
     
     // TPU Dashboard Export
     Route::get('/api/tpu/export-report', [DashboardExportController::class, 'tpuExport'])->name('tpu.export-report');
-
-    // Performance feedback - TPU only submits, and only TPU sees the active-supplier dropdown
-    Route::get('/api/customer-satisfaction/suppliers', [CustomerSatisfactionController::class, 'suppliers'])->name('customer-satisfaction.suppliers');
-    Route::post('/api/customer-satisfaction', [CustomerSatisfactionController::class, 'store'])->name('customer-satisfaction.store');
 });
 
 // ===================== GSPS-ONLY API ROUTES =====================
