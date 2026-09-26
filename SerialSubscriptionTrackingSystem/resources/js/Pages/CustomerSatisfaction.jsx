@@ -77,7 +77,7 @@ export default function PerformanceFeedback() {
       <div style={{ padding: '28px 32px', maxWidth: 820, margin: '0 auto', color: '#1f2933' }}>
         <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 2px 10px rgba(0,0,0,0.08)', padding: 28 }}>
           <h1 style={{ color: '#004A98', fontSize: 24, margin: '0 0 6px' }}>Performance feedback survey</h1>
-          <p style={{ color: '#68737d', margin: '0 0 24px' }}>Serial Subscription Tracking System (DOST-STII LAMS)</p>
+          <p style={{ color: '#68737d', margin: '0 0 24px' }}>DOST STII-LAMS</p>
           <a href="/tpu/customer-satisfaction-report" style={{ display: 'inline-block', color: '#004A98', fontWeight: 600, marginBottom: 18 }}>View performance feedback report</a>
           {message.text && <div role="status" style={{ background: message.type === 'success' ? '#e7f6ec' : '#fdecec', color: message.type === 'success' ? '#237a3b' : '#a12a2a', padding: '12px 14px', borderRadius: 6, marginBottom: 18 }}>{message.text}</div>}
           {loading ? <p>Loading active suppliers...</p> : suppliers.length === 0 ? <p style={{ color: '#68737d' }}>There are no active supplier accounts available for feedback.</p> : (

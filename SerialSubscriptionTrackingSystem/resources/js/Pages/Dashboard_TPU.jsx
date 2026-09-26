@@ -16,6 +16,7 @@ import {
 /* ================= CONSTANTS ================= */
 
 const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
 const PIPELINE_COLORS = {
   awarded: "#3b82f6",
   delivered: "#22c55e",
@@ -85,8 +86,8 @@ export default function TPUDashboard() {
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
   const [activeKpi, setActiveKpi] = useState(null);
 
   const [showFilter, setShowFilter] = useState(false);
@@ -401,7 +402,7 @@ export default function TPUDashboard() {
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December") || supplierId || serialTitle) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -580,15 +581,15 @@ export default function TPUDashboard() {
                     setFilterMode('year');
                     setTempYear(2026);
                     setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setTempSupplierId('');
                     setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setSupplierId('');
                     setSerialTitle('');
                   }}

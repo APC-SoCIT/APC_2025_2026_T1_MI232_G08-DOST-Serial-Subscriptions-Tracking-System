@@ -5,7 +5,7 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
-const appName = import.meta.env.VITE_APP_NAME || 'DOST STII Serial Subscription Tracking System';
+const appName = import.meta.env.VITE_APP_NAME || 'DOST STII-LAMS';
 
 // Handle 419 (CSRF token mismatch) globally for Inertia form submissions.
 // When Inertia receives a non-Inertia response (like the 419 error page),

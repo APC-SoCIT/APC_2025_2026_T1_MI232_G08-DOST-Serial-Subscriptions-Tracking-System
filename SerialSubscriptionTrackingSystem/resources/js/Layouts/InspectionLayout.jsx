@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router, usePage, Link } from "@inertiajs/react";
+import { Head, router, usePage, Link } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
 import { FaClipboardList, FaClipboardCheck, FaUserCircle } from "react-icons/fa";
 import { BsFillChatTextFill } from "react-icons/bs";
@@ -75,6 +75,7 @@ export default function InspectionLayout({ children, title }) {
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
+      <Head title={pageTitle === 'Chat' ? 'Inspection Chat' : pageTitle} />
       {/* ================= MOBILE OVERLAY ================= */}
       {isMobile && sidebarOpen && (
         <div
@@ -131,7 +132,7 @@ export default function InspectionLayout({ children, title }) {
               textAlign: 'left',
             }}>
               DOST <br />
-              STII
+              STII-LAMS
             </div>
           </div>
         </Link>
