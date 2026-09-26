@@ -72,8 +72,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         return Inertia::render('Admin_Logs');
     })->name('admin.logs');
 
-    Route::get('/admin/customer-satisfaction', [CustomerSatisfactionController::class, 'adminPage'])->name('admin.customer-satisfaction');
-});
+    Route::get('/admin/performance-feedback', [CustomerSatisfactionController::class, 'adminPage'])->name('admin.customer-satisfaction');});
 
 // ===================== TPU ROUTES =====================
 Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
@@ -183,8 +182,8 @@ Route::middleware(['auth', 'verified', 'role:tpu'])->group(function () {
         return Inertia::render('Dashboard_TPU_Addaccount');
     })->name('tpu.addaccount');
 
-    Route::get('/customer-satisfaction', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
-    Route::get('/tpu/customer-satisfaction-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
+     Route::get('/performance-feedback', [CustomerSatisfactionController::class, 'page'])->name('customer-satisfaction.page');
+    Route::get('/tpu/performance-feedback-report', [CustomerSatisfactionController::class, 'tpuReportPage'])->name('tpu.customer-satisfaction-report');
 });
 
 // ===================== GSPS ROUTES =====================

@@ -50,8 +50,7 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
     'tpu.monitordelivery': '/dashboard-tpu-monitordelivery',
     'archive.page': '/archive',
     'tpu.addaccount': '/dashboard-tpu-addaccount',
-    'customer-satisfaction.page': '/customer-satisfaction',
-  };
+    'customer-satisfaction.page': '/performance-feedback',  };
 
   const isRouteActive = (routeName) => {
     const expectedPath = routeToPath[routeName] || '';
