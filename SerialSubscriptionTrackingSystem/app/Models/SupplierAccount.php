@@ -29,6 +29,7 @@ class SupplierAccount extends Model
         'rejected_at',
         'rejection_reason',
         'user_id', // The User ID after approval
+        'is_active_supplier', // TPU's "Active Suppliers" list — controls visibility in Add Serial's supplier dropdown. Database-backed, shared across all browsers/devices/deployments (replaces the old localStorage-only version).
     ];
 
     /**
@@ -50,6 +51,7 @@ class SupplierAccount extends Model
         return [
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
+            'is_active_supplier' => 'boolean',
         ];
     }
 
@@ -85,6 +87,19 @@ class SupplierAccount extends Model
     public function scopeRejected($query)
     {
         return $query->where('status', 'rejected');
+    }
+
+    /**
+     * Scope for approved accounts that TPU has marked as "active" — i.e.
+     * selectable in Add Serial's supplier dropdown. Since MongoDB documents
+     * created before this field existed won't have it set at all, this
+     * treats a genuinely missing field the same as false (not active) —
+     * TPU must explicitly add a supplier to Active Suppliers, matching the
+     * old localStorage behavior where nothing was active until added.
+     */
+    public function scopeActiveSupplier($query)
+    {
+        return $query->where('status', 'approved')->where('is_active_supplier', true);
     }
 
     /**

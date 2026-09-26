@@ -399,6 +399,71 @@ class SupplierAccountController extends Controller
     }
 
     /**
+     * Mark an approved supplier account as "active" for TPU — i.e. it
+     * becomes selectable in Add Serial's supplier dropdown. This is the
+     * database-backed replacement for the old tpu_suppliers localStorage
+     * list: it's shared across every browser, device, and deployment
+     * instead of being trapped in whichever single browser TPU happened to
+     * click "Add Supplier" in.
+     */
+    public function activate(Request $request, $id)
+    {
+        $account = SupplierAccount::findOrFail($id);
+
+        if ($account->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only approved supplier accounts can be added to Active Suppliers.',
+            ], 422);
+        }
+
+        $account->is_active_supplier = true;
+        $account->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Supplier added to Active Suppliers.',
+            'account' => $account,
+        ]);
+    }
+
+    /**
+     * Remove a supplier account from TPU's Active Suppliers list. This does
+     * NOT disable the account or affect its approval status — it only
+     * controls whether it appears in Add Serial's supplier dropdown, same
+     * as the old localStorage-based "Remove" behavior.
+     */
+    public function deactivate(Request $request, $id)
+    {
+        $account = SupplierAccount::findOrFail($id);
+
+        $account->is_active_supplier = false;
+        $account->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Supplier removed from Active Suppliers.',
+            'account' => $account,
+        ]);
+    }
+
+    /**
+     * List supplier accounts currently marked active for TPU — powers both
+     * the Active Suppliers table in Supplier Info and the supplier dropdown
+     * in Add Serial / Subscription Tracking. Database-backed, so every
+     * browser/device/deployment sees the same list.
+     */
+    public function activeSuppliers(Request $request)
+    {
+        $accounts = SupplierAccount::activeSupplier()->orderBy('company_name')->get();
+
+        return response()->json([
+            'success' => true,
+            'accounts' => $accounts,
+        ]);
+    }
+
+    /**
      * Get statistics for dashboard
      */
     public function stats()

@@ -179,7 +179,9 @@ function SubscriptionTracking() {
   const [successMessage, setSuccessMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   
-  // Suppliers loaded from localStorage (created in Supplier Info page)
+  // Active Suppliers loaded from the database (Supplier Info page) — shared
+  // across every browser/device/deployment, replacing the old
+  // localStorage-only list that broke on fresh deploys/devices.
   const [addedSuppliers, setAddedSuppliers] = useState([]);
 
   // Dropdown options for serial form
@@ -187,30 +189,23 @@ function SubscriptionTracking() {
   const frequencyOptions = ['Biweekly', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
   const categories = ['Science', 'Medical', 'Economics', 'Geography', 'Technology', 'Business', 'Psychology', 'Arts', 'Engineering', 'Education', 'Others'];
   
-  // Load suppliers from localStorage (fallback) but prioritize approved suppliers from backend
-  // Also validate localStorage against approved suppliers to remove deleted ones
+  // Load Active Suppliers from the database
   useEffect(() => {
-    const savedSuppliers = localStorage.getItem('tpu_suppliers');
-    if (savedSuppliers) {
-      const parsed = JSON.parse(savedSuppliers);
-      // If we have approved suppliers from backend, filter localStorage to only valid ones
-      if (approvedSuppliers.length > 0) {
-        const approvedEmails = approvedSuppliers.map(s => s.email?.toLowerCase());
-        const validSuppliers = parsed.filter(s => approvedEmails.includes(s.email?.toLowerCase()));
-        setAddedSuppliers(validSuppliers);
-        // Update localStorage if any were removed
-        if (validSuppliers.length !== parsed.length) {
-          if (validSuppliers.length > 0) {
-            localStorage.setItem('tpu_suppliers', JSON.stringify(validSuppliers));
-          } else {
-            localStorage.removeItem('tpu_suppliers');
-          }
+    const fetchActiveSuppliers = async () => {
+      try {
+        const response = await axios.get('/api/supplier-accounts/active');
+        if (response.data.success) {
+          const mapped = response.data.accounts.map((acc) => ({
+            email: acc.email || '',
+          }));
+          setAddedSuppliers(mapped);
         }
-      } else {
-        setAddedSuppliers(parsed);
+      } catch (error) {
+        console.error('Error fetching active suppliers:', error);
       }
-    }
-  }, [approvedSuppliers]);
+    };
+    fetchActiveSuppliers();
+  }, []);
   
   // Fetch subscriptions from API on mount
   useEffect(() => {
@@ -267,7 +262,12 @@ function SubscriptionTracking() {
     }
   };
   
-  // Build supplier options from approved accounts, constrained to active suppliers from localStorage.
+  // Build supplier options from approved accounts, constrained to Active
+  // Suppliers (database-backed). Unlike the old localStorage fallback, an
+  // empty Active Suppliers list now correctly means "show nothing" instead
+  // of "show every approved supplier" — the bug that caused ALL suppliers
+  // to appear after a fresh deploy is fixed by this alone, since the
+  // database always reflects the real, intentionally-curated list.
   const supplierOptions = useMemo(() => {
     if (!Array.isArray(approvedSuppliers) || approvedSuppliers.length === 0) {
       return [];
@@ -280,10 +280,7 @@ function SubscriptionTracking() {
     );
 
     return approvedSuppliers
-      .filter((supplier) => {
-        if (activeEmails.size === 0) return true;
-        return activeEmails.has((supplier.email || '').toLowerCase().trim());
-      })
+      .filter((supplier) => activeEmails.has((supplier.email || '').toLowerCase().trim()))
       .map((supplier) => {
         const id = String(supplier._id || supplier.id || '');
         const companyName = supplier.company_name || supplier.supplierName || '';
