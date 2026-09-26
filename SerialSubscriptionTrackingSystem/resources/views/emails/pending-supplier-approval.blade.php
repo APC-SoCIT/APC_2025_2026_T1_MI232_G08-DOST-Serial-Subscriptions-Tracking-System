@@ -152,7 +152,7 @@
     <div class="email-container">
         <div class="header">
             <h1>Pending Supplier Approval</h1>
-            <p>DOST-STII Library Automated Management System</p>
+            <p>DOST STII-LAMS</p>
         </div>
         
         <div class="content">
@@ -212,7 +212,7 @@
         </div>
         
         <div class="footer">
-            <p class="system-name">DOST-STII Library Automated Management System</p>
+            <p class="system-name">DOST STII-LAMS</p>
             <p>Department of Science and Technology - Science and Technology Information Institute</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>

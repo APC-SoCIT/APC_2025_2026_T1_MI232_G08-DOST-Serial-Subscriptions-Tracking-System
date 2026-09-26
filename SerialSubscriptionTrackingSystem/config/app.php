@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'DOST STII Serial Subscription Tracking System'),
+    'name' => env('APP_NAME', 'DOST STII-LAMS'),
 
     /*
     |--------------------------------------------------------------------------

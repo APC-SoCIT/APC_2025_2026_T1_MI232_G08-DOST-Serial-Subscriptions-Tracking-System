@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router, usePage } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiUserAdd, HiMenu, HiX, HiClipboardList, HiChevronDown, HiChevronRight } from "react-icons/hi";
 import { MdRateReview } from "react-icons/md";
@@ -67,6 +67,7 @@ export default function AdminLayout({ children, header, title }) {
 
   const getPageTitle = () => {
     if (title) return title;
+    if (url === "/dashboard-admin") return "Admin Dashboard";
     const flatItems = navItems.flatMap((item) =>
       Array.isArray(item.children) ? item.children : [item]
     );
@@ -108,6 +109,7 @@ export default function AdminLayout({ children, header, title }) {
         overflow: "hidden",
       }}
     >
+      <Head title={getPageTitle()} />
       {isMobile && sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -186,7 +188,7 @@ export default function AdminLayout({ children, header, title }) {
               }}
             >
               DOST <br />
-              STII
+              STII-LAMS
             </div>
           </div>
         </a>

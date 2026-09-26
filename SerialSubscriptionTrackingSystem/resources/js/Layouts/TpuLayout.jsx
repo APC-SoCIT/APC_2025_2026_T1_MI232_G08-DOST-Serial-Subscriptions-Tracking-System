@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, usePage, router } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers, HiMenu, HiX, HiChevronDown, HiChevronRight } from "react-icons/hi";
 import { ImStatsBars } from "react-icons/im";
@@ -139,7 +139,7 @@ function Sidebar({ isMobile, sidebarOpen, setSidebarOpen }) {
             textAlign: 'left',
           }}>
             DOST <br />
-            STII
+            STII-LAMS
           </div>
         </div>
       </Link>
@@ -480,6 +480,7 @@ export default function TPULayout({ children, title, hideTitle = false }) {
 
   return (
     <div style={{ display: 'flex', background: '#F5F6FA', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
+      <Head title={pageTitle === 'Chat' ? 'TPU Chat' : pageTitle} />
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
         <div 
