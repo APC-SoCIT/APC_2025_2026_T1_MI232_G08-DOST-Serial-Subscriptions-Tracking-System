@@ -15,19 +15,20 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 4, CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
-
 const COLORS = {
   awarded: "#2563eb",
   preparing: "#facc15",
   forDelivery: "#22c55e",
   delivered: "#16a34a",
   returned: "#ef4444",
+  completed: "#0d9488",
 };
 
 /* ================= HELPERS ================= */
@@ -84,6 +85,7 @@ export default function SupplierDashboard() {
     preparing: 0,
     for_delivery: 0,
     delivered: 0,
+    completed: 0,
     returned: 0,
     success_rate: 0,
   });
@@ -93,19 +95,41 @@ export default function SupplierDashboard() {
   /* ===== MAIN FILTER STATE (APPLIED) ===== */
 
   const [filterMode, setFilterMode] = useState("year");
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(CURRENT_YEAR);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
   const [activeKpi, setActiveKpi] = useState(null);
 
   const [showFilter, setShowFilter] = useState(false);
 
+  /* ===== SERIAL TITLE FILTER STATE (no Supplier filter — already scoped to self) ===== */
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options');
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, []);
+
   /* ===== TEMP STATE (LIKE ADMIN) ===== */
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
@@ -124,6 +148,8 @@ export default function SupplierDashboard() {
 
     setStartMonth(MONTHS[s.getMonth()]);
     setEndMonth(MONTHS[e.getMonth()]);
+
+    setSerialTitle(tempSerialTitle);
 
     setShowFilter(false);
   };
@@ -153,6 +179,7 @@ export default function SupplierDashboard() {
           params: {
             start_date: startDate,
             end_date: endDate,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -166,7 +193,9 @@ export default function SupplierDashboard() {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -185,16 +214,18 @@ export default function SupplierDashboard() {
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          awarded: item.awarded || 0,
-          preparing: item.preparing || 0,
-          forDelivery: item.forDelivery || 0,
-          delivered: item.delivered || 0,
-          returned: item.returned || 0,
-        }));
+
+      
+  const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+      return months.map(month => ({
+        month,
+        awarded: monthlyByMonth.get(month)?.awarded || 0,
+        preparing: monthlyByMonth.get(month)?.preparing || 0,
+        forDelivery: monthlyByMonth.get(month)?.forDelivery || 0,
+        delivered: monthlyByMonth.get(month)?.delivered || 0,
+        completed: monthlyByMonth.get(month)?.completed || 0,
+        returned: monthlyByMonth.get(month)?.returned || 0,
+      }));    
     }
     return months.map((m) => ({
       month: m,
@@ -202,41 +233,44 @@ export default function SupplierDashboard() {
       preparing: 0,
       forDelivery: 0,
       delivered: 0,
+      completed: 0,
       returned: 0,
     }));
   }, [chartData.monthly, months]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
+  // Read success_rate and completed directly from dashboardStats — the real
+  // backend totals — instead of recomputing a different formula locally from
+  // the monthly chart buckets, which previously produced a mismatched number
+  // ((Delivered - Returned) / Awarded) versus the backend's and export's
+  // Delivered / (Delivered + Returned) formula.
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      awarded: acc.awarded + (month.awarded || 0),
-      preparing: acc.preparing + (month.preparing || 0),
-      forDelivery: acc.forDelivery + (month.forDelivery || 0),
-      delivered: acc.delivered + (month.delivered || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { awarded: 0, preparing: 0, forDelivery: 0, delivered: 0, returned: 0 });
-    
-    const successRate = totals.awarded > 0 
-      ? Math.round(((totals.delivered - totals.returned) / totals.awarded) * 100) 
-      : 0;
-    
     return {
-      awarded: totals.awarded,
-      preparing: totals.preparing,
-      forDelivery: totals.forDelivery,
-      delivered: totals.delivered,
-      returned: totals.returned,
-      success: Math.max(0, successRate),
+      awarded: dashboardStats.awarded || 0,
+      preparing: dashboardStats.preparing || 0,
+      forDelivery: dashboardStats.for_delivery || 0,
+      delivered: dashboardStats.delivered || 0,
+      completed: dashboardStats.completed || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
-  // Derive deliveryTrend from pipelineData to ensure consistency
+  // Derive deliveryTrend from pipelineData for consistency
   const deliveryTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
       delivered: item.delivered || 0,
+    }));
+  }, [pipelineData]);
+
+  // Completed Issues trend — same "completed" field the KPI card and the
+  // export's "Completed Issues" line read, so chart/KPI/export always agree.
+  const completedTrend = useMemo(() => {
+    return pipelineData.map(item => ({
+      month: item.month,
+      completed: item.completed || 0,
     }));
   }, [pipelineData]);
 
@@ -248,22 +282,14 @@ export default function SupplierDashboard() {
   }, [pipelineData]);
 
   const pieData = [
-    { name: "Delivered (Passed)", value: kpis.delivered },
+    { name: "Delivered (Passed)", value: kpis.completed },
     { name: "Returned", value: kpis.returned }
   ];
 
   const kpiCards = useMemo(() => ([
     {
-      id: "awarded",
-      title: "Awarded Serials",
-      value: kpis.awarded,
-      sourceLabel: "List of Serials",
-      sourcePath: "/dashboard-supplier-listofserial",
-      chartIds: ["pipeline", "volume"],
-    },
-    {
       id: "preparing",
-      title: "Preparing Delivery",
+      title: "Serial Issues For Preparing",
       value: kpis.preparing,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -271,7 +297,7 @@ export default function SupplierDashboard() {
     },
     {
       id: "forDelivery",
-      title: "For Delivery",
+      title: "Serial Issues For Delivery",
       value: kpis.forDelivery,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -279,15 +305,23 @@ export default function SupplierDashboard() {
     },
     {
       id: "delivered",
-      title: "Delivered to GSPS",
+      title: "Serial Issues Delivered to GSPS",
       value: kpis.delivered,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
       chartIds: ["pipeline", "deliveredTrend", "outcome"],
     },
     {
+      id: "completed",
+      title: "Delivered Issues",
+      value: kpis.completed,
+      sourceLabel: "List of Serials",
+      sourcePath: "/dashboard-supplier-listofserial",
+      chartIds: ["completedTrend", "outcome"],
+    },
+    {
       id: "returned",
-      title: "Returned",
+      title: "Serial Issues For Returned",
       value: kpis.returned,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
@@ -299,7 +333,7 @@ export default function SupplierDashboard() {
       value: `${kpis.success}%`,
       sourceLabel: "Delivery",
       sourcePath: "/dashboard-supplier-delivery",
-      chartIds: ["deliveredTrend", "outcome"],
+      chartIds: ["deliveredTrend", "completedTrend", "outcome"],
     },
   ]), [kpis]);
 
@@ -334,16 +368,21 @@ export default function SupplierDashboard() {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(
+                      startDate === firstDayOfMonth(year, "January") && endDate === lastDayOfMonth(year, "December")
+                        ? ""
+                        : startMonth
+                    );
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -355,6 +394,7 @@ export default function SupplierDashboard() {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'Supplier Dashboard',
                       },
                       responseType: 'blob',
@@ -365,7 +405,7 @@ export default function SupplierDashboard() {
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `Supplier_Dashboard_Report_${startDate}_to_${endDate}.csv`;
+                    link.download = `Supplier_Dashboard_Report_${startDate}_to_${endDate}.xlsx`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -419,6 +459,9 @@ export default function SupplierDashboard() {
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                        setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -477,6 +520,31 @@ export default function SupplierDashboard() {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Serial Title Selector (no Supplier filter — already scoped to self) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -484,15 +552,17 @@ export default function SupplierDashboard() {
                 <button
                   onClick={() => {
                     setFilterMode('year');
-                    setTempYear(2026);
-                    setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
-                    setYear(2026);
+                    setTempYear(CURRENT_YEAR);
+                    setTempStartMonth('');
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSerialTitle('');
+                    setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -534,7 +604,7 @@ export default function SupplierDashboard() {
               sourceLabel={card.sourceLabel}
               isActive={card.id === activeKpi}
               onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
-              onSeeMore={() => router.visit(card.sourcePath)}
+              onSeeMore={() => router.visit(`${card.sourcePath}?month=${encodeURIComponent(startMonth === endMonth ? String(monthIndex(startMonth) + 1).padStart(2, "0") : '')}&year=${year}&start_date=${startDate}&end_date=${endDate}`)}
             />
           ))}
         </div>
@@ -546,7 +616,7 @@ export default function SupplierDashboard() {
           <Chart title="Delivery Pipeline Status">
             <ResponsiveContainer height={300}>
               <AreaChart data={pipelineData}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Legend 
@@ -618,10 +688,23 @@ export default function SupplierDashboard() {
           <Chart title="Delivered Serials Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={deliveryTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </Chart>
+          )}
+
+          {shouldShowChart("completedTrend") && (
+          <Chart title="Completed Issues Trend">
+            <ResponsiveContainer height={300}>
+              <LineChart data={completedTrend}>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
+                <YAxis/>
+                <Tooltip/>
+                <Line dataKey="completed" stroke={COLORS.completed} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
               </LineChart>
             </ResponsiveContainer>
           </Chart>
@@ -631,7 +714,7 @@ export default function SupplierDashboard() {
           <Chart title="Monthly Delivery Volume">
             <ResponsiveContainer height={300}>
               <BarChart data={volumeData}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Bar dataKey="volume" fill="#2563eb"/>

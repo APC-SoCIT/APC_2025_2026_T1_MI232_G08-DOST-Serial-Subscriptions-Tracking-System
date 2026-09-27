@@ -16,12 +16,13 @@ import {
 /* ================= CONSTANTS ================= */
 
 const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
 const PIPELINE_COLORS = {
-  awarded: "#3b82f6",     // Blue
-  delivered: "#22c55e",   // Green
-  forDelivery: "#facc15", // Yellow
-  inspected: "#a855f7",   // Purple
-  returned: "#ef4444"     // Red
+  awarded: "#3b82f6",
+  delivered: "#22c55e",
+  forDelivery: "#facc15",
+  inspected: "#a855f7",
+  returned: "#ef4444"
 };
 
 const MONTHS = [
@@ -52,8 +53,6 @@ const dateRangeFactor = (startDate, endDate) => {
   return Math.max(diff/365, 0.15);
 };
 
-/* ===== WEEK HELPERS ===== */
-
 const getDaysInMonth = (year, month) => {
   const days = [];
   const firstDay = new Date(year, month, 1).getDay();
@@ -67,7 +66,6 @@ const getDaysInMonth = (year, month) => {
 
 export default function TPUDashboard() {
 
-  /* ===== DASHBOARD DATA FROM DATABASE ===== */
   const [dashboardStats, setDashboardStats] = useState({
     total_serials: 0,
     awarded: 0,
@@ -79,70 +77,87 @@ export default function TPUDashboard() {
     prepare: 0,
     efficiency: 0,
   });
-  const [chartData, setChartData] = useState({ monthly: [], pipeline: [] });
+  const [chartData, setChartData] = useState({ monthly: [], pipeline: [], supplierRanking: [] });
   const [isLoading, setIsLoading] = useState(true);
 
-  /* ===== FILTER STATE ===== */
-
-  const [filterMode, setFilterMode] = useState("year");       // applied
-const [tempFilterMode, setTempFilterMode] = useState("year"); // popup
+  const [filterMode, setFilterMode] = useState("year");
+  const [tempFilterMode, setTempFilterMode] = useState("year");
 
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
   const [activeKpi, setActiveKpi] = useState(null);
 
   const [showFilter, setShowFilter] = useState(false);
 
-  /* ===== TEMP STATES ===== */
+  /* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+  const [supplierId, setSupplierId] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierId, setTempSupplierId] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_id: tempSupplierId || undefined }
+        });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierId]);
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
-  /* ===== ADMIN SYNC: when popup opens ===== */
-useEffect(() => {
-  if (showFilter) {
-    setTempYear(year);
-    setTempStartMonth(startMonth);
-    setTempStartDate(startDate);
-    setTempEndDate(endDate);
 
-    // Sync calendar for week view
-    setCalendarYear(year);
-    setCalendarMonth(monthIndex(startMonth));
-  }
-}, [showFilter]);
+  useEffect(() => {
+    if (showFilter) {
+      setTempYear(year);
+      setTempStartMonth(filterMode === "month" ? startMonth : "");
+      setTempStartDate(startDate);
+      setTempEndDate(endDate);
+      setTempSupplierId(supplierId);
+      setTempSerialTitle(serialTitle);
 
-  // AUTO-SYNC: When YEAR changes in Year mode → full year range
-useEffect(() => {
-  if (filterMode === "year") {
-    setTempStartDate(firstDayOfMonth(tempYear, "January"));
-    setTempEndDate(lastDayOfMonth(tempYear, "December"));
-    setTempStartMonth("January");
-  }
-}, [tempYear, filterMode]);
+      setCalendarYear(year);
+      setCalendarMonth(monthIndex(startMonth));
+    }
+  }, [showFilter]);
 
-// AUTO-SYNC: When MONTH changes → update dates for that month
-useEffect(() => {
-  if (filterMode === "month") {
-    setTempStartDate(firstDayOfMonth(tempYear, tempStartMonth));
-    setTempEndDate(lastDayOfMonth(tempYear, tempStartMonth));
-  }
-}, [tempStartMonth, tempYear, filterMode]);
+  useEffect(() => {
+    if (filterMode === "year") {
+      setTempStartDate(firstDayOfMonth(tempYear, "January"));
+      setTempEndDate(lastDayOfMonth(tempYear, "December"));
+      setTempStartMonth("");
+    }
+  }, [tempYear, filterMode]);
 
-// AUTO-SYNC calendar when year/month changes (for week view)
-useEffect(() => {
-  if (filterMode === "week") {
-    setCalendarYear(tempYear);
-    setCalendarMonth(monthIndex(tempStartMonth));
-  }
-}, [tempYear, tempStartMonth, filterMode]);
+  useEffect(() => {
+    if (filterMode === "month") {
+      setTempStartDate(firstDayOfMonth(tempYear, tempStartMonth));
+      setTempEndDate(lastDayOfMonth(tempYear, tempStartMonth));
+    }
+  }, [tempStartMonth, tempYear, filterMode]);
 
-
-  /* ===== WEEK STATE ===== */
+  useEffect(() => {
+    if (filterMode === "week") {
+      setCalendarYear(tempYear);
+      setCalendarMonth(monthIndex(tempStartMonth));
+    }
+  }, [tempYear, tempStartMonth, filterMode]);
 
   const [calendarMonth, setCalendarMonth] = useState(monthIndex(startMonth));
   const [calendarYear, setCalendarYear] = useState(year);
@@ -159,7 +174,6 @@ useEffect(() => {
     setTempEndDate(sunday.toISOString().split("T")[0]);
   };
 
-  /* ===== FETCH DASHBOARD DATA FROM DATABASE ===== */
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setIsLoading(true);
@@ -168,6 +182,8 @@ useEffect(() => {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_id: supplierId || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -181,9 +197,9 @@ useEffect(() => {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
-
-  /* ================= MASTER FACTOR ================= */
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
   const filterFactor = useMemo(() => {
     const yFactor = yearWeight(year);
@@ -194,34 +210,39 @@ useEffect(() => {
       return yFactor * ((monthIndex(startMonth)+1)/12);
     }
 
-    // week & custom
     return yFactor * dateRangeFactor(startDate, endDate);
 
   }, [filterMode, year, startMonth, startDate, endDate]);
 
   const months = monthRange(startMonth, endMonth);
 
-  /* ================= APPLY FILTER ================= */
-
   const applyFilter = () => {
+    const isYearRange =
+      tempStartDate === firstDayOfMonth(tempYear, "January") &&
+      tempEndDate === lastDayOfMonth(tempYear, "December");
+    const isMonthRange = tempStartMonth &&
+      tempStartDate === firstDayOfMonth(tempYear, tempStartMonth) &&
+      tempEndDate === lastDayOfMonth(tempYear, tempStartMonth);
+    const nextFilterMode = isYearRange ? "year" : isMonthRange ? "month" : "custom";
+
+    setFilterMode(nextFilterMode);
     setYear(tempYear);
 
-    if (filterMode === "year") {
+    if (nextFilterMode === "year") {
       setStartMonth("January");
       setEndMonth("December");
       setStartDate(firstDayOfMonth(tempYear,"January"));
       setEndDate(lastDayOfMonth(tempYear,"December"));
     }
 
-  if (filterMode === "month") {
-  setStartMonth(tempStartMonth);
-  setEndMonth(tempStartMonth);
-  setStartDate(tempStartDate);
-  setEndDate(tempEndDate);
-}
+    if (nextFilterMode === "month") {
+      setStartMonth(tempStartMonth);
+      setEndMonth(tempStartMonth);
+      setStartDate(tempStartDate);
+      setEndDate(tempEndDate);
+    }
 
-
-    if (filterMode === "week" || filterMode === "custom") {
+    if (nextFilterMode === "custom") {
       setStartDate(tempStartDate);
       setEndDate(tempEndDate);
 
@@ -232,17 +253,16 @@ useEffect(() => {
       setEndMonth(MONTHS[e.getMonth()]);
     }
 
+    setSupplierId(tempSupplierId);
+    setSerialTitle(tempSerialTitle);
+
     setShowFilter(false);
   };
 
-  /* ================= CHART DATA (FROM DATABASE) ================= */
-
-  // Use chart data from database or generate fallback
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
       return chartData.monthly.filter(item => months.includes(item.month));
     }
-    // Fallback to placeholder data
     return months.map((m) => ({
       month: m,
       awarded: 0,
@@ -253,35 +273,19 @@ useEffect(() => {
     }));
   }, [chartData.monthly, months]);
 
-  /* ================= KPI (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
-
-  // Compute KPIs as sum of chart data to ensure alignment
-  const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      awarded: acc.awarded + (month.awarded || 0),
-      delivered: acc.delivered + (month.delivered || 0),
-      forDelivery: acc.forDelivery + (month.forDelivery || 0),
-      inspected: acc.inspected + (month.inspected || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { awarded: 0, delivered: 0, forDelivery: 0, inspected: 0, returned: 0 });
-    
-    const successRate = totals.awarded > 0 
-      ? Math.round((totals.inspected / totals.awarded) * 100) 
-      : 0;
-    
+   const kpis = useMemo(() => {
     return {
-      total: totals.awarded,
-      delivered: totals.delivered,
-      awaiting: totals.forDelivery,
-      returned: totals.returned,
-      inspected: totals.inspected,
+      total: dashboardStats.total_serials || 0,
+      delivered: dashboardStats.delivered || 0,
+      awaiting: dashboardStats.for_delivery || 0,
+      forDeliveryStatus: dashboardStats.for_delivery_status || 0,
+      returned: dashboardStats.returned || 0,
+      inspected: dashboardStats.inspected || 0,
       pending: dashboardStats.pending || 0,
       prepare: dashboardStats.prepare || 0,
-      success: successRate,
+      success: dashboardStats.efficiency || 0,
     };
-  }, [pipelineData, dashboardStats]);
-
-  // Derive deliveryTrend from pipelineData to ensure consistency
+  }, [dashboardStats]);
   const deliveryTrend = useMemo(() => {
     return pipelineData.map(item => ({
       month: item.month,
@@ -289,7 +293,6 @@ useEffect(() => {
     }));
   }, [pipelineData]);
 
-  // Use computed KPIs for pie chart to ensure alignment
   const inspectionPie = useMemo(() => {
     return [
       { name: "Inspected", value: kpis.inspected || 0 },
@@ -297,10 +300,10 @@ useEffect(() => {
     ];
   }, [kpis]);
 
-  const kpiCards = useMemo(() => ([
+    const kpiCards = useMemo(() => ([
     {
       id: "total",
-      title: "Total Serials Encoded",
+      title: "Total Serial Titles Encoded",
       value: kpis.total,
       sourceLabel: "Subscription",
       sourcePath: "/dashboard-tpu-subscriptiontracking",
@@ -308,7 +311,7 @@ useEffect(() => {
     },
     {
       id: "delivered",
-      title: "Delivered to GSPS",
+      title: "Serial Issues Delivered to GSPS",
       value: kpis.delivered,
       sourceLabel: "Monitor Delivery",
       sourcePath: "/dashboard-tpu-monitordelivery",
@@ -316,15 +319,23 @@ useEffect(() => {
     },
     {
       id: "awaiting",
-      title: "Awaiting delivery",
+      title: "Serial Issue awaiting Delivery",
       value: kpis.awaiting,
       sourceLabel: "Monitor Delivery",
       sourcePath: "/dashboard-tpu-monitordelivery",
       chartIds: ["pipeline"],
     },
     {
+      id: "forDeliveryStatus",
+      title: "Serial Issues For Delivery",
+      value: kpis.forDeliveryStatus,
+      sourceLabel: "Monitor Delivery",
+      sourcePath: "/dashboard-tpu-monitordelivery",
+      chartIds: ["pipeline"],
+    },
+    {
       id: "returned",
-      title: "Overdue / Returned",
+      title: "Serial Issues For Returned",
       value: kpis.returned,
       sourceLabel: "Monitor Delivery",
       sourcePath: "/dashboard-tpu-monitordelivery",
@@ -332,7 +343,7 @@ useEffect(() => {
     },
     {
       id: "inspected",
-      title: "Inspected",
+      title: "Accepted Serial Issues",
       value: kpis.inspected,
       sourceLabel: "Monitor Delivery",
       sourcePath: "/dashboard-tpu-monitordelivery",
@@ -354,12 +365,9 @@ useEffect(() => {
   const visibleKpiCards = selectedKpi ? [selectedKpi] : kpiCards;
   const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includes(chartId);
 
-  const supplierRanking = [
-    { name:"ABC Books", value: 100 },
-    { name:"Med Pub Ltd", value: 95 },
-    { name:"Global Periodicals", value: 80 },
-    { name:"Nat Geo", value: 72 }
-  ];
+  const supplierRanking = chartData.supplierRanking && chartData.supplierRanking.length > 0
+    ? chartData.supplierRanking
+    : [];
 
   const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     const RADIAN = Math.PI/180;
@@ -374,40 +382,36 @@ useEffect(() => {
     );
   };
 
-  /* ================= UI ================= */
-
   return (
     <TPULayout>
       <Head title="TPU Dashboard" />
 
       <div className="space-y-6">
 
-        {/* FILTERS - Dropdown Style (matching Admin Logs design) */}
         <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-200">
           
-          {/* Filter Toolbar */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between px-6 py-4 border-b border-gray-100 gap-4">
             
-            {/* Title */}
             <h2 className="text-xl font-bold text-gray-800">Dashboard Overview</h2>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(filterMode === "month" ? startMonth : "");
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierId(supplierId);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -419,6 +423,8 @@ useEffect(() => {
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_id: supplierId || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'TPU Dashboard',
                       },
                       responseType: 'blob',
@@ -447,12 +453,10 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Filter Panel - Expandable */}
           {showFilter && (
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 
-                {/* Year Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
                   <select
@@ -472,7 +476,6 @@ useEffect(() => {
                   </select>
                 </div>
 
-                {/* Month Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
                   <select
@@ -483,6 +486,9 @@ useEffect(() => {
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                        } else {
+                          setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                          setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -494,7 +500,6 @@ useEffect(() => {
                   </select>
                 </div>
 
-                {/* Week Selector */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Week</label>
                   <select
@@ -520,7 +525,6 @@ useEffect(() => {
                   </select>
                 </div>
 
-                {/* Start Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
                   <input
@@ -531,7 +535,6 @@ useEffect(() => {
                   />
                 </div>
 
-                {/* End Date */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
                   <input
@@ -541,22 +544,66 @@ useEffect(() => {
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierId}
+                    onChange={(e) => {
+                      setTempSupplierId(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
-              {/* Filter Actions */}
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(2026);
-                    setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
+                    setTempStartMonth('');
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSupplierId('');
+                    setTempSerialTitle('');
                     setYear(2026);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSupplierId('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -573,7 +620,6 @@ useEffect(() => {
           )}
         </div>
 
-        {/* KPIs */}
         {selectedKpi && (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <p className="text-sm text-blue-900">
@@ -589,7 +635,7 @@ useEffect(() => {
           </div>
         )}
 
-        <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-6"}`}>
+               <div className={`grid gap-4 ${selectedKpi ? "md:grid-cols-1" : "md:grid-cols-7"}`}>
           {visibleKpiCards.map((card) => (
             <KPI
               key={card.id}
@@ -603,18 +649,16 @@ useEffect(() => {
           ))}
         </div>
 
-        {/* Charts */}
         <div className="grid md:grid-cols-2 gap-6">
 
  {shouldShowChart("pipeline") && (
  <Chart title="Serial Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
-      <XAxis dataKey="month"/>
+      <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
       <YAxis/>
       <Tooltip/>
 
-      {/* Legend uses same colors */}
       <Legend 
   verticalAlign="bottom"
   height={36}
@@ -679,7 +723,7 @@ useEffect(() => {
           <Chart title="Delivery Performance Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={deliveryTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
@@ -688,14 +732,25 @@ useEffect(() => {
           </Chart>
           )}
 
-          {shouldShowChart("supplierRanking") && (
+          {shouldShowChart("supplierRanking") && supplierRanking.length > 0 && (
           <Chart title="Supplier Reliability Ranking">
-            <ResponsiveContainer height={300}>
-              <BarChart data={supplierRanking} layout="vertical">
+            <ResponsiveContainer height={Math.max(240, supplierRanking.length * 70)}>
+              <BarChart
+                data={supplierRanking}
+                layout="vertical"
+                margin={{ top: 8, right: 55, bottom: 8, left: 8 }}
+                barCategoryGap="25%"
+              >
                 <XAxis type="number" domain={[0,100]} tickFormatter={(v)=>`${v}%`}/>
-                <YAxis dataKey="name" type="category"/>
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  width={130}
+                  tick={{ fontSize: 13 }}
+                  interval={0}
+                />
                 <Tooltip formatter={(v)=>`${v}%`}/>
-                <Bar dataKey="value" fill="#2563eb">
+                <Bar dataKey="value" fill="#2563eb" barSize={38}>
                   <LabelList dataKey="value" position="right" formatter={(v)=>`${v}%`} />
                 </Bar>
               </BarChart>
@@ -731,39 +786,40 @@ useEffect(() => {
   );
 }
 
-/* ================= UI ================= */
-
-const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onSelect}
-    onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onSelect();
-      }
-    }}
-    className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
-  >
-    <p className="text-sm text-gray-600">{title}</p>
-    <p className="text-3xl font-bold">{value}</p>
-    <div className="mt-4 flex justify-end">
-      <button
-        type="button"
-        aria-label={`See more in ${sourceLabel}`}
-        title={`Open ${sourceLabel}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSeeMore();
-        }}
-        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-      >
-        See More
-      </button>
+const KPI = ({title, value, sourceLabel, isActive, onSelect, onSeeMore}) => {
+  const isLongValue = typeof value === 'string' && value.length > 10;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`bg-white p-5 rounded-xl shadow border cursor-pointer transition ${isActive ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent hover:border-blue-200"}`}
+    >
+      <p className="text-sm text-gray-600">{title}</p>
+      <p className={isLongValue ? "text-xl font-bold leading-tight" : "text-3xl font-bold"}>{value}</p>
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          aria-label={`See more in ${sourceLabel}`}
+          title={`Open ${sourceLabel}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSeeMore();
+          }}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+        >
+          See More
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Chart = ({title,children}) => (
   <div className="bg-white p-6 rounded-xl shadow">

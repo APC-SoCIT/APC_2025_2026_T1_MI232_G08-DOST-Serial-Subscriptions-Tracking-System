@@ -26,6 +26,7 @@ class SerialIssue extends Model
         'for_delivery_at',
         'received_at',
         'inspected_at',
+        'delivered_at',
         'notes',
         // Attachment fields
         'attachment_url',
@@ -36,6 +37,7 @@ class SerialIssue extends Model
         'inspection_remarks',
         'inspection_checklist',
         'other_description',
+        'archived_at',
     ];
 
     /**
@@ -53,7 +55,9 @@ class SerialIssue extends Model
             'for_delivery_at' => 'datetime',
             'received_at' => 'datetime',
             'inspected_at' => 'datetime',
+            'delivered_at' => 'datetime',
             'inspection_checklist' => 'array',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -74,6 +78,11 @@ class SerialIssue extends Model
     const INSPECTION_INSPECTED = 'inspected';
     const INSPECTION_FOR_RETURN = 'for_return';
 
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
     /**
      * Get the subscription that owns this serial issue
      */
@@ -87,7 +96,7 @@ class SerialIssue extends Model
      */
     public function scopePending($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->whereNull('archived_at')->where('status', self::STATUS_PENDING);
     }
 
     /**
@@ -95,7 +104,7 @@ class SerialIssue extends Model
      */
     public function scopeDelivered($query)
     {
-        return $query->where('status', self::STATUS_DELIVERED);
+        return $query->whereNull('archived_at')->where('status', self::STATUS_DELIVERED);
     }
 
     /**
@@ -111,7 +120,7 @@ class SerialIssue extends Model
      */
     public function scopeNeedsInspection($query)
     {
-        return $query->where('status', self::STATUS_RECEIVED)
+        return $query->whereNull('archived_at')->where('status', self::STATUS_RECEIVED)
                      ->whereNull('inspection_status');
     }
 
@@ -120,7 +129,7 @@ class SerialIssue extends Model
      */
     public function scopeOverdue($query)
     {
-        return $query->where('expected_delivery_date', '<', now())
+        return $query->whereNull('archived_at')->where('expected_delivery_date', '<', now())
                      ->whereNotIn('status', [self::STATUS_DELIVERED, self::STATUS_FOR_RETURN]);
     }
 
@@ -129,7 +138,7 @@ class SerialIssue extends Model
      */
     public function scopeUpcoming($query, $days = 7)
     {
-        return $query->where('expected_delivery_date', '>=', now())
+        return $query->whereNull('archived_at')->where('expected_delivery_date', '>=', now())
                      ->where('expected_delivery_date', '<=', now()->addDays($days))
                      ->whereNotIn('status', [self::STATUS_DELIVERED, self::STATUS_FOR_RETURN]);
     }

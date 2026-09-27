@@ -422,7 +422,7 @@ function AddAccount() {
 
 export default function Dashboard_TPU_Addaccount() {
   return (
-    <TPULayout title="Add Account">
+    <TPULayout title="Create Account">
       <AddAccount />
     </TPULayout>
   );

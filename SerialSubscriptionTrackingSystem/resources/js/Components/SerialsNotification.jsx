@@ -111,7 +111,10 @@ export default function SerialsNotification({ isMobile = false }) {
   // Mark all as read
   const handleMarkAllRead = async () => {
     try {
-      await window.axios.post('/api/notifications/mark-all-read');
+      const response = await window.axios.post('/api/notifications/mark-all-read');
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Unable to mark notifications as read');
+      }
       // Update local state immediately for instant UI feedback
       setUnreadCount(0);
       // Update all notifications to be marked as read in the UI
@@ -123,6 +126,34 @@ export default function SerialsNotification({ isMobile = false }) {
       );
     } catch (error) {
       console.error('Error marking notifications as read:', error);
+    }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (notification.is_read) return;
+
+    const payload = notification.notification_key
+      ? { notification_key: notification.notification_key }
+      : notification.user_notification_id
+      ? { user_notification_id: notification.user_notification_id }
+      : notification.notification_id
+        ? { notification_id: notification.notification_id }
+        : null;
+
+    if (!payload) return;
+
+    try {
+      const response = await window.axios.post('/api/notifications/mark-read', payload);
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Unable to mark notification as read');
+      }
+
+      setNotifications((prevNotifications) => prevNotifications.map((item) => (
+        item === notification ? { ...item, is_read: true } : item
+      )));
+      setUnreadCount((count) => Math.max(0, count - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
     }
   };
 
@@ -290,6 +321,7 @@ export default function SerialsNotification({ isMobile = false }) {
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f8f9fa'}
                     onMouseLeave={(e) => e.currentTarget.style.background = notification.is_read ? '#fff' : colors.bg}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                       <div style={{

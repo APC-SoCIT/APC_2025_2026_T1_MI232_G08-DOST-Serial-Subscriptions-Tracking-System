@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Reminder - DOST STII</title>
+    <title>Delivery Reminder - DOST STII-LAMS</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -129,7 +129,7 @@
 <body>
     <div class="email-container">
         <div class="email-header">
-            <h1>Serial Subscription Tracking System</h1>
+            <h1>DOST STII-LAMS</h1>
             <p>Department of Science and Technology - STII</p>
         </div>
         
@@ -183,13 +183,13 @@
             @endif
 
             <p style="margin-top: 20px; font-size: 14px; color: #666;">
-                If you have any questions about this delivery or need to reschedule, please contact the DOST Serial Subscription Tracking System administrator.
+                If you have any questions about this delivery or need to reschedule, please contact the DOST STII-LAMS administrator.
             </p>
         </div>
         
         <div class="email-footer">
             <p>
-                <span class="dost-branding">Serial Subscription Tracking System</span>
+                <span class="dost-branding">DOST STII-LAMS</span>
             </p>
             <p>Department of Science and Technology - Science and Technology Information Institute (STII)</p>
             <p style="margin-top: 10px; color: #999;">

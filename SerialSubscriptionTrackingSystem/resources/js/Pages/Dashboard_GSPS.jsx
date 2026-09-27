@@ -15,13 +15,13 @@ import {
 
 /* ================= CONSTANTS ================= */
 
-const YEARS = [2022, 2023, 2024, 2025, 2026];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 4, CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
-
 const formatDateInput = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -98,18 +98,44 @@ export default function DashboardGSPS() {
   /* ===== FILTER STATE (APPLIED) ===== */
 
   const [filterMode, setFilterMode] = useState("year");
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(CURRENT_YEAR);
   const [startMonth, setStartMonth] = useState("January");
   const [endMonth, setEndMonth] = useState("December");
-  const [startDate, setStartDate] = useState(firstDayOfMonth(2026,"January"));
-  const [endDate, setEndDate] = useState(lastDayOfMonth(2026,"December"));
+  const [startDate, setStartDate] = useState(firstDayOfMonth(CURRENT_YEAR,"January"));
+  const [endDate, setEndDate] = useState(lastDayOfMonth(CURRENT_YEAR,"December"));
   const [showFilter, setShowFilter] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
+
+  /* ===== SUPPLIER (by account ID) / SERIAL TITLE FILTER STATE ===== */
+  const [supplierId, setSupplierId] = useState("");
+  const [serialTitle, setSerialTitle] = useState("");
+  const [tempSupplierId, setTempSupplierId] = useState("");
+  const [tempSerialTitle, setTempSerialTitle] = useState("");
+  const [filterOptions, setFilterOptions] = useState({ suppliers: [], serial_titles: [] });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/api/dashboard-filter-options', {
+          params: { supplier_id: tempSupplierId || undefined }
+        });
+        if (response.data.success) {
+          setFilterOptions({
+            suppliers: response.data.suppliers || [],
+            serial_titles: response.data.serial_titles || [],
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, [tempSupplierId]);
 
   /* ===== TEMP STATE ===== */
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
@@ -143,6 +169,9 @@ export default function DashboardGSPS() {
     setStartMonth(MONTHS[s.getMonth()]);
     setEndMonth(MONTHS[e.getMonth()]);
 
+    setSupplierId(tempSupplierId);
+    setSerialTitle(tempSerialTitle);
+
     setShowFilter(false);
   };
 
@@ -171,6 +200,8 @@ export default function DashboardGSPS() {
           params: {
             start_date: startDate,
             end_date: endDate,
+            supplier_id: supplierId || undefined,
+            serial_title: serialTitle || undefined,
           }
         });
         if (response.data.success) {
@@ -184,7 +215,9 @@ export default function DashboardGSPS() {
       }
     };
     fetchDashboardStats();
-  }, [startDate, endDate]);
+    const refreshTimer = window.setInterval(fetchDashboardStats, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [startDate, endDate, supplierId, serialTitle]);
 
   /* ===== FACTOR ===== */
 
@@ -229,15 +262,14 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
 
   const pipelineData = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          received: item.received || 0,
-          pending: item.pending || 0,
-          forwarded: item.forwarded || 0,
-          returned: item.returned || 0,
-        }));
+      const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+      return months.map(month => ({
+        month,
+        received: monthlyByMonth.get(month)?.received || 0,
+        pending: monthlyByMonth.get(month)?.pending || 0,
+        forwarded: monthlyByMonth.get(month)?.forwarded || 0,
+        returned: monthlyByMonth.get(month)?.returned || 0,
+      }));
     }
     return months.map((m) => ({
       month: m,
@@ -256,38 +288,25 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     }));
   }, [pipelineData]);
 
-  /* ================= KPIs (COMPUTED FROM CHART DATA FOR ALIGNMENT) ================= */
+  /* ================= KPIs (FROM DATABASE HEADLINE STATS) ================= */
 
-  // Compute KPIs as sum of pipelineData to ensure alignment with charts
   const kpis = useMemo(() => {
-    const totals = pipelineData.reduce((acc, month) => ({
-      received: acc.received + (month.received || 0),
-      forwarded: acc.forwarded + (month.forwarded || 0),
-      pending: acc.pending + (month.pending || 0),
-      returned: acc.returned + (month.returned || 0),
-    }), { received: 0, forwarded: 0, pending: 0, returned: 0 });
-    
-    const successRate = totals.received > 0 
-      ? Math.round((totals.forwarded / totals.received) * 100) 
-      : 0;
-    
     return {
-      received: totals.received,
-      forwarded: totals.forwarded,
-      pending: totals.pending,
-      returned: totals.returned,
-      success: successRate,
+      received: dashboardStats.received || 0,
+      forwarded: dashboardStats.forwarded || 0,
+      pending: dashboardStats.pending || 0,
+      returned: dashboardStats.returned || 0,
+      success: dashboardStats.success_rate || 0,
     };
-  }, [pipelineData]);
+  }, [dashboardStats]);
 
   const forwardedMonthly = useMemo(() => {
     if (chartData.monthly && chartData.monthly.length > 0) {
-      return chartData.monthly
-        .filter(item => months.includes(item.month))
-        .map(item => ({
-          month: item.month,
-          forwarded: item.forwarded || 0,
-        }));
+      const monthlyByMonth = new Map(chartData.monthly.map(item => [item.month, item]));
+      return months.map(month => ({
+        month,
+        forwarded: monthlyByMonth.get(month)?.forwarded || 0,
+      }));
     }
     return months.map((m) => ({ month: m, forwarded: 0 }));
   }, [chartData.monthly, months]);
@@ -300,7 +319,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
   const kpiCards = useMemo(() => ([
     {
       id: "received",
-      title: "Received Deliveries",
+      title: "Received Serial Issues",
       value: kpis.received,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
@@ -308,7 +327,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     },
     {
       id: "forwarded",
-      title: "Forwarded to Inspection",
+      title: "Serial Issues forwarded to Inspection",
       value: kpis.forwarded,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
@@ -316,30 +335,21 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
     },
     {
       id: "pending",
-      title: "Pending Forwarding",
+      title: "Pending Receipt Confirmation",
       value: kpis.pending,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
       chartIds: ["pipeline"],
     },
-    {
+  {
       id: "returned",
-      title: "Returned / Issues",
+      title: "Returned Issues",
       value: kpis.returned,
       sourceLabel: "Delivery Status",
       sourcePath: "/dashboard-gsps-deliverystatus",
       chartIds: ["pipeline", "outcome"],
     },
-    {
-      id: "success",
-      title: "Handling Success Rate",
-      value: `${kpis.success}%`,
-      sourceLabel: "Delivery Status",
-      sourcePath: "/dashboard-gsps-deliverystatus",
-      chartIds: ["pipeline", "outcome"],
-    },
   ]), [kpis]);
-
   const selectedKpi = activeKpi
     ? kpiCards.find((card) => card.id === activeKpi) || null
     : null;
@@ -377,13 +387,15 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     setTempStartMonth(startDate === fullYearStart && endDate === fullYearEnd ? "" : startMonth);
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
+                    setTempSupplierId(supplierId);
+                    setTempSerialTitle(serialTitle);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
               >
                 <FaFilter size={14} />
                 Filters
-                {(year !== 2026 || startDate !== firstDayOfMonth(2026, "January") || endDate !== lastDayOfMonth(2026, "December")) && (
+                {(year !== CURRENT_YEAR || startDate !== firstDayOfMonth(CURRENT_YEAR, "January") || endDate !== lastDayOfMonth(CURRENT_YEAR, "December") || supplierId || serialTitle) && (
                   <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Active</span>
                 )}
               </button>
@@ -395,6 +407,8 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                       params: {
                         start_date: startDate,
                         end_date: endDate,
+                        supplier_id: supplierId || undefined,
+                        serial_title: serialTitle || undefined,
                         dashboard_name: 'GSPS Dashboard',
                       },
                       responseType: 'blob',
@@ -405,7 +419,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `GSPS_Dashboard_Report_${startDate}_to_${endDate}.csv`;
+                    link.download = `GSPS_Dashboard_Report_${startDate}_to_${endDate}.xlsx`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -527,6 +541,49 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                {/* Supplier Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+                  <select
+                    value={tempSupplierId}
+                    onChange={(e) => {
+                      setTempSupplierId(e.target.value);
+                      setTempSerialTitle('');
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Suppliers</option>
+                    {filterOptions.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Serial Title Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Serial Title</label>
+                  {filterOptions.serial_titles.length === 0 ? (
+                    <select
+                      value=""
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No Serial Titles Yet</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={tempSerialTitle}
+                      onChange={(e) => setTempSerialTitle(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Serial Titles</option>
+                      {filterOptions.serial_titles.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Filter Actions */}
@@ -534,15 +591,19 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                 <button
                   onClick={() => {
                     setFilterMode('year');
-                    setTempYear(2026);
-                    setTempStartMonth('January');
-                    setTempStartDate(firstDayOfMonth(2026, 'January'));
-                    setTempEndDate(lastDayOfMonth(2026, 'December'));
-                    setYear(2026);
+                    setTempYear(CURRENT_YEAR);
+                    setTempStartMonth('');
+                    setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setTempSupplierId('');
+                    setTempSerialTitle('');
+                    setYear(CURRENT_YEAR);
                     setStartMonth('January');
                     setEndMonth('December');
-                    setStartDate(firstDayOfMonth(2026, 'January'));
-                    setEndDate(lastDayOfMonth(2026, 'December'));
+                    setStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
+                    setEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
+                    setSupplierId('');
+                    setSerialTitle('');
                   }}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                 >
@@ -584,7 +645,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
               sourceLabel={card.sourceLabel}
               isActive={card.id === activeKpi}
               onSelect={() => setActiveKpi((prev) => prev === card.id ? null : card.id)}
-              onSeeMore={() => router.visit(card.sourcePath)}
+              onSeeMore={() => router.visit(`${card.sourcePath}?month=${encodeURIComponent(startMonth === endMonth ? String(monthIndex(startMonth) + 1).padStart(2, "0") : '')}&year=${year}&start_date=${startDate}&end_date=${endDate}`)}
             />
           ))}
         </div>
@@ -602,7 +663,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
           <Chart title="Delivery Intake Trend">
             <ResponsiveContainer height={280}>
               <LineChart data={intakeTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line type="monotone" dataKey="received" stroke={COLORS.received} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
@@ -615,7 +676,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
           <Chart title="Delivery Pipeline Status">
             <ResponsiveContainer height={280}>
               <AreaChart data={pipelineData}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Legend 
@@ -635,7 +696,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
           <Chart title="Monthly Forwarded to Inspection">
             <ResponsiveContainer height={280}>
               <BarChart data={forwardedMonthly}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50} tick={{ fontSize: 12, fontWeight: 600 }}/>
                 <YAxis/>
                 <Tooltip/>
                 <Bar dataKey="forwarded" fill={COLORS.received}/>

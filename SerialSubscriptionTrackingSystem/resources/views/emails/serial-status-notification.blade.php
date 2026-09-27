@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serial Status Update - DOST STII</title>
+    <title>Serial Status Update - DOST STII-LAMS</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -120,7 +120,7 @@
 <body>
     <div class="email-container">
         <div class="email-header">
-            <h1>Serial Subscription Tracking System</h1>
+            <h1>DOST STII-LAMS</h1>
             <p>Department of Science and Technology - STII</p>
         </div>
         
@@ -214,7 +214,7 @@
                 @endif
             </div>
             
-            <p>Please log in to the Serial Subscription Tracking System to view more details or take necessary actions.</p>
+            <p>Please log in to DOST STII-LAMS to view more details or take necessary actions.</p>
         </div>
         
         <div class="email-footer">

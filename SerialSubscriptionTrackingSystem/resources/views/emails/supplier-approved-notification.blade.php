@@ -17,7 +17,7 @@
                                 ✓ Supplier Account Approved
                             </h1>
                             <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; font-weight: 500;">
-                                DOST Serial Subscription Tracking System
+                                DOST STII-LAMS
                             </p>
                         </td>
                     </tr>
@@ -103,7 +103,7 @@
                         <td style="background-color: #f8f9fa; padding: 25px 40px; text-align: center; border-top: 1px solid #e9ecef;">
                             <p style="margin: 0; font-size: 12px; color: #6c757d; line-height: 1.6;">
                                 This is an automated notification from the<br>
-                                <strong>DOST Serial Subscription Tracking System</strong>
+                                <strong>DOST STII-LAMS</strong>
                             </p>
                             <p style="margin: 15px 0 0 0; font-size: 11px; color: #adb5bd;">
                                 © {{ date('Y') }} Department of Science and Technology. All rights reserved.

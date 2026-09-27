@@ -1,5 +1,5 @@
-# apc-PROJMAN-template
-Template repository for APC PROJMAN     
+# APC-SOFTDEV-QUALITY
+Repository for APC SOFTDEV and QUALITY     
   
 Group Name: CyberSentinels    
    

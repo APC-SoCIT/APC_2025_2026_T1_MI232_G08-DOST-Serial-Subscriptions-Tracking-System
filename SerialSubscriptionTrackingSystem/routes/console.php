@@ -30,3 +30,8 @@ Schedule::command('logs:cleanup --days=90')
     ->weeklyOn(0, '03:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('archive:eligible-records')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->onOneServer();

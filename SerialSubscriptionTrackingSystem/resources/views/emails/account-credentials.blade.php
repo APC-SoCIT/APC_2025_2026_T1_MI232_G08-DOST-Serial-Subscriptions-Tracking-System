@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your DOST-STII LAMS Account</title>
+    <title>Your DOST STII-LAMS Account</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -168,7 +168,7 @@
 <body>
     <div class="email-container">
         <div class="header">
-            <h1>DOST-STII LAMS</h1>
+            <h1>DOST STII-LAMS</h1>
             <p>Library Automated Management System</p>
         </div>
         
@@ -176,7 +176,7 @@
             <p class="greeting">Hello {{ $recipientName }},</p>
             
             <p class="message">
-                Your account has been successfully created in the DOST-STII Library Automated Management System (LAMS). 
+                Your account has been successfully created in DOST STII-LAMS.
                 Please find your login credentials below:
             </p>
             
@@ -219,7 +219,7 @@
         </div>
         
         <div class="footer">
-            <p class="system-name">DOST-STII Library Automated Management System</p>
+            <p class="system-name">DOST STII-LAMS</p>
             <p>Department of Science and Technology - Science and Technology Information Institute</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>

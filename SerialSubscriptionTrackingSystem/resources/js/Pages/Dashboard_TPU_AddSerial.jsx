@@ -4,23 +4,30 @@ import { Head, usePage } from '@inertiajs/react';
 import { MdAdd, MdClose, MdSearch } from "react-icons/md";
 import axios from 'axios';
 
+const emptyFormData = {
+  serialTitle: '',
+  issn: '',
+  supplierName: '',
+  supplierId: '',
+  period: '',
+  awardCost: '',
+  frequency: 'Monthly',
+  totalVolumes: '',
+  totalIssues: '12',
+  volumeStart: '',
+  issueStart: '',
+  startDate: new Date().toISOString().split('T')[0],
+  publicationDateType: 'specific',
+  publicationDate: '',
+  authorPublisher: '',
+  category: '',
+  note: ''
+};
+
 export default function AddSerial() {
   const { approvedSuppliers = [] } = usePage().props;
   
-  const [formData, setFormData] = useState({
-    serialTitle: '',
-    issn: '',
-    supplierName: '',
-    supplierId: '',
-    period: '',
-    awardCost: '',
-    frequency: 'Monthly',
-    totalIssues: '12',
-    startDate: new Date().toISOString().split('T')[0],
-    authorPublisher: '',
-    category: '',
-    note: ''
-  });
+  const [formData, setFormData] = useState({ ...emptyFormData });
   
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -58,8 +65,13 @@ export default function AddSerial() {
         period: formData.period,
         award_cost: parseFloat(formData.awardCost) || 0,
         frequency: formData.frequency,
+        total_volumes: parseInt(formData.totalVolumes) || null,
         total_issues: parseInt(formData.totalIssues) || 12,
+        volume_start: formData.volumeStart || null,
+        issue_start: formData.issueStart || null,
         start_date: formData.startDate || new Date().toISOString().split('T')[0],
+        publication_date_type: formData.publicationDateType,
+        publication_date: formData.publicationDate || null,
         author_publisher: formData.authorPublisher,
         category: formData.category,
         note: formData.note
@@ -67,20 +79,7 @@ export default function AddSerial() {
       
       if (response.data.success) {
         setSuccessMessage('Serial subscription added successfully!');
-        setFormData({
-          serialTitle: '',
-          issn: '',
-          supplierName: '',
-          supplierId: '',
-          period: '',
-          awardCost: '',
-          frequency: 'Monthly',
-          totalIssues: '12',
-          startDate: new Date().toISOString().split('T')[0],
-          authorPublisher: '',
-          category: '',
-          note: ''
-        });
+        setFormData({ ...emptyFormData, startDate: new Date().toISOString().split('T')[0] });
       }
     } catch (err) {
       console.error('Error adding serial:', err);
@@ -105,6 +104,41 @@ export default function AddSerial() {
     fontWeight: '500',
     color: '#374151',
     fontSize: '14px'
+  };
+
+  const renderPublicationDateInput = () => {
+    if (formData.publicationDateType === 'month_year') {
+      return (
+        <input
+          type="month"
+          name="publicationDate"
+          value={formData.publicationDate}
+          onChange={handleChange}
+          style={inputStyle}
+        />
+      );
+    }
+    if (formData.publicationDateType === 'season') {
+      return (
+        <input
+          type="text"
+          name="publicationDate"
+          value={formData.publicationDate}
+          onChange={handleChange}
+          style={inputStyle}
+          placeholder="e.g., Summer 2025, Spring 2025"
+        />
+      );
+    }
+    return (
+      <input
+        type="date"
+        name="publicationDate"
+        value={formData.publicationDate}
+        onChange={handleChange}
+        style={inputStyle}
+      />
+    );
   };
 
   return (
@@ -243,9 +277,25 @@ export default function AddSerial() {
                   <option value="Annually">Annually</option>
                 </select>
               </div>
+
+              <div>
+                <label style={labelStyle}>No. of Volumes</label>
+                <input
+                  type="number"
+                  name="totalVolumes"
+                  value={formData.totalVolumes}
+                  onChange={handleChange}
+                  style={inputStyle}
+                  placeholder="e.g., 4"
+                  min="1"
+                />
+                <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                  Number of volumes covered in this subscription period
+                </span>
+              </div>
               
               <div>
-                <label style={labelStyle}>Total Issues</label>
+                <label style={labelStyle}>No. of Issues</label>
                 <input
                   type="number"
                   name="totalIssues"
@@ -260,6 +310,30 @@ export default function AddSerial() {
                   Number of serial issues to generate based on frequency
                 </span>
               </div>
+
+              <div>
+                <label style={labelStyle}>Volume Start</label>
+                <input
+                  type="text"
+                  name="volumeStart"
+                  value={formData.volumeStart}
+                  onChange={handleChange}
+                  style={inputStyle}
+                  placeholder="e.g., Vol. 1"
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Issue Start</label>
+                <input
+                  type="text"
+                  name="issueStart"
+                  value={formData.issueStart}
+                  onChange={handleChange}
+                  style={inputStyle}
+                  placeholder="e.g., Issue 1"
+                />
+              </div>
               
               <div>
                 <label style={labelStyle}>Start Date</label>
@@ -272,6 +346,28 @@ export default function AddSerial() {
                 />
                 <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
                   When the first issue is expected
+                </span>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Date of Publication Format</label>
+                <select
+                  name="publicationDateType"
+                  value={formData.publicationDateType}
+                  onChange={handleChange}
+                  style={inputStyle}
+                >
+                  <option value="specific">Specific Date</option>
+                  <option value="month_year">Month &amp; Year</option>
+                  <option value="season">Season &amp; Year (e.g., Summer 2025)</option>
+                </select>
+              </div>
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={labelStyle}>Date of Publication</label>
+                {renderPublicationDateInput()}
+                <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                  For publications without a specific date, choose Month &amp; Year or Season &amp; Year above, then enter it here (e.g., "Summer 2025")
                 </span>
               </div>
               
@@ -334,18 +430,7 @@ export default function AddSerial() {
               
               <button
                 type="button"
-                onClick={() => setFormData({
-                  serialTitle: '',
-                  issn: '',
-                  supplierName: '',
-                  supplierId: '',
-                  period: '',
-                  awardCost: '',
-                  frequency: 'Monthly',
-                  authorPublisher: '',
-                  category: '',
-                  note: ''
-                })}
+                onClick={() => setFormData({ ...emptyFormData, startDate: new Date().toISOString().split('T')[0] })}
                 style={{
                   background: '#f3f4f6',
                   color: '#374151',

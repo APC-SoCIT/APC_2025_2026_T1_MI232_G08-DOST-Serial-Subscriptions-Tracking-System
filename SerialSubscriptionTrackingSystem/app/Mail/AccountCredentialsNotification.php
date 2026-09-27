@@ -40,7 +40,7 @@ class AccountCredentialsNotification extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Your DOST-STII LAMS Account Has Been Created",
+            subject: "Your DOST STII-LAMS Account Has Been Created",
         );
     }
 
