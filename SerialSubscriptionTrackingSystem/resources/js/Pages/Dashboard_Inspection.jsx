@@ -119,7 +119,7 @@ export default function InspectionDashboard() {
   }, [tempSupplierId]);
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
@@ -315,7 +315,11 @@ export default function InspectionDashboard() {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(
+                      startDate === firstDayOfMonth(year, "January") && endDate === lastDayOfMonth(year, "December")
+                        ? ""
+                        : startMonth
+                    );
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
                     setTempSupplierId(supplierId);
@@ -401,6 +405,9 @@ export default function InspectionDashboard() {
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                        setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -504,7 +511,7 @@ export default function InspectionDashboard() {
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(2026);
-                    setTempStartMonth('January');
+                    setTempStartMonth('');
                       setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                       setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setTempSupplierId('');
@@ -568,7 +575,7 @@ export default function InspectionDashboard() {
           <Chart title="Inspection Intake Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={intakeTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="received" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>
@@ -581,7 +588,7 @@ export default function InspectionDashboard() {
       <Chart title="Inspection Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
-      <XAxis dataKey="month"/>
+      <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
       <YAxis/>
       <Tooltip/>
       
@@ -644,7 +651,7 @@ export default function InspectionDashboard() {
           <Chart title="Monthly Inspected Volume">
             <ResponsiveContainer height={300}>
               <BarChart data={inspectedVolume}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
                 <YAxis/>
                 <Tooltip/>
                 <Bar dataKey="inspected" fill="#2563eb"/>

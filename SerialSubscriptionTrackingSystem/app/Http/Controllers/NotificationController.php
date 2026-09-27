@@ -38,6 +38,15 @@ class NotificationController extends Controller
             ->where('type', '__incoming_notifications_read_all')
             ->orderBy('created_at', 'desc')
             ->first()?->created_at;
+        $readNotificationKeys = UserNotification::where('user_id', (string) ($user->_id ?? $user->id))
+            ->where('type', '__incoming_notification_read')
+            ->get()
+            ->pluck('data.notification_key')
+            ->filter()
+            ->flip();
+        $isRead = function (string $key, Carbon $timestamp) use ($readAllAt, $readNotificationKeys): bool {
+            return $readNotificationKeys->has($key) || ($readAllAt && $timestamp->lte($readAllAt));
+        };
         
         foreach ($subscriptions as $subscription) {
             $serials = $subscription->activeSerials();
@@ -96,10 +105,14 @@ class NotificationController extends Controller
                     }
                     
                     // Parse delivery date if available
-                    $deliveryDate = $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null;
-                    $timestamp = $deliveryDate
-                        ? Carbon::parse($deliveryDate)
-                        : Carbon::parse($subscription->created_at ?? Carbon::now());
+                    $timestamp = Carbon::parse(
+                        $serial['updated_at']
+                            ?? $serial['inspected_at']
+                            ?? $serial['received_at']
+                            ?? $subscription->updated_at
+                            ?? $subscription->created_at
+                    );
+                    $notificationKey = "serial:{$subscription->_id}:{$serialIndex}:{$status}:{$inspectionStatus}";
                     
                     $notifications[] = [
                         'id' => $notificationId++,
@@ -112,8 +125,8 @@ class NotificationController extends Controller
                         'notification_type' => $notificationType,
                         'message' => $message,
                         'timestamp' => $timestamp->toISOString(),
-                        'is_read' => $readAllAt && $timestamp->lte($readAllAt),
-                        'notification_key' => "serial:{$subscription->_id}:{$serialIndex}:{$status}:{$inspectionStatus}",
+                        'is_read' => $isRead($notificationKey, $timestamp),
+                        'notification_key' => $notificationKey,
                     ];
                 }
             }
@@ -135,8 +148,8 @@ class NotificationController extends Controller
                     'notification_type' => 'account_approval',
                     'message' => 'New supplier account awaiting approval',
                     'timestamp' => $account->created_at ? $account->created_at->toISOString() : Carbon::now()->toISOString(),
-                    'is_read' => $readAllAt && Carbon::parse($account->created_at)->lte($readAllAt),
-                    'notification_key' => 'account:' . (string) ($account->_id ?? $account->id),
+                        'is_read' => $isRead('account:' . (string) ($account->_id ?? $account->id), Carbon::parse($account->created_at)),
+                        'notification_key' => 'account:' . (string) ($account->_id ?? $account->id),
                     'account_id' => (string) ($account->_id ?? $account->id),
                     'email' => $account->email ?? '',
                 ];
@@ -152,11 +165,24 @@ class NotificationController extends Controller
             
             if ($supplierAccount) {
                 $supplierId = (string)($supplierAccount->_id ?? $supplierAccount->id);
+                $storedNotifications = DeliveryNotification::forSupplier($supplierId)
+                    ->orderBy('created_at', 'desc')
+                    ->limit(20)
+                    ->get();
+                $storedReminderKeys = $storedNotifications->mapWithKeys(function ($notification) {
+                    return [
+                        (string) $notification->subscription_id . ':' . optional($notification->delivery_date)->toDateString() => true,
+                    ];
+                });
                 
                 // Get upcoming deliveries
                 $upcomingDeliveries = DeliveryNotificationService::getUpcomingDeliveries($supplierId, 7);
                 
                 foreach ($upcomingDeliveries as $delivery) {
+                    $reminderKey = (string) ($delivery['subscription_id'] ?? '') . ':' . ($delivery['delivery_date'] ?? '');
+                    if ($storedReminderKeys->has($reminderKey)) {
+                        continue;
+                    }
                     $urgencyMessages = [
                         'high' => 'Delivery due today or tomorrow!',
                         'medium' => 'Delivery due within 3 days',
@@ -174,7 +200,7 @@ class NotificationController extends Controller
                         'notification_type' => 'delivery_reminder',
                         'message' => $urgencyMessages[$delivery['urgency']] ?? 'Delivery reminder',
                         'timestamp' => Carbon::parse($delivery['delivery_date'])->toISOString(),
-                        'is_read' => $readAllAt && Carbon::parse($delivery['delivery_date'])->lte($readAllAt),
+                        'is_read' => $isRead('delivery-reminder:' . ($delivery['subscription_id'] ?? '') . ':' . $delivery['delivery_date'], Carbon::parse($delivery['delivery_date'])),
                         'notification_key' => 'delivery-reminder:' . ($delivery['subscription_id'] ?? '') . ':' . $delivery['delivery_date'],
                         'delivery_date' => $delivery['delivery_date'],
                         'days_until_delivery' => $delivery['days_until_delivery'],
@@ -183,11 +209,6 @@ class NotificationController extends Controller
                 }
                 
                 // Also get stored delivery notifications
-                $storedNotifications = DeliveryNotification::forSupplier($supplierId)
-                    ->orderBy('created_at', 'desc')
-                    ->limit(20)
-                    ->get();
-                
                 foreach ($storedNotifications as $notif) {
                     $notifications[] = [
                         'id' => $notificationId++,

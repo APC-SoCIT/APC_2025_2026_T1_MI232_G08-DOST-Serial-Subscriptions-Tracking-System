@@ -323,6 +323,11 @@ class DashboardStatsController extends Controller
         ];
 
         $dateRows = $allIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $filteredDeliveredRows = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED);
+        $filteredReturnedRows = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $filteredAwaitingRows = $dateRows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE], true));
+        $filteredReachedRows = $dateRows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true));
+        $filteredSuccessBase = $filteredDeliveredRows->count() + $filteredReturnedRows->count();
         $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], function ($rows) {
             return [
                 'awarded' => $rows->count(),
@@ -335,15 +340,15 @@ class DashboardStatsController extends Controller
 
           return response()->json(['success' => true, 'stats' => [
             'total_serials' => $totalSerialTitles,
-            'awarded' => $allIssues->count(),
-            'delivered' => $reachedGspsRows->count(),
-            'for_delivery' => $awaitingRows->count(),
-            'for_delivery_status' => $forDeliveryStatusRows->count(),
-            'inspected' => $deliveredRows->count(),
-            'returned' => $returnedRows->count(),
-            'pending' => $awaitingRows->count(),
-            'prepare' => $allIssues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_PENDING, SerialIssue::STATUS_PREPARE], true))->count(),
-            'efficiency' => $successBase ? round(($deliveredRows->count() / $successBase) * 100) : 0,
+            'awarded' => $dateRows->count(),
+            'delivered' => $filteredReachedRows->count(),
+            'for_delivery' => $filteredAwaitingRows->count(),
+            'for_delivery_status' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+            'inspected' => $filteredDeliveredRows->count(),
+            'returned' => $filteredReturnedRows->count(),
+            'pending' => $filteredAwaitingRows->count(),
+            'prepare' => $filteredAwaitingRows->count(),
+            'efficiency' => $filteredSuccessBase ? round(($filteredDeliveredRows->count() / $filteredSuccessBase) * 100) : 0,
             'total_subscriptions' => $totalSerialTitles,
             'active_subscriptions' => $allSubscriptions->where('status', 'Active')->count(),
             'total_award_cost' => $allIssues->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
@@ -382,6 +387,9 @@ class DashboardStatsController extends Controller
         $pending = $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
 
         $dateRows = $allIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $filteredForwarded = $dateRows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true));
+        $filteredReturned = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $filteredPending = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY);
         $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
             'received' => $rows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true))->count(),
             'pending' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
@@ -390,12 +398,12 @@ class DashboardStatsController extends Controller
         ]);
 
         return response()->json(['success' => true, 'stats' => [
-            'received' => $receivedStatusRows->count(),
-            'total_subscriptions' => $subsWithIssues,
-            'forwarded' => $forwardedTier->count(),
-            'pending' => $pending->count(),
-            'returned' => $returned->count(),
-            'success_rate' => $forwardedTier->count() ? round(($successNumerator / $forwardedTier->count()) * 100) : 0,
+            'received' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED)->count(),
+            'total_subscriptions' => $dateRows->pluck('subscription_id')->unique()->count(),
+            'forwarded' => $filteredForwarded->count(),
+            'pending' => $filteredPending->count(),
+            'returned' => $filteredReturned->count(),
+            'success_rate' => $filteredForwarded->count() ? round((($filteredForwarded->count() - $filteredReturned->count()) / $filteredForwarded->count()) * 100) : 0,
         ], 'charts' => ['monthly' => $monthly, 'pipeline' => [
             ['name' => 'Pending', 'value' => $pending->count()],
             ['name' => 'Received', 'value' => $allIssues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED)->count()],
@@ -454,6 +462,9 @@ class DashboardStatsController extends Controller
         $successBase = $inspected->count() + $returned->count();
 
         $dateRows = $inspectionIssues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
+        $filteredInspected = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED);
+        $filteredReturned = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN);
+        $filteredPending = $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_RECEIVED);
         $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
             'received' => $rows->count(),
             'inspected' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
@@ -468,12 +479,12 @@ class DashboardStatsController extends Controller
             // This intentionally does NOT shrink as issues get inspected —
             // an issue that moves from received to delivered/for_return is
             // still counted here, since it still "was received from GSPS".
-            'received' => $inspectionIssues->count(),
-            'total_subscriptions' => $qualifyingSubs,
-            'inspected' => $inspected->count(),
-            'pending' => $pending->count(),
-            'returned' => $returned->count(),
-            'success_rate' => $successBase ? round(($inspected->count() / $successBase) * 100) : 0,
+            'received' => $dateRows->count(),
+            'total_subscriptions' => $dateRows->pluck('issue.subscription_id')->filter()->unique()->count(),
+            'inspected' => $filteredInspected->count(),
+            'pending' => $filteredPending->count(),
+            'returned' => $filteredReturned->count(),
+            'success_rate' => ($filteredInspected->count() + $filteredReturned->count()) ? round(($filteredInspected->count() / ($filteredInspected->count() + $filteredReturned->count())) * 100) : 0,
         ], 'charts' => ['monthly' => $monthly, 'pipeline' => [
             ['name' => 'Received', 'value' => $inspectionIssues->count()],
             ['name' => 'Pending', 'value' => $pending->count()],
@@ -515,18 +526,18 @@ class DashboardStatsController extends Controller
 
         $start = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::now()->startOfYear();
         $end = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::now()->endOfDay();
+        $dateRows = $issues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
 
         $counts = [
-            'awarded' => $issues->count(),
-            'preparing' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
-            'for_delivery' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
-            'delivered' => $issues->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
-            'delivered_only' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
-            'returned' => $issues->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
+            'awarded' => $dateRows->count(),
+            'preparing' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),
+            'for_delivery' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_DELIVERY)->count(),
+            'delivered' => $dateRows->filter(fn ($r) => in_array($r['issue']->status, [SerialIssue::STATUS_RECEIVED, SerialIssue::STATUS_DELIVERED], true))->count(),
+            'delivered_only' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_DELIVERED)->count(),
+            'returned' => $dateRows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_FOR_RETURN)->count(),
         ];
         $successBase = $counts['delivered_only'] + $counts['returned'];
 
-        $dateRows = $issues->filter(fn ($r) => !$r['date'] || (Carbon::parse($r['date']) >= $start && Carbon::parse($r['date']) <= $end));
         $monthly = $this->monthlyData($dateRows, $start, $end, fn ($r) => $r['date'], fn ($rows) => [
             'awarded' => $rows->count(),
             'preparing' => $rows->filter(fn ($r) => $r['issue']->status === SerialIssue::STATUS_PREPARE)->count(),

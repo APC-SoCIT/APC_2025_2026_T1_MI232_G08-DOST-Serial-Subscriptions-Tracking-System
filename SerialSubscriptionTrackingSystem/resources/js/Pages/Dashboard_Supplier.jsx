@@ -129,7 +129,7 @@ export default function SupplierDashboard() {
   /* ===== TEMP STATE (LIKE ADMIN) ===== */
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
@@ -368,7 +368,11 @@ export default function SupplierDashboard() {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(
+                      startDate === firstDayOfMonth(year, "January") && endDate === lastDayOfMonth(year, "December")
+                        ? ""
+                        : startMonth
+                    );
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
                     setTempSerialTitle(serialTitle);
@@ -455,6 +459,9 @@ export default function SupplierDashboard() {
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                        setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -546,7 +553,7 @@ export default function SupplierDashboard() {
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(CURRENT_YEAR);
-                    setTempStartMonth('January');
+                    setTempStartMonth('');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setTempSerialTitle('');
@@ -694,7 +701,7 @@ export default function SupplierDashboard() {
           <Chart title="Completed Issues Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={completedTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="completed" stroke={COLORS.completed} strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>

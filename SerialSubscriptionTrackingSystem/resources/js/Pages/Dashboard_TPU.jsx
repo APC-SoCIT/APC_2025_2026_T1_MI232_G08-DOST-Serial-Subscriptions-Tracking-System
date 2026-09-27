@@ -119,14 +119,14 @@ export default function TPUDashboard() {
   }, [tempSupplierId]);
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
   useEffect(() => {
     if (showFilter) {
       setTempYear(year);
-      setTempStartMonth(startMonth);
+      setTempStartMonth(filterMode === "month" ? startMonth : "");
       setTempStartDate(startDate);
       setTempEndDate(endDate);
       setTempSupplierId(supplierId);
@@ -141,7 +141,7 @@ export default function TPUDashboard() {
     if (filterMode === "year") {
       setTempStartDate(firstDayOfMonth(tempYear, "January"));
       setTempEndDate(lastDayOfMonth(tempYear, "December"));
-      setTempStartMonth("January");
+      setTempStartMonth("");
     }
   }, [tempYear, filterMode]);
 
@@ -217,23 +217,32 @@ export default function TPUDashboard() {
   const months = monthRange(startMonth, endMonth);
 
   const applyFilter = () => {
+    const isYearRange =
+      tempStartDate === firstDayOfMonth(tempYear, "January") &&
+      tempEndDate === lastDayOfMonth(tempYear, "December");
+    const isMonthRange = tempStartMonth &&
+      tempStartDate === firstDayOfMonth(tempYear, tempStartMonth) &&
+      tempEndDate === lastDayOfMonth(tempYear, tempStartMonth);
+    const nextFilterMode = isYearRange ? "year" : isMonthRange ? "month" : "custom";
+
+    setFilterMode(nextFilterMode);
     setYear(tempYear);
 
-    if (filterMode === "year") {
+    if (nextFilterMode === "year") {
       setStartMonth("January");
       setEndMonth("December");
       setStartDate(firstDayOfMonth(tempYear,"January"));
       setEndDate(lastDayOfMonth(tempYear,"December"));
     }
 
-    if (filterMode === "month") {
+    if (nextFilterMode === "month") {
       setStartMonth(tempStartMonth);
       setEndMonth(tempStartMonth);
       setStartDate(tempStartDate);
       setEndDate(tempEndDate);
     }
 
-    if (filterMode === "week" || filterMode === "custom") {
+    if (nextFilterMode === "custom") {
       setStartDate(tempStartDate);
       setEndDate(tempEndDate);
 
@@ -391,7 +400,7 @@ export default function TPUDashboard() {
                   setShowFilter(!showFilter);
                   if (!showFilter) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
+                    setTempStartMonth(filterMode === "month" ? startMonth : "");
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
                     setTempSupplierId(supplierId);
@@ -477,6 +486,9 @@ export default function TPUDashboard() {
                       if (m) {
                         setTempStartDate(firstDayOfMonth(tempYear, m));
                         setTempEndDate(lastDayOfMonth(tempYear, m));
+                        } else {
+                          setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                          setTempEndDate(lastDayOfMonth(tempYear, "December"));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -580,7 +592,7 @@ export default function TPUDashboard() {
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(2026);
-                    setTempStartMonth('January');
+                    setTempStartMonth('');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setTempSupplierId('');
@@ -643,7 +655,7 @@ export default function TPUDashboard() {
  <Chart title="Serial Pipeline Status">
   <ResponsiveContainer height={300}>
     <AreaChart data={pipelineData}>
-      <XAxis dataKey="month"/>
+      <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
       <YAxis/>
       <Tooltip/>
 
@@ -711,7 +723,7 @@ export default function TPUDashboard() {
           <Chart title="Delivery Performance Trend">
             <ResponsiveContainer height={300}>
               <LineChart data={deliveryTrend}>
-                <XAxis dataKey="month"/>
+                <XAxis dataKey="month" interval={0} angle={-35} textAnchor="end" height={50}/>
                 <YAxis/>
                 <Tooltip/>
                 <Line dataKey="delivered" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} isAnimationActive={false}/>

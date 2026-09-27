@@ -129,7 +129,7 @@ const [activeKpi, setActiveKpi] = useState(null);
 
 const [showFilterModal, setShowFilterModal] = useState(false);
 const [tempYear, setTempYear] = useState(year);
-const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+const [tempStartMonth, setTempStartMonth] = useState("");
 const [tempEndMonth, setTempEndMonth] = useState(endMonth);
 const [tempStartDate, setTempStartDate] = useState(startDate);
 const [tempEndDate, setTempEndDate] = useState(endDate);
@@ -416,8 +416,16 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                   setShowFilterModal(!showFilterModal);
                   if (!showFilterModal) {
                     setTempYear(year);
-                    setTempStartMonth(startMonth);
-                    setTempEndMonth(endMonth);
+                    setTempStartMonth(
+                      startDate === firstDayOfMonth(year, "January") && endDate === lastDayOfMonth(year, "December")
+                        ? ""
+                        : startMonth
+                    );
+                    setTempEndMonth(
+                      startDate === firstDayOfMonth(year, "January") && endDate === lastDayOfMonth(year, "December")
+                        ? "December"
+                        : endMonth
+                    );
                     setTempStartDate(startDate);
                     setTempEndDate(endDate);
                     setTempSupplierId(supplierId);
@@ -487,8 +495,8 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                     onChange={(e) => {
                       const selectedYear = parseInt(e.target.value);
                       setTempYear(selectedYear);
-                      setTempStartDate(firstDayOfMonth(selectedYear, tempStartMonth));
-                      setTempEndDate(lastDayOfMonth(selectedYear, tempEndMonth));
+                      setTempStartDate(firstDayOfMonth(selectedYear, tempStartMonth || "January"));
+                      setTempEndDate(lastDayOfMonth(selectedYear, tempEndMonth || "December"));
                       setCalendarYear(selectedYear);
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -508,9 +516,15 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                       const m = e.target.value;
                       setTempStartMonth(m);
                       setTempEndMonth(m);
-                      setTempStartDate(firstDayOfMonth(tempYear, m));
-                      setTempEndDate(lastDayOfMonth(tempYear, m));
-                      setCalendarMonth(monthIndex(m));
+                      if (m) {
+                        setTempStartDate(firstDayOfMonth(tempYear, m));
+                        setTempEndDate(lastDayOfMonth(tempYear, m));
+                        setCalendarMonth(monthIndex(m));
+                      } else {
+                        setTempStartDate(firstDayOfMonth(tempYear, "January"));
+                        setTempEndDate(lastDayOfMonth(tempYear, "December"));
+                        setCalendarMonth(0);
+                      }
                     }}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -624,7 +638,7 @@ const shouldShowChart = (chartId) => !selectedKpi || selectedKpi.chartIds.includ
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(CURRENT_YEAR);
-                    setTempStartMonth('January');
+                    setTempStartMonth('');
                     setTempEndMonth('December');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));

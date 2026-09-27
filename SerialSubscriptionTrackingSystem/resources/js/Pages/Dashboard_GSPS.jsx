@@ -135,7 +135,7 @@ export default function DashboardGSPS() {
   /* ===== TEMP STATE ===== */
 
   const [tempYear, setTempYear] = useState(year);
-  const [tempStartMonth, setTempStartMonth] = useState(startMonth);
+  const [tempStartMonth, setTempStartMonth] = useState("");
   const [tempStartDate, setTempStartDate] = useState(startDate);
   const [tempEndDate, setTempEndDate] = useState(endDate);
 
@@ -592,7 +592,7 @@ const efficiency = baseEfficiency * rangeImpact * normalizedSpan;
                   onClick={() => {
                     setFilterMode('year');
                     setTempYear(CURRENT_YEAR);
-                    setTempStartMonth('January');
+                    setTempStartMonth('');
                     setTempStartDate(firstDayOfMonth(CURRENT_YEAR, 'January'));
                     setTempEndDate(lastDayOfMonth(CURRENT_YEAR, 'December'));
                     setTempSupplierId('');
