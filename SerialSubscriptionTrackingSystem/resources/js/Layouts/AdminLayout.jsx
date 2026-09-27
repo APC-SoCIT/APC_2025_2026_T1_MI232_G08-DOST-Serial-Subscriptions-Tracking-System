@@ -8,6 +8,7 @@ import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
 import SessionManager from "@/Components/SessionManager";
+import TtsControl from "@/Components/TtsControl";
 
 /* ===================== NAV ITEMS ===================== */
 const navItems = [
@@ -239,6 +240,8 @@ export default function AdminLayout({ children, header, title }) {
             </div>
 
             <div className="flex items-center gap-3 md:gap-4">
+
+              <TtsControl label="Read Aloud" />
 
               {/* Notifications */}
               <SerialsNotification isMobile={isMobile} />

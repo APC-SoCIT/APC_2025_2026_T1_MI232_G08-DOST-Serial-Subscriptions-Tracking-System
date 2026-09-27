@@ -4,6 +4,7 @@ import './bootstrap';
 import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
+import { AccessibilityProvider } from './Contexts/AccessibilityContext';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -42,7 +43,11 @@ createInertiaApp({
     setup({ el, App, props }) {
         const root = createRoot(el);
 
-        root.render(<App {...props} />);
+        root.render(
+            <AccessibilityProvider>
+                <App {...props} />
+            </AccessibilityProvider>,
+        );
     },
     progress: {
         color: '#4B5563',
