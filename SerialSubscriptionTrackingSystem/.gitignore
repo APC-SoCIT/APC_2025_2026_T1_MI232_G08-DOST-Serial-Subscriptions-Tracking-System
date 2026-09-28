@@ -27,5 +27,3 @@ Thumbs.db
 dump/
 *.bson
 *.metadata.json
-atlas-backup/
-local-backup/
