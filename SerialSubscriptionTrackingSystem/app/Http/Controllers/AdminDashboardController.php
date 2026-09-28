@@ -186,6 +186,17 @@ class AdminDashboardController extends Controller
         $subscriptions = $query->get()->filter(fn ($subscription) => $subscription->hasActiveRecords());
         $total = $subscriptions->count();
 
+        $subscriptionIds = $subscriptions
+            ->map(fn ($subscription) => (string) ($subscription->_id ?? $subscription->id))
+            ->values()
+            ->all();
+        $issuesBySubscription = $subscriptionIds
+            ? SerialIssue::whereIn('subscription_id', $subscriptionIds)
+                ->whereNull('archived_at')
+                ->get()
+                ->groupBy(fn ($issue) => (string) $issue->subscription_id)
+            : collect();
+
         // "Active" here mirrors TPU Monitor Delivery's "Ongoing" definition exactly:
         // a subscription counts as active/ongoing if it's in the qualifying status
         // list, has at least one non-archived serial issue, and not every issue has
@@ -198,9 +209,7 @@ class AdminDashboardController extends Controller
             if (!in_array($subscription->status, $qualifyingStatuses, true)) {
                 continue;
             }
-            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
-                ->whereNull('archived_at')
-                ->get();
+            $issues = $issuesBySubscription->get((string) ($subscription->_id ?? $subscription->id), collect());
             if ($issues->isEmpty()) {
                 continue;
             }
@@ -222,8 +231,7 @@ class AdminDashboardController extends Controller
         $totalValue = 0;
         $deliveredValue = 0;
         foreach ($subscriptions as $subscription) {
-            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
-                ->whereNull('archived_at')->get();
+            $issues = $issuesBySubscription->get((string) ($subscription->_id ?? $subscription->id), collect());
             $totalValue += $issues->isEmpty() ? ($subscription->award_cost ?? 0) : $issues->sum('cost');
             $deliveredValue += $issues->isEmpty()
                 ? ($subscription->delivered_cost ?? 0)
@@ -274,6 +282,8 @@ class AdminDashboardController extends Controller
      */
     private function getChartData($startDate, $endDate)
     {
+        $supplierAccounts = SupplierAccount::all();
+        $users = User::all();
         $months = [];
         $current = Carbon::parse($startDate)->startOfMonth();
         $end = Carbon::parse($endDate)->endOfMonth();
@@ -284,27 +294,31 @@ class AdminDashboardController extends Controller
             $monthName = $current->format('F');
 
             // Supplier accounts approved in this month
-            $approvedCount = SupplierAccount::where('status', 'approved')
-                ->whereBetween('approved_at', [$monthStart, $monthEnd])
-                ->count();
+            $approvedCount = $supplierAccounts->filter(fn ($account) =>
+                $account->status === 'approved'
+                && $account->approved_at
+                && Carbon::parse($account->approved_at)->between($monthStart, $monthEnd)
+            )->count();
 
             // Supplier accounts pending at month end (those created before month end and still pending)
-            $pendingAtMonth = SupplierAccount::where('status', 'pending')
-                ->where('created_at', '<=', $monthEnd)
-                ->count();
-
             // Alternatively, accounts created in this month that were still pending
-            $pendingCreated = SupplierAccount::where('status', 'pending')
-                ->whereBetween('created_at', [$monthStart, $monthEnd])
-                ->count();
+            $pendingCreated = $supplierAccounts->filter(fn ($account) =>
+                $account->status === 'pending'
+                && $account->created_at
+                && Carbon::parse($account->created_at)->between($monthStart, $monthEnd)
+            )->count();
 
             // Supplier accounts created in this month
-            $createdCount = SupplierAccount::whereBetween('created_at', [$monthStart, $monthEnd])
-                ->count();
+            $createdCount = $supplierAccounts->filter(fn ($account) =>
+                $account->created_at
+                && Carbon::parse($account->created_at)->between($monthStart, $monthEnd)
+            )->count();
 
             // Users created in this month
-            $usersCreated = User::whereBetween('created_at', [$monthStart, $monthEnd])
-                ->count();
+            $usersCreated = $users->filter(fn ($user) =>
+                $user->created_at
+                && Carbon::parse($user->created_at)->between($monthStart, $monthEnd)
+            )->count();
 
             $months[] = [
                 'month' => $monthName,
@@ -320,16 +334,16 @@ class AdminDashboardController extends Controller
 
         // Calculate pie chart data from current totals
         $pieData = [
-            ['name' => 'Approved', 'value' => SupplierAccount::where('status', 'approved')->count()],
-            ['name' => 'Pending', 'value' => SupplierAccount::where('status', 'pending')->count()],
-            ['name' => 'Rejected', 'value' => SupplierAccount::where('status', 'rejected')->count()],
+            ['name' => 'Approved', 'value' => $supplierAccounts->where('status', 'approved')->count()],
+            ['name' => 'Pending', 'value' => $supplierAccounts->where('status', 'pending')->count()],
+            ['name' => 'Rejected', 'value' => $supplierAccounts->where('status', 'rejected')->count()],
         ];
 
         // User status pie chart
         $userPieData = [
-            ['name' => 'Approved', 'value' => User::whereNotNull('email_verified_at')->where(function($q) { $q->where('is_disabled', '!=', true)->orWhereNull('is_disabled'); })->count()],
-            ['name' => 'Pending', 'value' => User::whereNull('email_verified_at')->count()],
-            ['name' => 'Disabled', 'value' => User::where('is_disabled', true)->count()],
+            ['name' => 'Approved', 'value' => $users->filter(fn ($user) => $user->email_verified_at && ($user->is_disabled ?? false) !== true)->count()],
+            ['name' => 'Pending', 'value' => $users->filter(fn ($user) => !$user->email_verified_at)->count()],
+            ['name' => 'Disabled', 'value' => $users->where('is_disabled', true)->count()],
         ];
 
         return [

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import AdminLayout from "@/Layouts/AdminLayout";
+import FocusTrap from "@/Components/FocusTrap";
 import { usePage } from "@inertiajs/react";
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -26,6 +27,7 @@ export default function UserList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [disableModal, setDisableModal] = useState({ open: false, user: null });
+  const disableTriggerRef = useRef(null);
   const perPage = 10;
 
   // Fetch users on mount
@@ -231,7 +233,10 @@ export default function UserList() {
                   {/* Hide disable button for current logged-in user */}
                   {currentUserId !== item.id ? (
                     <button
-                      onClick={() => setDisableModal({ open: true, user: item })}
+                      onClick={(event) => {
+                        disableTriggerRef.current = event.currentTarget;
+                        setDisableModal({ open: true, user: item });
+                      }}
                       className={`px-3 py-1 text-xs rounded-lg ${item.is_disabled 
                         ? 'bg-green-50 text-green-600 hover:bg-green-100' 
                         : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
@@ -275,17 +280,25 @@ export default function UserList() {
         {/* Disable/Enable Confirmation Modal */}
         {disableModal.open && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <FocusTrap
+              onClose={() => setDisableModal({ open: false, user: null })}
+              returnFocusRef={disableTriggerRef}
+              titleId="disable-account-title"
+              descriptionId="disable-account-description"
+              alert
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl"
+            >
+              <h3 id="disable-account-title" className="text-lg font-semibold text-gray-800 mb-4">
                 {disableModal.user?.is_disabled ? 'Enable Account' : 'Disable Account'}
               </h3>
-              <p className="text-gray-600 mb-6">
+              <p id="disable-account-description" className="text-gray-600 mb-6">
                 Are you sure you want to {disableModal.user?.is_disabled ? 'enable' : 'disable'} the account for <strong>{disableModal.user?.name}</strong>?
                 {!disableModal.user?.is_disabled && ' This user will not be able to log in until re-enabled.'}
               </p>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setDisableModal({ open: false, user: null })}
+                  data-autofocus
                   className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
                 >
                   Cancel
@@ -299,7 +312,7 @@ export default function UserList() {
                   {disableModal.user?.is_disabled ? 'Enable' : 'Disable'}
                 </button>
               </div>
-            </div>
+            </FocusTrap>
           </div>
         )}
       </div>

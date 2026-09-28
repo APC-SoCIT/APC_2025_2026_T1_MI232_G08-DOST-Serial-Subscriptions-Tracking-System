@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -223,6 +224,17 @@ class UserController extends Controller
 
             $user->is_disabled = !($user->is_disabled ?? false);
             $user->save();
+
+            if ($user->is_disabled) {
+                if (config('session.driver') === 'database') {
+                    DB::table('sessions')
+                        ->where('user_id', (string) ($user->_id ?? $user->id))
+                        ->delete();
+                }
+
+                $user->remember_token = Str::random(60);
+                $user->save();
+            }
 
             // Log enable/disable action
             $action = $user->is_disabled ? 'disabled' : 'enabled';
