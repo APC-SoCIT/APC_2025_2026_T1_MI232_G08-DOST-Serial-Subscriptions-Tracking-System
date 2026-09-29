@@ -326,6 +326,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
+        <TtsControl label="Read Aloud" />
         <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
@@ -508,9 +509,6 @@ export default function TPULayout({ children, title, hideTitle = false }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: isMobile ? '12px 16px 0' : '16px 32px 0' }}>
           <div style={{ flex: 1 }}>
             <TopBar pageTitle={pageTitle} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
-          </div>
-          <div style={{ marginLeft: 8 }}>
-            <TtsControl label="Read Aloud" />
           </div>
         </div>
         <div style={{ 

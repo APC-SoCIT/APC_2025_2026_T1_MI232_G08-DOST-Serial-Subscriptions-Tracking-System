@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pwdLogoTitle pwdLogoDesc">
+  <title id="pwdLogoTitle">PWD accessibility</title>
+  <desc id="pwdLogoDesc">Wheelchair accessibility symbol matching the provided reference</desc>
+
+  <rect width="128" height="128" rx="16" fill="#0B2E6B"/>
+
+  <circle cx="64" cy="82" r="32" fill="none" stroke="#FFFFFF" stroke-width="12"/>
+
+  <circle cx="64" cy="36" r="16" fill="#FFFFFF"/>
+
+  <path d="M44 57C44 52.5817 47.5817 49 52 49H76C80.4183 49 84 52.5817 84 57V60H44V57Z" fill="#FFFFFF"/>
+  <path d="M52 60H76L86 75H42L52 60Z" fill="#FFFFFF"/>
+  <path d="M43 73H85V80C85 83.3137 82.3137 86 79 86H49C45.6863 86 43 83.3137 43 80V73Z" fill="#FFFFFF"/>
+  <path d="M36 82H47V95H36V82Z" fill="#FFFFFF"/>
+  <path d="M81 82H92V95H81V82Z" fill="#FFFFFF"/>
+
+  <path d="M48 56L56 43H72L80 56H48Z" fill="#FFFFFF"/>
+  <path d="M58 42V27H70V42H58Z" fill="#FFFFFF"/>
+
+  <path d="M36 95H47V105H36V95Z" fill="#FFFFFF"/>
+  <path d="M81 95H92V105H81V95Z" fill="#FFFFFF"/>
+
+  <circle cx="42" cy="95" r="7" fill="#FFFFFF"/>
+  <circle cx="86" cy="95" r="7" fill="#FFFFFF"/>
+</svg>

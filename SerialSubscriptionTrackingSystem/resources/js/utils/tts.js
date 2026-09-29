@@ -5,6 +5,113 @@ const pronunciationDictionary = {
     STII: 'S T I I',
 };
 
+const FILIPINO_WORDS = new Set([
+    'ang', 'ng', 'sa', 'na', 'may', 'bago', 'para', 'mag', 'ma', 'paki', 'i', 'in', 'an', 'ay',
+    'ako', 'ka', 'ko', 'mo', 'yo', 'si', 'ni', 'mga', 'dapat', 'kailangan', 'makita', 'maapprove',
+    'approve', 'review', 'submit', 'logout', 'login', 'check', 'status', 'account', 'system',
+    'supplier', 'users', 'user', 'form', 'button', 'list', 'new', 'bukas', 'kumusta', 'salamat',
+    'tulong', 'narito', 'nasa', 'kung', 'kapag', 'saan', 'bakit', 'paano', 'hindi', 'oo', 'huwag',
+    'bago', 'gusto', 'pakiusap', 'paki', 'tignan', 'tingnan', 'i-click', 'iapprove', 'i-review',
+    'ma-approve', 'ma-approve', 'ma-review', 'i-submit', 'i-login', 'update', 'details', 'approve'
+]);
+
+const FILIPINO_PREFIXES = ['mag', 'ma', 'mga', 'pa', 'paki', 'i', 'in', 'an', 'na', 'nag', 'um', 'mak', 'pin', 'ka', 'si', 'ni'];
+const FILIPINO_SUFFIXES = ['ang', 'ng', 'na', 'in', 'an', 'on', 'ong', 'ing'];
+const ENGLISH_WORDS = new Set([
+    'account', 'status', 'system', 'button', 'user', 'users', 'supplier', 'list', 'approve', 'review',
+    'submit', 'logout', 'login', 'check', 'form', 'details', 'new', 'active', 'disabled', 'email',
+    'name', 'date', 'role', 'contact', 'number', 'processing', 'current', 'message', 'archive', 'chat',
+    'dashboard', 'report', 'reports', 'analytics', 'notification', 'notifications', 'filter', 'search',
+    'settings', 'profile', 'admin', 'approval', 'supplierinfo', 'serial', 'delivery', 'inspection',
+    'update', 'save', 'cancel', 'remove', 'create', 'view', 'accept', 'reject', 'password', 'email',
+    'supplier', 'address', 'phone', 'mobile', 'contact', 'date', 'time', 'week', 'month', 'year'
+]);
+
+const isLikelyFilipino = (word = '') => {
+    const clean = String(word || '').replace(/[^a-zA-ZñÑáéíóúÁÉÍÓÚ]/g, '').toLowerCase();
+    if (!clean) return false;
+    if (FILIPINO_WORDS.has(clean)) return true;
+    if (FILIPINO_PREFIXES.some((prefix) => clean.startsWith(prefix) && clean.length > prefix.length)) return true;
+    if (FILIPINO_SUFFIXES.some((suffix) => clean.endsWith(suffix) && clean.length > suffix.length)) return true;
+    if (/[ñáéíóú]/i.test(clean)) return true;
+    return false;
+};
+
+const isLikelyEnglish = (word = '') => {
+    const clean = String(word || '').replace(/[^a-zA-Z]/g, '').toLowerCase();
+    if (!clean) return false;
+    if (ENGLISH_WORDS.has(clean)) return true;
+    if (/(tion|ment|ing|ed|er|ly|ous|ive|ness|ship|sion|able|ible)$/i.test(clean)) return true;
+    return false;
+};
+
+export const detectSpeechLanguage = (word = '') => {
+    const raw = String(word || '').trim();
+    if (!raw) return 'en-US';
+
+    const tokens = raw.split(/[-_]/).map((part) => part.replace(/[^A-Za-z0-9ñÑáéíóúÁÉÍÓÚ]/g, '')).filter(Boolean);
+    if (tokens.length > 1) {
+        const detected = tokens.map((token) => detectSpeechLanguage(token));
+        return detected.some((lang) => lang === 'fil-PH') && detected.some((lang) => lang === 'en-US')
+            ? 'fil-PH'
+            : detected[0] || 'en-US';
+    }
+
+    const clean = raw.replace(/[^A-Za-z0-9ñÑáéíóúÁÉÍÓÚ]/g, '').toLowerCase();
+    if (!clean) return 'en-US';
+    if (isLikelyFilipino(clean)) return 'fil-PH';
+    if (isLikelyEnglish(clean)) return 'en-US';
+    if (/^[A-Z]{2,}$/.test(raw) || /^(?:[A-Z]\.?){2,}$/.test(raw)) return 'en-US';
+    return 'en-US';
+};
+
+export const buildSpeechSegments = (value = '') => {
+    const text = normalizeSpeechText(value || '');
+    if (!text) return [];
+
+    const matches = text.match(/[A-Za-z0-9ñÑáéíóúÁÉÍÓÚ]+(?:[-'][A-Za-z0-9ñÑáéíóúÁÉÍÓÚ]+)*|[.,!?;:()\[\]{}]+|\s+/g) || [];
+    const segments = [];
+    let current = '';
+    let currentLang = null;
+
+    const flush = () => {
+        if (!current.trim()) return;
+        segments.push({ text: current.trim(), lang: currentLang || 'en-US' });
+        current = '';
+        currentLang = null;
+    };
+
+    matches.forEach((match) => {
+        if (/^\s+$/.test(match)) {
+            if (current) current += ' ';
+            return;
+        }
+
+        if (/^[.,!?;:()\[\]{}]+$/.test(match)) {
+            if (current) current += match;
+            return;
+        }
+
+        const parts = match.split(/[-']/).filter(Boolean);
+        const segmentLang = parts.map((part) => detectSpeechLanguage(part)).find((lang) => lang) || 'en-US';
+
+        if (current && currentLang && segmentLang !== currentLang && !/^\s+$/.test(current.slice(-1))) {
+            flush();
+        }
+
+        if (!currentLang) {
+            currentLang = segmentLang;
+        } else if (segmentLang !== currentLang) {
+            currentLang = segmentLang;
+        }
+
+        current += (current ? ' ' : '') + match;
+    });
+
+    flush();
+    return segments.filter((segment) => segment.text && segment.text.trim().length > 0);
+};
+
 export const normalizeSpeechText = (value = '') => {
     let text = (value || '')
         .replace(/\u00A0/g, ' ')
@@ -161,9 +268,13 @@ export const getSelectionContext = (selection) => {
     const node = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
         ? range.commonAncestorContainer
         : range.commonAncestorContainer.parentElement;
-    const element = node?.closest?.('td, th, tr, table, input, textarea, select, form, [role="dialog"], [role="alertdialog"], [data-tts-context="chat"], [role="alert"], [aria-live]');
+    const element = node?.closest?.('td, th, tr, table, [data-tts-row], input, textarea, select, form, [role="dialog"], [role="alertdialog"], [data-tts-context="chat"], [role="alert"], [aria-live]');
     if (!element || shouldSkipElement(element)) return { type: 'text', text: normalizeSpeechText(selection.toString()) };
     const selectedText = normalizeSpeechText(selection.toString());
+    if (element.matches('[data-tts-row]')) {
+        const rowText = normalizeSpeechText(element.dataset.ttsRow || element.getAttribute('data-tts-row') || '');
+        return { type: 'table-row', element, text: rowText || selectedText };
+    }
     if (element.matches('td, th')) return { type: 'table-cell', element, text: getTableRowSpeech(element.parentElement) };
     if (element.matches('tr')) return { type: 'table-row', element, text: getTableRowSpeech(element) };
     if (element.matches('table')) return { type: 'table', element, text: selectedText };
@@ -241,14 +352,35 @@ export function speakTtsText(text, options = {}) {
         return { supported: true, message: 'No readable content was found.' };
     }
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = options.lang || 'en-US';
-    utterance.rate = options.rate || 1;
-    utterance.pitch = options.pitch || 1;
-    utterance.volume = options.volume ?? 1;
+    const segments = buildSpeechSegments(cleanText);
+    if (!segments.length) {
+        return { supported: true, message: 'No readable content was found.' };
+    }
+
+    const speakSequence = (index = 0) => {
+        const segment = segments[index];
+        if (!segment) {
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(segment.text);
+        utterance.lang = options.lang || segment.lang || 'en-US';
+        utterance.rate = options.rate || 1;
+        utterance.pitch = options.pitch || 1;
+        utterance.volume = options.volume ?? 1;
+
+        utterance.onend = () => {
+            if (index < segments.length - 1) {
+                speakSequence(index + 1);
+            }
+        };
+
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+    };
 
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakSequence(0);
 
     return { supported: true, message: 'Speech started.' };
 }

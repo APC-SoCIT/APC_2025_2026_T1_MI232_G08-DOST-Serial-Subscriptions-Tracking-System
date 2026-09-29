@@ -42,9 +42,10 @@ createInertiaApp({
         ),
     setup({ el, App, props }) {
         const root = createRoot(el);
+        const user = props.initialPage?.props?.auth?.user;
 
         root.render(
-            <AccessibilityProvider>
+            <AccessibilityProvider user={user}>
                 <App {...props} />
             </AccessibilityProvider>,
         );
