@@ -15,6 +15,6 @@ body {
 }
 
 /* SweetAlert z-index fix for modals */
-.swal-high-zindex {
-    z-index: 100000 !important;
+.swal2-container {
+    z-index: 20000 !important;
 }
