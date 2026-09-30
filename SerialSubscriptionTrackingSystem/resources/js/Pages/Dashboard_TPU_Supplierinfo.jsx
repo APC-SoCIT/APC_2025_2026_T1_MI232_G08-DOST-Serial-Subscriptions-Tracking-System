@@ -665,7 +665,7 @@ function SupplierInfo() {
                 )}
               </div>
               <p style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
-                Select an approved supplier account to auto-fill the form below.
+                Select an approved supplier account to preview its details below. These fields reflect the account's current record and cannot be edited here — to change a supplier's info, they update it from their own Profile page.
               </p>
             </div>
 
@@ -691,8 +691,7 @@ function SupplierInfo() {
                     type="text"
                     name="contactPerson"
                     value={newSupplier.contactPerson}
-                    onChange={handleInputChange}
-                    required
+                    readOnly
                     placeholder="Enter contact person name"
                     style={{
                       width: '100%',
@@ -700,7 +699,9 @@ function SupplierInfo() {
                       borderRadius: 6,
                       border: '1px solid #ddd',
                       fontSize: 14,
-                      background: '#f9f9f9',
+                      background: '#eee',
+                      color: '#555',
+                      cursor: 'not-allowed',
                     }}
                   />
                 </div>
@@ -713,8 +714,7 @@ function SupplierInfo() {
                     type="text"
                     name="supplierName"
                     value={newSupplier.supplierName}
-                    onChange={handleInputChange}
-                    required
+                    readOnly
                     placeholder="Enter supplier/company name"
                     style={{
                       width: '100%',
@@ -722,7 +722,9 @@ function SupplierInfo() {
                       borderRadius: 6,
                       border: '1px solid #ddd',
                       fontSize: 14,
-                      background: '#f9f9f9',
+                      background: '#eee',
+                      color: '#555',
+                      cursor: 'not-allowed',
                     }}
                   />
                 </div>
@@ -735,8 +737,7 @@ function SupplierInfo() {
                     type="text"
                     name="email"
                     value={newSupplier.email}
-                    onChange={handleInputChange}
-                    required
+                    readOnly
                     placeholder="Enter email address"
                     autoComplete="email"
                     style={{
@@ -745,7 +746,9 @@ function SupplierInfo() {
                       borderRadius: 6,
                       border: '1px solid #ddd',
                       fontSize: 14,
-                      background: '#f9f9f9',
+                      background: '#eee',
+                      color: '#555',
+                      cursor: 'not-allowed',
                     }}
                   />
                 </div>
@@ -758,8 +761,7 @@ function SupplierInfo() {
                     type="tel"
                     name="phone"
                     value={newSupplier.phone}
-                    onChange={handleInputChange}
-                    required
+                    readOnly
                     placeholder="e.g., +63 912 345 6789"
                     style={{
                       width: '100%',
@@ -767,7 +769,9 @@ function SupplierInfo() {
                       borderRadius: 6,
                       border: '1px solid #ddd',
                       fontSize: 14,
-                      background: '#f9f9f9',
+                      background: '#eee',
+                      color: '#555',
+                      cursor: 'not-allowed',
                     }}
                   />
                 </div>
@@ -780,8 +784,7 @@ function SupplierInfo() {
                     type="text"
                     name="address"
                     value={newSupplier.address}
-                    onChange={handleInputChange}
-                    required
+                    readOnly
                     placeholder="Enter address"
                     style={{
                       width: '100%',
@@ -789,7 +792,9 @@ function SupplierInfo() {
                       borderRadius: 6,
                       border: '1px solid #ddd',
                       fontSize: 14,
-                      background: '#f9f9f9',
+                      background: '#eee',
+                      color: '#555',
+                      cursor: 'not-allowed',
                     }}
                   />
                 </div>
