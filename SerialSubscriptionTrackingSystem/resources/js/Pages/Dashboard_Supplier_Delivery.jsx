@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Link, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import axios from "axios";
 import { GoHomeFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
@@ -9,9 +9,7 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
 import SerialsNotification from "@/Components/SerialsNotification";
-import TtsControl from "@/Components/TtsControl";
 import { MdRefresh } from "react-icons/md";
-import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
 const sidebarItems = [
   { icon: <GoHomeFill />, label: 'Dashboard', route: '/dashboard-supplier' },
@@ -139,7 +137,6 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | Delivery</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <TtsControl label="Read Aloud" />
         <SerialsNotification />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
@@ -304,7 +301,7 @@ function Dashboard_Supplier_Delivery() {
     setLoading(true);
     try {
       const response = await axios.get('/api/serial-issues/supplier', {
-        params: { supplier_name: auth?.user?.name || '', ...getDateRangeParams() }
+        params: { supplier_name: auth?.user?.name || '' }
       });
       if (response.data.success) {
         const fetchedIssues = response.data.issues || [];
@@ -419,6 +416,7 @@ function Dashboard_Supplier_Delivery() {
 
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
+      <Head title="Delivery" />
       <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
       <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
         <TopBar />

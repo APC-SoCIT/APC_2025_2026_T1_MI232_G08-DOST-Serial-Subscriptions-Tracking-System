@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Link, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 import 'animate.css';
@@ -15,7 +15,6 @@ import { MdListAlt, MdViewList } from "react-icons/md";
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 import { getDateRangeParams } from '@/Utils/dateRangeParams';
 import SerialsNotification from "@/Components/SerialsNotification";
-import TtsControl from "@/Components/TtsControl";
 import SupplierSerialIssues from "@/Components/SupplierSerialIssues";
 
 const sidebarItems = [
@@ -144,7 +143,6 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | List of Serials</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-        <TtsControl label="Read Aloud" />
         <SerialsNotification />
         {activeIcon === 'notifications' && (
           <div style={popupStyle}>
@@ -556,6 +554,7 @@ function Dashboard_Supplier_ListofSerial() {
 
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
+      <Head title="List of Serials" />
       <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
       <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
         <TopBar />
