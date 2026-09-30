@@ -41,7 +41,7 @@ class LoginRequest extends FormRequest
         if ($user && ($user->is_disabled ?? false)) {
             Auth::logout();
             throw ValidationException::withMessages([
-                'email' => 'Your account has been disabled. Please contact the administrator.',
+                'email' => 'Account disabled. Please contact the administrator.',
             ]);
         }
     }

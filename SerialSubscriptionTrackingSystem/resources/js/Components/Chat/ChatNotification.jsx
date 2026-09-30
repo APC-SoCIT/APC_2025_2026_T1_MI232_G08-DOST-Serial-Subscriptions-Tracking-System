@@ -68,6 +68,8 @@ export default function ChatNotification() {
   };
 
   useEffect(() => {
+    if (isOnChatPage()) return undefined;
+
     // Initial fetch
     fetchAndNotify();
 

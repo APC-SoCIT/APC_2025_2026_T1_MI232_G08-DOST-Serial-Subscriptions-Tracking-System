@@ -74,9 +74,9 @@ class DashboardStatsController extends Controller
     private function eligibleSuppliers()
     {
         $approvedAccounts = SupplierAccount::where('status', 'approved')->get();
-
-        $usersById = User::all()->keyBy(fn ($u) => (string) $u->_id);
-        $usersByEmail = User::all()->keyBy(fn ($u) => strtolower($u->email ?? ''));
+        $users = User::all();
+        $usersById = $users->keyBy(fn ($u) => (string) $u->_id);
+        $usersByEmail = $users->keyBy(fn ($u) => strtolower($u->email ?? ''));
 
         return $approvedAccounts->filter(function ($account) use ($usersById, $usersByEmail) {
             $userId = (string) ($account->user_id ?? '');
@@ -164,11 +164,11 @@ class DashboardStatsController extends Controller
      * Label is disambiguated with the contact person only when a name
      * collision is actually detected among the ranked suppliers.
      */
-    private function supplierReliabilityRanking(): array
+    private function supplierReliabilityRanking(?string $supplierId = null, ?string $serialTitle = null): array
     {
-        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues();
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
 
-        $bySupplierId = [];
+        [$bySubscription, $allIssues] = $this->qualifyingSubscriptionIssues($supplierId, $serialTitle);
         foreach ($bySubscription as $entry) {
             $supplierId = (string) ($entry['subscription']->supplier_id ?? '');
             if (!$supplierId) {
@@ -246,11 +246,23 @@ class DashboardStatsController extends Controller
         $subscriptions = $query->get();
         $bySubscription = [];
         $allIssues = collect();
+            $bySupplierId = [];
+        if ($subscriptions->isEmpty()) {
+            return [$bySubscription, $allIssues];
+        }
+
+        $subscriptionIds = $subscriptions
+            ->map(fn ($subscription) => (string) ($subscription->_id ?? $subscription->id))
+            ->values()
+            ->all();
+        $issuesBySubscription = SerialIssue::whereIn('subscription_id', $subscriptionIds)
+            ->whereNull('archived_at')
+            ->get()
+            ->groupBy(fn ($issue) => (string) $issue->subscription_id);
 
         foreach ($subscriptions as $subscription) {
-            $issues = SerialIssue::where('subscription_id', (string) ($subscription->_id ?? $subscription->id))
-                ->whereNull('archived_at')
-                ->get();
+            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+            $issues = $issuesBySubscription->get($subscriptionId, collect());
 
             if ($issues->isEmpty()) {
                 continue;
@@ -353,7 +365,7 @@ class DashboardStatsController extends Controller
             'active_subscriptions' => $allSubscriptions->where('status', 'Active')->count(),
             'total_award_cost' => $allIssues->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
             'total_delivered_cost' => $deliveredRows->sum(fn ($r) => (float) ($r['issue']->cost ?? 0)),
-        ], 'charts' => ['monthly' => $monthly, 'pipeline' => $pipeline, 'supplierRanking' => $this->supplierReliabilityRanking()]]);
+        ], 'charts' => ['monthly' => $monthly, 'pipeline' => $pipeline, 'supplierRanking' => $this->supplierReliabilityRanking($supplierId, $serialTitle)]]);
     }
 
     // =====================================================================

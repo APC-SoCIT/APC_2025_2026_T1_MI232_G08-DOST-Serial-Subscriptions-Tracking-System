@@ -1,7 +1,7 @@
 import { useForm, Link, Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
-export default function Login({ status, canResetPassword }) {
+export default function Login({ status, canResetPassword, flash }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -21,8 +21,13 @@ export default function Login({ status, canResetPassword }) {
         }
     }, []);
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
+
+        if (window.refreshCsrfToken) {
+            await window.refreshCsrfToken();
+        }
+
         post(route('login'), {
             onFinish: () => reset('password'),
         });
@@ -75,6 +80,11 @@ export default function Login({ status, canResetPassword }) {
                 {/* Login card */}
                 <div className="bg-white shadow-lg rounded-md w-full max-w-[360px] p-6 sm:p-8 mb-16 sm:mb-0">
                     <form onSubmit={submit}>
+                        {flash?.error && (
+                            <p className="text-red-500 text-sm mb-4" role="alert">
+                                {flash.error}
+                            </p>
+                        )}
                         {/* Email */}
                         <div className="mb-4">
                             <input

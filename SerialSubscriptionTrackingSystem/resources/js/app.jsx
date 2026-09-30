@@ -5,6 +5,7 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { AccessibilityProvider } from './Contexts/AccessibilityContext';
+import GlobalModalFocusManager from './Components/GlobalModalFocusManager';
 
 const appName = import.meta.env.VITE_APP_NAME || 'DOST STII-LAMS';
 
@@ -48,6 +49,9 @@ createInertiaApp({
             <AccessibilityProvider user={user}>
                 <App {...props} />
             </AccessibilityProvider>,
+            <GlobalModalFocusManager>
+                <App {...props} />
+            </GlobalModalFocusManager>
         );
     },
     progress: {
