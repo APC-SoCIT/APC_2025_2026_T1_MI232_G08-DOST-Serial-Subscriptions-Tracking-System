@@ -9,6 +9,7 @@ import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
 import SessionManager from "@/Components/SessionManager";
+import TtsControl from "@/Components/TtsControl";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -182,6 +183,7 @@ function TopBar({ title, isMobile, sidebarOpen, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+        <TtsControl label="Read Aloud" />
         <SerialsNotification isMobile={isMobile} />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>

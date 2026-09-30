@@ -9,6 +9,7 @@ import { BsFillChatTextFill } from "react-icons/bs";
 import { BiSortAlt2 } from "react-icons/bi";
 import { FaTruckFast } from "react-icons/fa6";
 import SerialsNotification from "@/Components/SerialsNotification";
+import TtsControl from "@/Components/TtsControl";
 import { MdRefresh } from "react-icons/md";
 import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
@@ -138,6 +139,7 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | Delivery</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+        <TtsControl label="Read Aloud" />
         <SerialsNotification />
 
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>

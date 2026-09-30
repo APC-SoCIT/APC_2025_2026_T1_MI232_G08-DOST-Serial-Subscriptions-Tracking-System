@@ -11,6 +11,7 @@ import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
 import SessionManager from "@/Components/SessionManager";
+import TtsControl from "@/Components/TtsControl";
 
 const Icon = ({ children }) => (
   <span style={{ marginRight: 8 }}>{children}</span>
@@ -325,6 +326,7 @@ function TopBar({ pageTitle, isMobile, setSidebarOpen }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 18, position: 'relative' }}>
+        <TtsControl label="Read Aloud" />
         <SerialsNotification isMobile={isMobile} />
         
         <span onClick={() => handleIconClick('account')} style={{ cursor: 'pointer', position: 'relative' }}>
@@ -504,7 +506,11 @@ export default function TPULayout({ children, title, hideTitle = false }) {
         overflow: 'hidden',
         transition: 'margin-left 0.3s ease',
       }}>
-        <TopBar pageTitle={pageTitle} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: isMobile ? '12px 16px 0' : '16px 32px 0' }}>
+          <div style={{ flex: 1 }}>
+            <TopBar pageTitle={pageTitle} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+          </div>
+        </div>
         <div style={{ 
           flex: 1,
           padding: isChatPage ? '0' : (isMobile ? '16px' : '24px'),
