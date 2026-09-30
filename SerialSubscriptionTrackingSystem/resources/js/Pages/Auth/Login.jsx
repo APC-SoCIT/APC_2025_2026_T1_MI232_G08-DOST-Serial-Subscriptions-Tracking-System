@@ -35,7 +35,7 @@ export default function Login({ status, canResetPassword }) {
                 {/* Top-left DOST logo */}
                 <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
                     <img
-                        src="/images/dost-logo1.png"
+                        src="/images/DOST-Logo.png"
                         alt="DOST Logo"
                         className="h-10 sm:h-14"
                     />
@@ -62,7 +62,7 @@ export default function Login({ status, canResetPassword }) {
                 {/* Bottom-right DOST branding */}
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 sm:left-auto sm:transform-none sm:translate-x-0 sm:bottom-6 sm:right-6 flex items-center space-x-2 sm:space-x-3 bg-white/90 px-2 sm:px-3 py-2 rounded-md max-w-[90%] sm:max-w-none">
                     <img
-                        src="/images/dost-logo1.png"
+                        src="/images/DOST-Logo.png"
                         alt="DOST Logo"
                         className="h-8 sm:h-10 flex-shrink-0"
                     />
