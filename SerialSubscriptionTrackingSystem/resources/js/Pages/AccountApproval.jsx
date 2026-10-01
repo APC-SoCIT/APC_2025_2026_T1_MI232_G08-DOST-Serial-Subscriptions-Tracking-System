@@ -188,6 +188,7 @@ export default function AccountApproval() {
             {!loading && paginated.map((item, i) => (
               <div
                 key={item.id}
+                data-tts-row={`Name: ${item.name}. Email: ${item.email}. Contact Number: ${item.contact}. Date: ${item.date}. Role: ${item.role}. Action: ${processingId === item.id ? 'Processing' : 'Reject, Accept'}.`}
                 className={`grid grid-cols-[1.4fr,2.6fr,1.2fr,1fr,1.4fr,1.7fr] gap-x-8 px-6 py-4 
                           text-sm items-center ${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"}`}
               >

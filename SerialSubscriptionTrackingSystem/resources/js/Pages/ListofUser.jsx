@@ -212,6 +212,7 @@ export default function UserList() {
             {/* Rows */}
             {!loading && paginated.map((item, i) => (
               <div key={item.id}
+                  data-tts-row={`Name: ${item.name}. Email: ${item.email}. Role: ${item.role}. Date Created: ${item.date}. Status: ${item.is_disabled ? 'Disabled' : 'Active'}. Action: ${currentUserId === item.id ? 'Current User' : (item.is_disabled ? 'Enable' : 'Disable')}.`}
                   className={`grid grid-cols-[2fr,2fr,1fr,1fr,1fr] gap-x-6 px-8 py-4 text-sm items-center 
                               ${item.is_disabled ? 'bg-gray-100 opacity-60' : (i % 2 === 0 ? "bg-gray-50/60" : "bg-white")}`}>
                   

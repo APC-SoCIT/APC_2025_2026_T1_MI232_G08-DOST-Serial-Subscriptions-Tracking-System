@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Link, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import axios from "axios";
 import Swal from 'sweetalert2';
 import 'animate.css';
@@ -554,6 +554,7 @@ function Dashboard_Supplier_ListofSerial() {
 
   return (
     <div style={{ display: "flex", background: "#F5F6FA", minHeight: "100vh" }}>
+      <Head title="List of Serials" />
       <Sidebar active={activeSidebar} setActive={setActiveSidebar} />
       <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
         <TopBar />

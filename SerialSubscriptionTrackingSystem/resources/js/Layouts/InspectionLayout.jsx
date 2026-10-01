@@ -8,6 +8,7 @@ import { useRole } from "@/Components/RequireRole";
 import ChatNotification from "@/Components/Chat/ChatNotification";
 import SerialsNotification from "@/Components/SerialsNotification";
 import SessionManager from "@/Components/SessionManager";
+import TtsControl from "@/Components/TtsControl";
 
 const navItems = [
   { icon: <GoHomeFill size={18} />, label: "Dashboard", href: "/inspection-dashboard" },
@@ -214,6 +215,7 @@ export default function InspectionLayout({ children, title }) {
           </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+              <TtsControl label="Read Aloud" />
               {/* Notifications */}
               <SerialsNotification isMobile={isMobile} />
 

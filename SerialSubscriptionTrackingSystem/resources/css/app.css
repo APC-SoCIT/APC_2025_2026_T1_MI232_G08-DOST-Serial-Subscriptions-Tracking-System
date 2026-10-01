@@ -2,7 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+    --pwd-font-scale: 1;
+}
+
+html {
+    font-size: calc(16px * var(--pwd-font-scale));
+}
+
+body {
+    font-size: 1rem;
+}
+
 /* SweetAlert z-index fix for modals */
-.swal-high-zindex {
-    z-index: 100000 !important;
+.swal2-container {
+    z-index: 20000 !important;
 }

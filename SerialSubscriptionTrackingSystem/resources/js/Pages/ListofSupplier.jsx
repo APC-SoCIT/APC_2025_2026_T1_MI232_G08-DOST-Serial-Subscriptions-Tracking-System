@@ -148,6 +148,7 @@ export default function SupplierList() {
             {/* Rows */}
             {!loading && paginated.map((item, i) => (
             <div key={item.id}
+                data-tts-row={`Supplier Name: ${item.name}. Contact Person: ${item.contactPerson}. Email: ${item.email}. Status: ${item.is_disabled ? 'Disabled' : 'Active'}. Date Approved: ${item.date}.`}
                 className={`grid grid-cols-[2fr,1.5fr,2fr,1fr,1fr] gap-x-6 px-8 py-4 text-sm items-center 
                             ${item.is_disabled ? 'bg-gray-100 opacity-60' : (i % 2 === 0 ? "bg-gray-50/60" : "bg-white")}`}>
                 
