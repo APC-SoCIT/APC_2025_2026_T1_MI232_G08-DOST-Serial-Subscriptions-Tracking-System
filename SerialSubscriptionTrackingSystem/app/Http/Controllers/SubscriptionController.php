@@ -10,10 +10,41 @@ use App\Services\ProcessMovementService;
 use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SubscriptionController extends Controller
 {
+    private const LIVE_SUBSCRIPTION_STATUSES = ['pending', 'accepted', 'Active', 'Delivered', 'delivered'];
+    private const ISSN_PATTERN = '/^\d{4}-\d{3}[0-9X]$/';
+
+    private function hasLiveIssnConflict(string $issn, ?string $ignoreId = null): bool
+    {
+        $query = Subscription::where('issn', $issn)
+            ->whereIn('status', self::LIVE_SUBSCRIPTION_STATUSES);
+
+        if ($ignoreId !== null) {
+            $query->where('_id', '!=', $ignoreId);
+        }
+
+        return $query->exists();
+    }
+
+    private function normalizeSerialIssns(?array $serials): ?array
+    {
+        if ($serials === null) {
+            return null;
+        }
+
+        return array_map(function ($serial) {
+            if (is_array($serial) && array_key_exists('issn', $serial)) {
+                $serial['issn'] = ($issn = strtoupper(trim((string) $serial['issn']))) !== '' ? $issn : null;
+            }
+
+            return $serial;
+        }, $serials);
+    }
+
     /**
      * Display listing of all subscriptions
      */
@@ -190,15 +221,21 @@ class SubscriptionController extends Controller
      */
     public function store(Request $request)
     {
+        $request->merge([
+            'issn' => ($issn = strtoupper(trim((string) $request->input('issn')))) !== '' ? $issn : null,
+            'serials' => $this->normalizeSerialIssns($request->input('serials')),
+        ]);
+
         $validated = $request->validate([
             'serial_title' => 'required|string|max:255',
-            'issn' => 'nullable|string|max:255',
+            'issn' => ['nullable', 'string', 'regex:' . self::ISSN_PATTERN],
             'supplier_id' => 'nullable|string',
             'supplier_name' => 'required|string|max:255',
             'period' => 'nullable|string',
             'award_cost' => 'required|numeric|min:0',
             'delivered_cost' => 'nullable|numeric|min:0',
              'serials' => 'nullable|array',
+                        'serials.*.issn' => ['nullable', 'string', 'regex:' . self::ISSN_PATTERN],
             'transactions' => 'nullable|array',
             'author_publisher' => 'nullable|string|max:255',
             // New fields for serial issue generation
@@ -212,6 +249,13 @@ class SubscriptionController extends Controller
             'publication_date_type' => 'nullable|string|in:specific,month_year,season',
             'publication_date' => 'nullable|string|max:100',
             'issue_date_serial' => 'nullable|string|max:255'
+        ], [
+            'issn.regex' => 'ISSN must be in the format NNNN-NNNN (the last character may also be X).',
+                        'serials.*.issn.regex' => 'ISSN must be in the format NNNN-NNNN (the last character may also be X).',
+            'serial_title.max' => 'Title cannot exceed 255 characters.',
+            'total_issues.integer' => 'Total Issues must be a whole number between 1 and 52.',
+            'total_issues.min' => 'Total Issues must be between 1 and 52.',
+            'total_issues.max' => 'Total Issues must be between 1 and 52.',
         ]);
 
         $deliveredCost = $validated['delivered_cost'] ?? 0;
@@ -259,12 +303,28 @@ class SubscriptionController extends Controller
             $issn = $validated['serials'][0]['issn'] ?? null;
         }
 
+        $issn = $issn ? strtoupper(trim($issn)) : null;
+
+        if ($issn && $this->hasLiveIssnConflict($issn)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This ISSN is already in use by an active subscription.',
+                'errors' => ['issn' => ['This ISSN is already in use by an active subscription.']],
+            ], 422);
+        }
+
          $authorPublisher = $validated['author_publisher'] ?? null;
         if (!$authorPublisher && !empty($validated['serials'])) {
             $authorPublisher = $validated['serials'][0]['authorPublisher'] ?? null;
         }
 
-        $subscription = Subscription::create([
+        try {
+            $subscription = DB::connection('mongodb')->transaction(function () use ($validated, $issn, $authorPublisher, $supplierId, $supplierName, $deliveredCost, $remainingCost) {
+                if ($issn && $this->hasLiveIssnConflict($issn)) {
+                    throw new \RuntimeException('This ISSN is already in use by an active subscription.');
+                }
+
+                return Subscription::create([
             'serial_title' => $validated['serial_title'],
             'issn' => $issn,
             'author_publisher' => $authorPublisher,
@@ -288,7 +348,19 @@ class SubscriptionController extends Controller
             'publication_date_type' => $validated['publication_date_type'] ?? null,
             'publication_date' => $validated['publication_date'] ?? null,
             'issue_date_serial' => $validated['issue_date_serial'] ?? null,
-        ]);
+                ]);
+            });
+        } catch (\Throwable $exception) {
+            if ($issn && $this->hasLiveIssnConflict($issn)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This ISSN is already in use by an active subscription.',
+                    'errors' => ['issn' => ['This ISSN is already in use by an active subscription.']],
+                ], 422);
+            }
+
+            throw $exception;
+        }
 
         // Serial issues will be generated when supplier accepts the subscription
 
@@ -434,6 +506,11 @@ class SubscriptionController extends Controller
         // Store old values for audit logging
         $oldValues = $subscription->toArray();
 
+        $request->merge([
+            'issn' => ($issn = strtoupper(trim((string) $request->input('issn')))) !== '' ? $issn : null,
+            'serials' => $this->normalizeSerialIssns($request->input('serials')),
+        ]);
+
         $validated = $request->validate([
             'serial_title' => 'sometimes|string|max:255',
             'supplier_id' => 'nullable|string',
@@ -449,14 +526,35 @@ class SubscriptionController extends Controller
             // to save, however the person edited the form.
             'status' => 'sometimes|string|in:Active,Inactive,Completed,pending,accepted,Delivered,delivered',
             'serials' => 'nullable|array',
+            'serials.*.issn' => ['nullable', 'string', 'regex:' . self::ISSN_PATTERN],
             'transactions' => 'nullable|array',
             'note' => 'nullable|string',
-            'issn' => 'nullable|string|max:50',
+            'issn' => ['nullable', 'string', 'regex:' . self::ISSN_PATTERN],
             'frequency' => 'nullable|string|max:50',
             'author_publisher' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:100',
             'issue_date_serial' => 'nullable|string|max:255',
+            'total_issues' => 'sometimes|integer|min:1|max:52',
+        ], [
+            'issn.regex' => 'ISSN must be in the format NNNN-NNNN (the last character may also be X).',
+            'serials.*.issn.regex' => 'ISSN must be in the format NNNN-NNNN (the last character may also be X).',
+            'serial_title.max' => 'Title cannot exceed 255 characters.',
+            'total_issues.integer' => 'Total Issues must be a whole number between 1 and 52.',
+            'total_issues.min' => 'Total Issues must be between 1 and 52.',
+            'total_issues.max' => 'Total Issues must be between 1 and 52.',
         ]);
+
+        $effectiveIssn = $validated['issn'] ?? $subscription->issn;
+        $effectiveStatus = $validated['status'] ?? $subscription->status;
+        if ($effectiveIssn
+            && in_array($effectiveStatus, self::LIVE_SUBSCRIPTION_STATUSES, true)
+            && $this->hasLiveIssnConflict($effectiveIssn, (string) ($subscription->_id ?? $subscription->id))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This ISSN is already in use by an active subscription.',
+                'errors' => ['issn' => ['This ISSN is already in use by an active subscription.']],
+            ], 422);
+        }
 
         foreach (($subscription->serials ?? []) as $index => $serial) {
             if (!empty($serial['archived_at']) && isset($validated['serials'][$index]) && $validated['serials'][$index] != $serial) {
