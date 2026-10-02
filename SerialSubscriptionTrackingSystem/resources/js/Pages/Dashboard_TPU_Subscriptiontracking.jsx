@@ -9,6 +9,11 @@ import 'animate.css';
 import SerialIssuesTable from '@/Components/SerialIssuesTable';
 import { getDateRangeParams } from '@/Utils/dateRangeParams';
 
+const ISSN_PATTERN = /^\d{4}-\d{3}[0-9X]$/;
+const ISSN_MESSAGE = 'ISSN must be in the format NNNN-NNNN (the last character may also be X).';
+const TITLE_MAX_LENGTH = 255;
+const TOTAL_ISSUES_MAX = 52;
+
 // Subscription Tracking Component
 function SubscriptionTracking() {
   const { approvedSuppliers = [] } = usePage().props;
@@ -567,6 +572,7 @@ function SubscriptionTracking() {
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
+    const normalizedValue = name === 'issn' ? value.toUpperCase() : value;
     if (name === 'supplierId') {
       const selectedSupplier = supplierOptions.find((s) => s.id === value);
       setEditFormData({
@@ -578,13 +584,22 @@ function SubscriptionTracking() {
       // If category is changed and it's not "Others", clear customCategory
       setEditFormData({ ...editFormData, [name]: value, customCategory: '' });
     } else {
-      setEditFormData({ ...editFormData, [name]: value });
+      setEditFormData({ ...editFormData, [name]: normalizedValue });
     }
   };
 
   const handleSaveEdit = async () => {
     if (!editFormData.serialTitle || !editFormData.supplierName) {
       Swal.fire({ title: 'Please fill in Serial Title and Supplier Name', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      return;
+    }
+
+    if (editFormData.serialTitle.length > TITLE_MAX_LENGTH) {
+      Swal.fire({ title: 'Title cannot exceed 255 characters.', icon: 'warning' });
+      return;
+    }
+    if (editFormData.issn && !ISSN_PATTERN.test(editFormData.issn)) {
+      Swal.fire({ title: ISSN_MESSAGE, icon: 'warning' });
       return;
     }
 
@@ -618,7 +633,9 @@ function SubscriptionTracking() {
       }
     } catch (error) {
       console.error('Error updating subscription:', error);
-      Swal.fire({ title: 'Failed to update subscription. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      const validationErrors = error.response?.data?.errors;
+      const message = validationErrors ? Object.values(validationErrors).flat().join(' ') : (error.response?.data?.message || 'Failed to update subscription. Please try again.');
+      Swal.fire({ title: message, icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setEditSubmitting(false);
     }
@@ -738,6 +755,7 @@ function SubscriptionTracking() {
 
   const handleSerialInputChange = (e) => {
     const { name, value } = e.target;
+    const normalizedValue = name === 'issn' ? value.toUpperCase() : value;
     
     // Helper function to calculate quantity based on frequency
     const getQuantityByFrequency = (frequency) => {
@@ -775,13 +793,27 @@ function SubscriptionTracking() {
       // Reset the date value when switching format to avoid mismatched formats
       setSerialFormData({ ...serialFormData, [name]: value, dateOfPublication: '' });
     } else {
-      setSerialFormData({ ...serialFormData, [name]: value });
+      setSerialFormData({ ...serialFormData, [name]: normalizedValue });
     }
   };
 
   const handleAddSerialItem = () => {
     if (!serialFormData.serialTitle || !serialFormData.issn || !serialFormData.supplierId || !serialFormData.deliveryDate || !serialFormData.volumeNumber || !serialFormData.issuesNo) {
       Swal.fire({ title: 'Please fill in all required fields (Serial Title, ISSN, Supplier Account, Delivery Date, No. of Volumes, No. of Issues).', icon: 'warning', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      return;
+    }
+
+    if (serialFormData.serialTitle.length > TITLE_MAX_LENGTH) {
+      Swal.fire({ title: 'Title cannot exceed 255 characters.', icon: 'warning' });
+      return;
+    }
+    if (!ISSN_PATTERN.test(serialFormData.issn)) {
+      Swal.fire({ title: ISSN_MESSAGE, icon: 'warning' });
+      return;
+    }
+    const totalIssues = Number(serialFormData.amount);
+    if (!Number.isInteger(totalIssues) || totalIssues < 1 || totalIssues > TOTAL_ISSUES_MAX) {
+      Swal.fire({ title: 'Total Issues must be between 1 and 52.', icon: 'warning' });
       return;
     }
 
@@ -923,7 +955,9 @@ function SubscriptionTracking() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error creating subscription:', error);
-      Swal.fire({ title: 'Failed to create subscription. Please try again.', icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
+      const validationErrors = error.response?.data?.errors;
+      const message = validationErrors ? Object.values(validationErrors).flat().join(' ') : (error.response?.data?.message || 'Failed to create subscription. Please try again.');
+      Swal.fire({ title: message, icon: 'error', confirmButtonColor: '#0062f4', showClass: { popup: 'animate__animated animate__fadeInUp animate__faster' }, hideClass: { popup: 'animate__animated animate__fadeOutDown animate__faster' } });
     } finally {
       setSubmitting(false);
     }
@@ -1452,6 +1486,7 @@ function SubscriptionTracking() {
                     value={serialFormData.serialTitle}
                     onChange={handleSerialInputChange}
                     placeholder="Enter serial title"
+                    maxLength={TITLE_MAX_LENGTH}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1470,6 +1505,8 @@ function SubscriptionTracking() {
                     value={serialFormData.issn}
                     onChange={handleSerialInputChange}
                     placeholder="e.g., 0028-0836"
+                    maxLength={9}
+                    pattern="\\d{4}-\\d{3}[0-9Xx]"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1626,7 +1663,9 @@ function SubscriptionTracking() {
                     name="amount"
                     value={serialFormData.amount}
                     onChange={handleSerialInputChange}
-                    min="0"
+                    min="1"
+                    max={TOTAL_ISSUES_MAX}
+                    step="1"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1682,6 +1721,7 @@ function SubscriptionTracking() {
                     value={serialFormData.issuesNo}
                     onChange={handleSerialInputChange}
                     placeholder="e.g., 12"
+                    inputMode="numeric"
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -2230,6 +2270,7 @@ function SubscriptionTracking() {
                     value={editFormData.serialTitle}
                     onChange={handleEditInputChange}
                     placeholder="Enter serial title"
+                    maxLength={TITLE_MAX_LENGTH}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -2248,6 +2289,8 @@ function SubscriptionTracking() {
                     value={editFormData.issn}
                     onChange={handleEditInputChange}
                     placeholder="e.g., 0028-0836"
+                    maxLength={9}
+                    pattern="\\d{4}-\\d{3}[0-9Xx]"
                     style={{
                       width: '100%',
                       padding: '12px 14px',

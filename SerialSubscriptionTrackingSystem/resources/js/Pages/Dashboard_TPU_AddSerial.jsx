@@ -24,6 +24,11 @@ const emptyFormData = {
   note: ''
 };
 
+const ISSN_PATTERN = /^\d{4}-\d{3}[0-9X]$/;
+const ISSN_MESSAGE = 'ISSN must be in the format NNNN-NNNN (the last character may also be X).';
+const TITLE_MAX_LENGTH = 255;
+const TOTAL_ISSUES_MAX = 52;
+
 export default function AddSerial() {
   const { approvedSuppliers = [] } = usePage().props;
   
@@ -35,7 +40,8 @@ export default function AddSerial() {
   
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const normalizedValue = name === 'issn' ? value.toUpperCase() : value;
+    setFormData(prev => ({ ...prev, [name]: normalizedValue }));
   };
   
   const handleSupplierSelect = (e) => {
@@ -52,6 +58,20 @@ export default function AddSerial() {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.serialTitle.length > TITLE_MAX_LENGTH) {
+      setErrorMessage('Title cannot exceed 255 characters.');
+      return;
+    }
+    if (formData.issn && !ISSN_PATTERN.test(formData.issn)) {
+      setErrorMessage(ISSN_MESSAGE);
+      return;
+    }
+    const totalIssues = Number(formData.totalIssues);
+    if (!Number.isInteger(totalIssues) || totalIssues < 1 || totalIssues > TOTAL_ISSUES_MAX) {
+      setErrorMessage('Total Issues must be between 1 and 52.');
+      return;
+    }
+
     setSubmitting(true);
     setSuccessMessage('');
     setErrorMessage('');
@@ -66,7 +86,7 @@ export default function AddSerial() {
         award_cost: parseFloat(formData.awardCost) || 0,
         frequency: formData.frequency,
         total_volumes: parseInt(formData.totalVolumes) || null,
-        total_issues: parseInt(formData.totalIssues) || 12,
+        total_issues: totalIssues,
         volume_start: formData.volumeStart || null,
         issue_start: formData.issueStart || null,
         start_date: formData.startDate || new Date().toISOString().split('T')[0],
@@ -83,7 +103,8 @@ export default function AddSerial() {
       }
     } catch (err) {
       console.error('Error adding serial:', err);
-      setErrorMessage(err.response?.data?.message || 'Failed to add serial subscription. Please try again.');
+      const validationErrors = err.response?.data?.errors;
+      setErrorMessage(validationErrors ? Object.values(validationErrors).flat().join(' ') : (err.response?.data?.message || 'Failed to add serial subscription. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -200,6 +221,7 @@ export default function AddSerial() {
                   onChange={handleChange}
                   style={inputStyle}
                   required
+                  maxLength={TITLE_MAX_LENGTH}
                   placeholder="Enter serial title"
                 />
               </div>
@@ -213,6 +235,8 @@ export default function AddSerial() {
                   onChange={handleChange}
                   style={inputStyle}
                   required
+                  maxLength={9}
+                  pattern="\\d{4}-\\d{3}[0-9Xx]"
                   placeholder="e.g., 1234-5678"
                 />
               </div>
@@ -304,10 +328,11 @@ export default function AddSerial() {
                   style={inputStyle}
                   placeholder="12"
                   min="1"
-                  max="52"
+                  max={TOTAL_ISSUES_MAX}
+                  step="1"
                 />
                 <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
-                  Number of serial issues to generate based on frequency
+                  Total Issues must be between 1 and 52.
                 </span>
               </div>
 
