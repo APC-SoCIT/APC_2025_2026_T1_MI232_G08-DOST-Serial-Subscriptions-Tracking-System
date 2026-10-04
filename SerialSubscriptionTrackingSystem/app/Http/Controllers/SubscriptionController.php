@@ -919,111 +919,112 @@ class SubscriptionController extends Controller
     /**
      * Get serials for a specific supplier (for Supplier Dashboard)
      */
-      public function getSupplierSerials(Request $request)
-    {
-        $supplierName = $request->get('supplier_name');
-        $user = Auth::user();
-        
-        // Get subscriptions for this supplier
-        $query = Subscription::query();
+     public function getSupplierSerials(Request $request)
+{
+    $supplierName = $request->get('supplier_name');
+    $user = Auth::user();
+    
+    // Get subscriptions for this supplier
+    $query = Subscription::query();
 
-        // For supplier role, always scope by linked supplier account ID.
-        if ($user && strtolower($user->role ?? '') === 'supplier') {
-            $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
-                ->orWhere('email', $user->email)
-                ->first();
+    // For supplier role, always scope by linked supplier account ID.
+    if ($user && strtolower($user->role ?? '') === 'supplier') {
+        $supplierAccount = SupplierAccount::where('user_id', $user->_id ?? $user->id)
+            ->orWhere('email', $user->email)
+            ->first();
 
-            if ($supplierAccount) {
-                $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
-                $query->where('supplier_id', $supplierAccountId);
-            } else if ($supplierName) {
-                // Legacy fallback if account linkage is missing.
-                $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
-            }
+        if ($supplierAccount) {
+            $supplierAccountId = (string) ($supplierAccount->_id ?? $supplierAccount->id);
+            $query->where('supplier_id', $supplierAccountId);
         } else if ($supplierName) {
-            // Use case-insensitive regex matching for MongoDB
+            // Legacy fallback if account linkage is missing.
             $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
         }
-        
-        $subscriptions = $query->orderBy('created_at', 'desc')->get();
-        
-        // Extract all serials from subscriptions and flatten them
-        $serials = [];
-        $serialId = 1;
-        
-        foreach ($subscriptions as $subscription) {
-            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
-
-            // SerialIssue is the real source of truth once a subscription has
-            // been accepted and its issues generated — no SerialIssue rows exist
-            // until acceptSubscription() runs, so a still-pending subscription
-            // correctly falls through to the embedded-array branch below (that's
-            // also what the "Accept" button in this table reads its row from).
-            // Once accepted, prefer SerialIssue so the row doesn't vanish.
-            $issues = SerialIssue::where('subscription_id', $subscriptionId)
-                ->whereNull('archived_at')
-                ->orderBy('issue_number', 'desc')
-                ->get();
-
-            if ($issues->isNotEmpty()) {
-                foreach ($issues as $issue) {
-                    $serials[] = [
-                        'id' => $serialId++,
-                        'subscription_id' => $subscriptionId,
-                        'subscription_status' => $subscription->status,
-                        'issn' => $subscription->issn ?: '',
-                        'title' => $subscription->serial_title ?: '',
-                        'dateDelivered' => optional($issue->expected_delivery_date)->toISOString(),
-                        'frequency' => $subscription->frequency ?: '',
-                        'status' => $issue->status ?? 'pending',
-                        'supplier_name' => $subscription->supplier_name,
-                        'inspection_status' => $issue->inspection_status ?? null,
-                        'inspection_checklist' => $issue->inspection_checklist ?? [],
-                        'other_description' => $issue->other_description ?? null,
-                        'inspection_remarks' => $issue->inspection_remarks ?? null,
-                        'inspector_name' => $issue->inspector_name ?? null,
-                        'inspection_date' => optional($issue->inspected_at)->toISOString(),
-                        'condition' => $issue->condition ?? null,
-                        'inspection_attachment' => $issue->inspection_attachment ?? null,
-                    ];
-                }
-
-                continue;
-            }
-
-            // Legacy fallback: subscription hasn't been accepted yet (no
-            // SerialIssue rows generated), or predates issue-based tracking.
-            $subscriptionSerials = array_reverse($subscription->activeSerials());
-
-            foreach ($subscriptionSerials as $serial) {
-                if (!empty($serial['archived_at'])) continue;
-                $serials[] = [
-                    'id' => $serialId++,
-                    'subscription_id' => $subscriptionId,
-                    'subscription_status' => $subscription->status,
-                    'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
-                    'title' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
-                    'dateDelivered' => $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null,
-                    'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
-                    'status' => $serial['status'] ?? 'pending',
-                    'supplier_name' => $subscription->supplier_name,
-                    'inspection_status' => $serial['inspection_status'] ?? null,
-                    'inspection_checklist' => $serial['inspection_checklist'] ?? [],
-                    'other_description' => $serial['other_description'] ?? null,
-                    'inspection_remarks' => $serial['inspection_remarks'] ?? null,
-                    'inspector_name' => $serial['inspector_name'] ?? null,
-                    'inspection_date' => $serial['inspection_date'] ?? null,
-                    'condition' => $serial['condition'] ?? null,
-                    'inspection_attachment' => $serial['inspection_attachment'] ?? null,
-                ];
-            }
-        }
-        
-        return response()->json([
-            'success' => true,
-            'serials' => $serials,
-        ]);
+    } else if ($supplierName) {
+        // Use case-insensitive regex matching for MongoDB
+        $query->where('supplier_name', 'regex', '/^' . preg_quote($supplierName, '/') . '$/i');
     }
+    
+    $subscriptions = $query->orderBy('created_at', 'desc')->get();
+    
+    // Extract all serials from subscriptions and flatten them
+    $serials = [];
+    $serialId = 1;
+    
+    foreach ($subscriptions as $subscription) {
+        $subscriptionSerials = $subscription->activeSerials();
+
+        // Reverse the serials array so newest ones appear first
+        $subscriptionSerials = array_reverse($subscriptionSerials);
+
+        // Subscriptions created through the simple "Add Serial" form never
+        // populate the embedded `serials[]` array (it's saved as []) — they
+        // only set issn/serial_title/frequency on the subscription itself.
+        // Without this fallback, activeSerials() returns empty and the
+        // subscription silently disappears from "All Serials" entirely.
+        // Synthesize a single row from the subscription's own fields so it
+        // still shows up, with every column populated instead of just title.
+        if (empty($subscriptionSerials)) {
+            $subscriptionSerials = [[
+                'issn' => $subscription->issn ?? '',
+                'serialTitle' => $subscription->serial_title ?? '',
+                'frequency' => $subscription->frequency ?? '',
+                'status' => 'pending',
+                'deliveryDate' => null,
+            ]];
+        }
+
+        // The embedded serials[] array holds ONE ENTRY PER RECURRING ISSUE
+        // for a serial that's being tracked issue-by-issue (see
+        // SerialIssueController::updateStatus, which writes back to
+        // $serials[$issue->issue_number - 1]) — not one entry per distinct
+        // serial title. "All Serials" is meant to list each subscribed
+        // serial once; the per-delivery breakdown already has its own
+        // "Serial Issues (Recurring)" tab. So dedupe down to a single
+        // representative row per distinct serial (keyed by ISSN, falling
+        // back to title when ISSN is blank) before building rows.
+        $seenKeys = [];
+        foreach ($subscriptionSerials as $serial) {
+            if (!empty($serial['archived_at'])) continue;
+
+            $dedupeKey = $serial['issn'] ?? $subscription->issn ?? '';
+            if ($dedupeKey === '' || $dedupeKey === null) {
+                $dedupeKey = $serial['serialTitle'] ?? $serial['title'] ?? $subscription->serial_title ?? '';
+            }
+            if (isset($seenKeys[$dedupeKey])) continue;
+            $seenKeys[$dedupeKey] = true;
+
+            $serials[] = [
+                'id' => $serialId++,
+                'subscription_id' => $subscription->_id ?? $subscription->id,
+                'subscription_status' => $subscription->status,
+                // Prefer the subscription-level fields (kept current by Edit
+                // Subscription) over the older per-serial array copies, so an
+                // edit to ISSN/title actually shows up here.
+                'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
+                'title' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
+                'dateDelivered' => $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null,
+                'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
+                'status' => $serial['status'] ?? 'pending', // pending, prepare, for_delivery
+                'supplier_name' => $subscription->supplier_name,
+                // Inspection-related fields for Delivered/For Return status
+                'inspection_status' => $serial['inspection_status'] ?? null,
+                'inspection_checklist' => $serial['inspection_checklist'] ?? [],
+                'other_description' => $serial['other_description'] ?? null,
+                'inspection_remarks' => $serial['inspection_remarks'] ?? null,
+                'inspector_name' => $serial['inspector_name'] ?? null,
+                'inspection_date' => $serial['inspection_date'] ?? null,
+                'condition' => $serial['condition'] ?? null,
+                'inspection_attachment' => $serial['inspection_attachment'] ?? null,
+            ];
+        }
+    }
+    
+    return response()->json([
+        'success' => true,
+        'serials' => $serials,
+    ]);
+}
 
     /**
      * Update serial status (for Supplier Dashboard)

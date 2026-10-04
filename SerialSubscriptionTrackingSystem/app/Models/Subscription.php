@@ -68,20 +68,36 @@ class Subscription extends Model
         return $query->where('status', 'Active');
     }
 
-    public function activeSerials(): array
-    {
-        return array_values(array_filter($this->serials ?? [], fn ($serial) => empty($serial['archived_at'])));
+public function activeSerials(): array
+{
+    return array_values(array_filter($this->serials ?? [], fn ($serial) => empty($serial['archived_at'])));
+}
+
+public function hasActiveRecords(): bool
+{
+    if (!empty($this->serials)) {
+        return count($this->activeSerials()) > 0;
     }
 
-    public function hasActiveRecords(): bool
-    {
-        if (!empty($this->serials)) {
-            return count($this->activeSerials()) > 0;
-        }
+    // A subscription with an empty embedded `serials[]` (e.g. created via
+    // the simple "Add Serial" form, which never populates that array) is
+    // entirely dependent on SerialIssue rows to prove it's "active". But
+    // having zero SerialIssue rows just means none have been generated
+    // yet (brand new, not yet accepted by the supplier) — or that an edit
+    // momentarily deleted the old schedule before regenerating it — not
+    // that every record was archived. Only treat it as inactive when
+    // SerialIssue rows actually exist and all of them are archived;
+    // otherwise it must keep showing up in its owner's own list.
+    $subscriptionId = (string) ($this->_id ?? $this->id);
+    $totalIssues = SerialIssue::where('subscription_id', $subscriptionId)->count();
 
-        return SerialIssue::where('subscription_id', (string) ($this->_id ?? $this->id))
-            ->whereNull('archived_at')->exists();
+    if ($totalIssues === 0) {
+        return true;
     }
+
+    return SerialIssue::where('subscription_id', $subscriptionId)
+        ->whereNull('archived_at')->exists();
+}
 
     /**
      * Scope for a specific period
