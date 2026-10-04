@@ -7,7 +7,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import 'animate.css';
 import SerialIssuesTable from '@/Components/SerialIssuesTable';
-import { getDateRangeParams } from '@/Utils/dateRangeParams';
+import { getdateRangeParams } from '@/utils/dateRangeParams.js';
 
 const ISSN_PATTERN = /^\d{4}-\d{3}[0-9X]$/;
 const ISSN_MESSAGE = 'ISSN must be in the format NNNN-NNNN (the last character may also be X).';
@@ -221,7 +221,7 @@ function SubscriptionTracking() {
     setLoading(true);
     try {
       const response = await axios.get('/api/subscriptions', {
-        params: getDateRangeParams(),
+        params: getdateRangeParams(),
       });
       if (response.data.success) {
         // Transform API data to match the component's expected format

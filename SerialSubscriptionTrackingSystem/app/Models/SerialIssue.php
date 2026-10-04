@@ -38,6 +38,8 @@ class SerialIssue extends Model
         'inspection_checklist',
         'other_description',
         'archived_at',
+        'archived_by',
+        'archived_by_role',
     ];
 
     /**

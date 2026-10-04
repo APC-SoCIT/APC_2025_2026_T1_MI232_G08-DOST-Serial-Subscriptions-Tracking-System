@@ -4,7 +4,7 @@ import TPULayout from '@/Layouts/TpuLayout';
 import { MdSearch, MdFilterList, MdRefresh, MdVisibility, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { FiPackage, FiCheckCircle, FiClock, FiAlertTriangle } from "react-icons/fi";
 import { FaHistory } from "react-icons/fa";
-import { getDateRangeParams } from '@/Utils/dateRangeParams';
+import { getdateRangeParams } from '@/utils/dateRangeParams.js';
 
 /**
  * TPU Monitor Delivery - Shows subscriptions with serial issues
@@ -40,7 +40,7 @@ function MonitorDelivery() {
       setError(null);
       
       const response = await axios.get('/api/subscriptions/tpu-delivery-tracking', {
-        params: getDateRangeParams(),
+        params: getdateRangeParams(),
       });
       
       if (response.data.success) {

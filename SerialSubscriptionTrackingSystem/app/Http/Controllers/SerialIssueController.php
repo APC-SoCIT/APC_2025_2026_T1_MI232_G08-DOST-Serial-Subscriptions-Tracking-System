@@ -505,7 +505,60 @@ class SerialIssueController extends Controller
             'issue' => $issue,
         ]);
     }
+   public function updateDeliveryDate(Request $request, $subscriptionId, $issueId)
+    {
+        $issue = SerialIssue::where('subscription_id', $subscriptionId)
+            ->where('_id', $issueId)
+            ->first();
 
+        if (!$issue) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial issue not found',
+            ], 404);
+        }
+
+        if ($issue->archived_at) {
+            return response()->json(['success' => false, 'message' => 'Archived serial records are read-only.'], 422);
+        }
+
+        $validated = $request->validate([
+            'expected_delivery_date' => 'required|date',
+        ]);
+
+        $oldDate = optional($issue->expected_delivery_date)->toDateString();
+        $issue->expected_delivery_date = Carbon::parse($validated['expected_delivery_date']);
+        $issue->save();
+
+        // Keep the embedded Subscription.serials[] copy in sync for anything that
+        // still reads it directly (older dashboards, exports). Matches the same
+        // positional-match pattern used by updateStatus()/markReceived() above.
+        $subscription = Subscription::find($subscriptionId);
+        if ($subscription) {
+            $serials = $subscription->serials ?? [];
+            $serialIndex = $issue->issue_number - 1;
+            if (isset($serials[$serialIndex])) {
+                $serials[$serialIndex]['deliveryDate'] = $issue->expected_delivery_date->toISOString();
+                $subscription->serials = $serials;
+                $subscription->save();
+            }
+        }
+
+        AuditLogService::log(
+            'update',
+            SerialIssue::class,
+            (string) $issue->_id,
+            "Serial Issue #{$issue->issue_number} delivery date updated",
+            ['expected_delivery_date' => $oldDate],
+            ['expected_delivery_date' => $issue->expected_delivery_date->toDateString()]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Delivery date updated successfully',
+            'issue' => $issue,
+        ]);
+    }
     /**
      * Get issues that need inspection (for Inspection Dashboard)
      */

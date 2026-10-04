@@ -12,14 +12,13 @@ function ArchiveContent() {
   const [records, setRecords] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('all');
   const [loading, setLoading] = useState(true);
   const [selectedRecords, setSelectedRecords] = useState({});
 
   const loadRecords = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/archive', { params: { search, status } });
+      const response = await axios.get('/api/archive', { params: { search } });
       const nextRecords = response.data.records || [];
       setRecords(nextRecords);
       setExpanded({});
@@ -29,7 +28,7 @@ function ArchiveContent() {
     }
   };
 
-  useEffect(() => { loadRecords(); }, [search, status]);
+  useEffect(() => { loadRecords(); }, [search]);
 
   const groups = records.reduce((result, record) => {
     const key = `${record.subscription_id}-${record.title}`;
@@ -71,11 +70,6 @@ function ArchiveContent() {
             separate block that broke the layout. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, ISSN, supplier, issue" />
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="all">All statuses</option>
-            <option value="delivered">Delivered</option>
-            <option value="for_return">For Return</option>
-          </select>
           {isTpu && selectedCount > 0 && (
             <button
               type="button"

@@ -171,11 +171,14 @@ class SubscriptionController extends Controller
         }
 
         $hasArchivedSerials = collect($subscription->serials ?? [])->contains(fn ($serial) => !empty($serial['archived_at']));
-        $activeAwardCost = $issues->isEmpty() && !$hasArchivedSerials
-            ? ($subscription->award_cost ?? 0)
-            : ($issues->isEmpty()
+        if ($issues->isEmpty()) {
+            $activeAwardCost = $hasArchivedSerials
                 ? collect($subscription->activeSerials())->sum(fn ($serial) => (float) ($serial['amount'] ?? $serial['quantity'] ?? 1) * (float) ($serial['unitPrice'] ?? 0))
-                : $issues->sum('cost'));
+                : ($subscription->award_cost ?? 0);
+        } else {
+            $issuesCostSum = $issues->sum('cost');
+            $activeAwardCost = $issuesCostSum > 0 ? $issuesCostSum : (float) ($subscription->award_cost ?? 0);
+        }
         $subscription->setAttribute('active_award_cost', $activeAwardCost);
         $subscription->setAttribute('active_delivered_cost', $deliveredCost);
         $subscription->setAttribute('active_remaining_cost', max(0, $activeAwardCost - $deliveredCost));
@@ -466,7 +469,9 @@ class SubscriptionController extends Controller
                     }
                 }
             }
-
+       if ($totalCost <= 0) {
+                $totalCost = (float) ($subscription->award_cost ?? 0);
+            }
             // Use SerialIssue::generateForSubscription to properly calculate expected delivery dates
             $frequency = strtolower($subscription->frequency ?? 'monthly');
             SerialIssue::generateForSubscription(
@@ -914,7 +919,7 @@ class SubscriptionController extends Controller
     /**
      * Get serials for a specific supplier (for Supplier Dashboard)
      */
-    public function getSupplierSerials(Request $request)
+      public function getSupplierSerials(Request $request)
     {
         $supplierName = $request->get('supplier_name');
         $user = Auth::user();
@@ -947,27 +952,61 @@ class SubscriptionController extends Controller
         $serialId = 1;
         
         foreach ($subscriptions as $subscription) {
-            $subscriptionSerials = $subscription->activeSerials();
-            
-            // Reverse the serials array so newest ones appear first
-            $subscriptionSerials = array_reverse($subscriptionSerials);
-            
+            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+
+            // SerialIssue is the real source of truth once a subscription has
+            // been accepted and its issues generated — no SerialIssue rows exist
+            // until acceptSubscription() runs, so a still-pending subscription
+            // correctly falls through to the embedded-array branch below (that's
+            // also what the "Accept" button in this table reads its row from).
+            // Once accepted, prefer SerialIssue so the row doesn't vanish.
+            $issues = SerialIssue::where('subscription_id', $subscriptionId)
+                ->whereNull('archived_at')
+                ->orderBy('issue_number', 'desc')
+                ->get();
+
+            if ($issues->isNotEmpty()) {
+                foreach ($issues as $issue) {
+                    $serials[] = [
+                        'id' => $serialId++,
+                        'subscription_id' => $subscriptionId,
+                        'subscription_status' => $subscription->status,
+                        'issn' => $subscription->issn ?: '',
+                        'title' => $subscription->serial_title ?: '',
+                        'dateDelivered' => optional($issue->expected_delivery_date)->toISOString(),
+                        'frequency' => $subscription->frequency ?: '',
+                        'status' => $issue->status ?? 'pending',
+                        'supplier_name' => $subscription->supplier_name,
+                        'inspection_status' => $issue->inspection_status ?? null,
+                        'inspection_checklist' => $issue->inspection_checklist ?? [],
+                        'other_description' => $issue->other_description ?? null,
+                        'inspection_remarks' => $issue->inspection_remarks ?? null,
+                        'inspector_name' => $issue->inspector_name ?? null,
+                        'inspection_date' => optional($issue->inspected_at)->toISOString(),
+                        'condition' => $issue->condition ?? null,
+                        'inspection_attachment' => $issue->inspection_attachment ?? null,
+                    ];
+                }
+
+                continue;
+            }
+
+            // Legacy fallback: subscription hasn't been accepted yet (no
+            // SerialIssue rows generated), or predates issue-based tracking.
+            $subscriptionSerials = array_reverse($subscription->activeSerials());
+
             foreach ($subscriptionSerials as $serial) {
                 if (!empty($serial['archived_at'])) continue;
                 $serials[] = [
                     'id' => $serialId++,
-                    'subscription_id' => $subscription->_id ?? $subscription->id,
+                    'subscription_id' => $subscriptionId,
                     'subscription_status' => $subscription->status,
-                    // Prefer the subscription-level fields (kept current by Edit
-                    // Subscription) over the older per-serial array copies, so an
-                    // edit to ISSN/title actually shows up here.
                     'issn' => $subscription->issn ?: ($serial['issn'] ?? ''),
                     'title' => $subscription->serial_title ?: ($serial['serialTitle'] ?? $serial['title'] ?? ''),
                     'dateDelivered' => $serial['deliveryDate'] ?? $serial['dateDelivered'] ?? null,
                     'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
-                    'status' => $serial['status'] ?? 'pending', // pending, prepare, for_delivery
+                    'status' => $serial['status'] ?? 'pending',
                     'supplier_name' => $subscription->supplier_name,
-                    // Inspection-related fields for Delivered/For Return status
                     'inspection_status' => $serial['inspection_status'] ?? null,
                     'inspection_checklist' => $serial['inspection_checklist'] ?? [],
                     'other_description' => $serial['other_description'] ?? null,

@@ -182,6 +182,52 @@ const SerialIssuesTable = ({ subscriptionId, userRole = 'tpu', onCostUpdate }) =
     }
   };
 
+  const handleEditDeliveryDate = async (issue) => {
+    const issueId = issue._id || issue.id;
+    const currentDate = issue.expected_delivery_date
+      ? new Date(issue.expected_delivery_date).toISOString().slice(0, 10)
+      : '';
+
+    const { value: newDate, isConfirmed } = await Swal.fire({
+      title: `Edit Delivery Date — Issue #${issue.issue_number}`,
+      input: 'date',
+      inputValue: currentDate,
+      showCancelButton: true,
+      confirmButtonText: 'Save',
+      confirmButtonColor: '#004A98',
+      inputValidator: (value) => {
+        if (!value) return 'Please pick a date';
+      },
+    });
+
+    if (!isConfirmed || !newDate) return;
+
+    setActionLoading(issueId);
+    try {
+      const response = await axios.put(`/api/subscriptions/${subscriptionId}/issues/${issueId}/delivery-date`, {
+        expected_delivery_date: newDate,
+      });
+      if (response.data.success) {
+        await fetchIssues();
+        Swal.fire({
+          title: 'Delivery Date Updated',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating delivery date:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.response?.data?.message || 'Failed to update delivery date',
+        icon: 'error',
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleSaveNotes = async (issueId) => {
     try {
       const response = await axios.put(`/api/subscriptions/${subscriptionId}/issues/${issueId}/notes`, {
@@ -442,7 +488,28 @@ const SerialIssuesTable = ({ subscriptionId, userRole = 'tpu', onCostUpdate }) =
                     </div>
                   </td>
                   <td style={{ padding: '14px 12px', fontSize: '14px', color: '#666' }}>
-                    {formatDate(issue.expected_delivery_date)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {formatDate(issue.expected_delivery_date)}
+                      {userRole === 'tpu' && !issue.archived_at && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditDeliveryDate(issue)}
+                          disabled={actionLoading === issueId}
+                          title="Edit delivery date"
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#004A98',
+                            cursor: actionLoading === issueId ? 'not-allowed' : 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <MdEdit size={14} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: '14px 12px' }}>
                     <span style={{

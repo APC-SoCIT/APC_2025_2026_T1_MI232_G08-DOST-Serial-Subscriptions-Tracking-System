@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { buildSpeechSegments, normalizeSpeechText } from '@/utils/tts';
-
+import { buildSpeechSegments, normalizeSpeechText } from '@/utils/tts.js';
 const STORAGE_KEY_PREFIX = 'pwd-accessibility-settings-user';
 const MIN_FONT_STEP = 0;
 const MAX_FONT_STEP = 10;

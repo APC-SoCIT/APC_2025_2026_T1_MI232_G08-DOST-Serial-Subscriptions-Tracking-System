@@ -7,7 +7,7 @@ import { FaHistory } from "react-icons/fa";
 import Swal from 'sweetalert2';
 import 'animate.css';
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
-import { getDateRangeParams } from '@/Utils/dateRangeParams';
+import { getdateRangeParams } from '@/utils/dateRangeParams.js';
 
 // GSPS Delivery Status Component - With clickable dropdown and serial issues
 function DeliveryStatus() {
@@ -49,7 +49,7 @@ function DeliveryStatus() {
       setError(null);
       
       const response = await axios.get('/api/subscriptions/gsps-delivery-tracking', {
-        params: getDateRangeParams(),
+        params: getdateRangeParams(),
       });
       
       if (response.data.success) {

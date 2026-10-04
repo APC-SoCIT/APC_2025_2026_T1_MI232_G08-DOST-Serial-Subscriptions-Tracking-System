@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Mail\DeliveryReminderNotification;
 use App\Models\DeliveryNotification;
+use App\Models\SerialIssue;
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
 use App\Models\User;
@@ -31,17 +32,75 @@ class DeliveryNotificationService
             $subscriptions = Subscription::where('status', 'Active')->get();
 
             foreach ($subscriptions as $subscription) {
+                $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+
+                // SerialIssue is the real source of truth once a subscription's issues
+                // have been generated; the embedded serials[] array only stays accurate
+                // for subscriptions that predate issue-based tracking. Prefer SerialIssue
+                // whenever it exists (same fallback pattern used in NotificationController
+                // and ArchiveController/ArchiveService).
+                $issues = SerialIssue::where('subscription_id', $subscriptionId)
+                    ->whereNull('archived_at')
+                    ->get();
+
+                if ($issues->isNotEmpty()) {
+                    foreach ($issues as $issue) {
+                        $status = $issue->status ?? SerialIssue::STATUS_PENDING;
+                        if (in_array($status, [SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true)) {
+                            continue;
+                        }
+
+                        $deliveryDate = $issue->expected_delivery_date;
+                        if (!$deliveryDate) {
+                            continue;
+                        }
+
+                        $daysUntilDelivery = $today->diffInDays($deliveryDate, false);
+                        $notificationType = self::determineNotificationType($daysUntilDelivery);
+                        if (!$notificationType) {
+                            continue;
+                        }
+
+                        $supplierInfo = self::getSupplierInfo($subscription);
+                        $dedupIndex = $issue->issue_number - 1;
+
+                        if (DeliveryNotification::wasAlreadySentToday($subscriptionId, $dedupIndex, $notificationType)) {
+                            $results['skipped']++;
+                            continue;
+                        }
+
+                        $notification = DeliveryNotification::create([
+                            'subscription_id' => $subscriptionId,
+                            'serial_index' => $dedupIndex,
+                            'serial_title' => $subscription->serial_title ?? 'Unknown Serial',
+                            'supplier_id' => $supplierInfo['id'],
+                            'supplier_name' => $supplierInfo['name'],
+                            'supplier_email' => $supplierInfo['email'],
+                            'delivery_date' => $deliveryDate,
+                            'notification_type' => $notificationType,
+                            'days_until_delivery' => $daysUntilDelivery,
+                            'is_read' => false,
+                            'is_email_sent' => false,
+                            'sent_at' => now(),
+                        ]);
+
+                        $results['generated']++;
+                        self::sendEmailNotification($notification);
+                    }
+
+                    continue;
+                }
+
+                // Legacy fallback: subscriptions with no SerialIssue records at all.
                 $serials = $subscription->activeSerials();
 
                 foreach ($serials as $index => $serial) {
                     if (!empty($serial['archived_at'])) continue;
-                    // Skip if serial is already completed or inspected
                     $status = $serial['status'] ?? 'pending';
-                    if (in_array($status, ['completed', 'inspected'])) {
+                    if (in_array($status, ['delivered', 'for_return'])) {
                         continue;
                     }
 
-                    // Get delivery date
                     $deliveryDateStr = $serial['deliveryDate'] ?? $serial['expected_delivery'] ?? null;
                     if (!$deliveryDateStr) {
                         continue;
@@ -53,42 +112,21 @@ class DeliveryNotificationService
                         continue;
                     }
 
-                    // Calculate days until delivery
                     $daysUntilDelivery = $today->diffInDays($deliveryDate, false);
-
-                    // Skip if delivery date has passed
-                    if ($daysUntilDelivery < 0) {
+                    $notificationType = self::determineNotificationType($daysUntilDelivery);
+                    if (!$notificationType) {
                         continue;
                     }
 
-                    // Get supplier info
                     $supplierInfo = self::getSupplierInfo($subscription);
 
-                    // Determine notification type
-                    if ($daysUntilDelivery === 3) {
-                        // Initial 3-day reminder
-                        $notificationType = 'initial_reminder';
-                    } elseif ($daysUntilDelivery <= 2 && $daysUntilDelivery >= 0) {
-                        // Daily reminder (2 days, 1 day, or day of delivery)
-                        $notificationType = 'daily_reminder';
-                    } else {
-                        // Not yet time to notify
-                        continue;
-                    }
-
-                    // Check if notification already sent today
-                    if (DeliveryNotification::wasAlreadySentToday(
-                        (string)($subscription->_id ?? $subscription->id),
-                        $index,
-                        $notificationType
-                    )) {
+                    if (DeliveryNotification::wasAlreadySentToday($subscriptionId, $index, $notificationType)) {
                         $results['skipped']++;
                         continue;
                     }
 
-                    // Create notification
                     $notification = DeliveryNotification::create([
-                        'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                        'subscription_id' => $subscriptionId,
                         'serial_index' => $index,
                         'serial_title' => $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial',
                         'supplier_id' => $supplierInfo['id'],
@@ -103,11 +141,8 @@ class DeliveryNotificationService
                     ]);
 
                     $results['generated']++;
-
-                    // Send email notification to supplier
                     self::sendEmailNotification($notification);
-
-                } // end foreach serial
+                }
             } // end foreach subscription
 
         } catch (\Exception $e) {
@@ -116,6 +151,26 @@ class DeliveryNotificationService
         }
 
         return $results;
+    }
+
+    /**
+     * Decide what kind of reminder (if any) a delivery is due for, purely from how
+     * many days remain until its expected delivery date. Negative means the date has
+     * already passed and the serial is still not delivered/returned — overdue.
+     */
+    private static function determineNotificationType(int $daysUntilDelivery): ?string
+    {
+        if ($daysUntilDelivery < 0) {
+            return 'overdue';
+        }
+        if ($daysUntilDelivery === 3) {
+            return 'initial_reminder';
+        }
+        if ($daysUntilDelivery <= 2 && $daysUntilDelivery >= 0) {
+            return 'daily_reminder';
+        }
+
+        return null;
     }
 
     /**
@@ -202,22 +257,60 @@ class DeliveryNotificationService
         $endDate = $today->copy()->addDays($days);
         $upcomingDeliveries = [];
 
-        $query = Subscription::where('status', 'Active');
-
-        $subscriptions = $query->get();
+        $subscriptions = Subscription::where('status', 'Active')->get();
 
         foreach ($subscriptions as $subscription) {
             // Filter by supplier if specified
-            if ($supplierId && $subscription->supplier_id !== $supplierId) {
+            if ($supplierId && (string) $subscription->supplier_id !== (string) $supplierId) {
                 continue;
             }
 
+            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+
+            // Same SerialIssue-first, embedded-array-fallback pattern as
+            // generateDeliveryNotifications() above.
+            $issues = SerialIssue::where('subscription_id', $subscriptionId)
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($issues->isNotEmpty()) {
+                foreach ($issues as $issue) {
+                    $status = $issue->status ?? SerialIssue::STATUS_PENDING;
+                    if (in_array($status, [SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true)) {
+                        continue;
+                    }
+
+                    $deliveryDate = $issue->expected_delivery_date;
+                    if (!$deliveryDate) {
+                        continue;
+                    }
+
+                    if ($deliveryDate >= $today && $deliveryDate <= $endDate) {
+                        $daysUntil = $today->diffInDays($deliveryDate, false);
+
+                        $upcomingDeliveries[] = [
+                            'subscription_id' => $subscriptionId,
+                            'serial_index' => $issue->issue_number - 1,
+                            'serial_title' => $subscription->serial_title ?? 'Unknown',
+                            'supplier_name' => $subscription->supplier_name,
+                            'delivery_date' => $deliveryDate->toDateString(),
+                            'days_until_delivery' => $daysUntil,
+                            'status' => $status,
+                            'urgency' => $daysUntil <= 1 ? 'high' : ($daysUntil <= 3 ? 'medium' : 'low'),
+                        ];
+                    }
+                }
+
+                continue;
+            }
+
+            // Legacy fallback: subscriptions with no SerialIssue records at all.
             $serials = $subscription->activeSerials();
 
             foreach ($serials as $index => $serial) {
                 if (!empty($serial['archived_at'])) continue;
                 $status = $serial['status'] ?? 'pending';
-                if (in_array($status, ['completed', 'inspected', 'received'])) {
+                if (in_array($status, ['delivered', 'for_return'])) {
                     continue;
                 }
 
@@ -234,9 +327,9 @@ class DeliveryNotificationService
 
                 if ($deliveryDate >= $today && $deliveryDate <= $endDate) {
                     $daysUntil = $today->diffInDays($deliveryDate, false);
-                    
+
                     $upcomingDeliveries[] = [
-                        'subscription_id' => (string)($subscription->_id ?? $subscription->id),
+                        'subscription_id' => $subscriptionId,
                         'serial_index' => $index,
                         'serial_title' => $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown',
                         'supplier_name' => $subscription->supplier_name,

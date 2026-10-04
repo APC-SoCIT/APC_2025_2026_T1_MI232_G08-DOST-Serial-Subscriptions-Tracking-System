@@ -478,6 +478,7 @@ Route::middleware(['auth', 'role:inspection'])->group(function () {
 Route::middleware(['auth', 'role:tpu'])->group(function () {
     Route::post('/api/subscriptions/{subscriptionId}/generate-issues', [SerialIssueController::class, 'generateIssues'])->name('serial-issues.generate');
     Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/notes', [SerialIssueController::class, 'updateNotes'])->name('serial-issues.updateNotes');
-});
+    Route::put('/api/subscriptions/{subscriptionId}/issues/{issueId}/delivery-date', [SerialIssueController::class, 'updateDeliveryDate'])->name('serial-issues.updateDeliveryDate');
+    });
 
 require __DIR__.'/auth.php';

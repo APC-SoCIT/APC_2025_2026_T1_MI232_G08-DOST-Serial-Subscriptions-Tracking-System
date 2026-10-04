@@ -4,7 +4,7 @@ import { useAccessibility } from '@/Contexts/AccessibilityContext';
 import {
     getFieldSpeech,
     getSelectionContext,
-} from '@/utils/tts';
+} from '@/utils/tts.js';
 
 const isSelectionSensitive = (selection) => {
     if (!selection || selection.rangeCount === 0) {

@@ -1,4 +1,4 @@
-export function getDateRangeParams() {
+export function getdateRangeParams() {
   const query = new URLSearchParams(window.location.search);
   const now = new Date();
   const currentMonth = String(now.getMonth() + 1).padStart(2, '0');

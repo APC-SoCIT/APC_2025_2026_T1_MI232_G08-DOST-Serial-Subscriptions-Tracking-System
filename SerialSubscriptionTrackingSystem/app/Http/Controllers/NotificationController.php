@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Models\SupplierAccount;
 use App\Models\DeliveryNotification;
+use App\Models\SerialIssue;
 use App\Models\UserNotification;
 use App\Services\DeliveryNotificationService;
 use Illuminate\Http\Request;
@@ -48,77 +49,101 @@ class NotificationController extends Controller
             return $readNotificationKeys->has($key) || ($readAllAt && $timestamp->lte($readAllAt));
         };
         
+        // Given (status, inspectionStatus, isOverdue, role, isSupplierOwned), decide whether
+        // this serial is notification-worthy for the current user and what to say about it.
+        // Shared by both the SerialIssue path and the legacy-embedded-array fallback below,
+        // so the two can never silently diverge in what counts as "relevant".
+        $classify = function (string $status, ?string $inspectionStatus, bool $isOverdue, string $userRole, bool $isSupplierOwned) {
+            $isForDelivery = $status === SerialIssue::STATUS_FOR_DELIVERY;
+            $needsInspection = $status === SerialIssue::STATUS_RECEIVED && is_null($inspectionStatus);
+            $isPrepare = $status === SerialIssue::STATUS_PREPARE;
+
+            $isRelevant = false;
+            switch ($userRole) {
+                case 'tpu':
+                case 'gsps':
+                case 'admin':
+                    // TPU/GSPS/Admin see all incoming serials, plus overdue/delayed deliveries
+                    $isRelevant = $isForDelivery || $needsInspection || $isOverdue;
+                    break;
+                case 'inspection':
+                    // Inspection only sees serials pending inspection
+                    $isRelevant = $needsInspection;
+                    break;
+                case 'supplier':
+                    // Supplier sees only subscriptions tied to their own supplier account ID.
+                    $isRelevant = $isSupplierOwned && ($isForDelivery || $isPrepare || $isOverdue);
+                    break;
+            }
+
+            if (!$isRelevant) {
+                return [false, null, null];
+            }
+
+            // Overdue takes priority — it's the most urgent state a serial can be in.
+            if ($isOverdue) {
+                return [true, 'overdue', 'Delivery is overdue — expected date has passed'];
+            }
+            if ($isForDelivery) {
+                return [true, 'incoming', 'Serial is on the way for delivery'];
+            }
+            if ($needsInspection) {
+                return [true, $userRole === 'inspection' ? 'inspection' : 'received', $userRole === 'inspection' ? 'Serial awaiting inspection' : 'Serial received, pending inspection'];
+            }
+            if ($isPrepare) {
+                return [true, 'prepare', 'Serial being prepared for delivery'];
+            }
+
+            return [false, null, null];
+        };
+
+        $currentSupplierId = $supplierAccount ? (string)($supplierAccount->_id ?? $supplierAccount->id) : null;
+
         foreach ($subscriptions as $subscription) {
-            $serials = $subscription->activeSerials();
-            
-            foreach ($serials as $serialIndex => $serial) {
-                $status = $serial['status'] ?? 'pending';
-                $inspectionStatus = $serial['inspection_status'] ?? null;
-                
-                // Include serials that are:
-                // 1. For delivery (incoming)
-                // 2. Recently received (within last 7 days) but not yet inspected
-                // 3. Pending inspection
-                $isForDelivery = $status === 'for_delivery';
-                $isRecentlyReceived = $status === 'received' && !$inspectionStatus;
-                $isPendingInspection = $inspectionStatus === 'pending';
-                
-                // Check if this is relevant for the user's role
-                $isRelevant = false;
-                switch ($userRole) {
-                    case 'tpu':
-                    case 'gsps':
-                    case 'admin':
-                        // TPU/GSPS/Admin see all incoming serials
-                        $isRelevant = $isForDelivery || $isRecentlyReceived || $isPendingInspection;
-                        break;
-                    case 'inspection':
-                        // Inspection only sees serials pending inspection
-                        $isRelevant = $isPendingInspection || $isRecentlyReceived;
-                        break;
-                    case 'supplier':
-                        // Supplier sees only subscriptions tied to their own supplier account ID.
-                        $currentSupplierId = $supplierAccount ? (string)($supplierAccount->_id ?? $supplierAccount->id) : null;
-                        $subscriptionSupplierId = (string)($subscription->supplier_id ?? '');
-                        $isSupplierOwned = $currentSupplierId && $subscriptionSupplierId === $currentSupplierId;
-                        $isRelevant = $isSupplierOwned && ($isForDelivery || $status === 'prepare');
-                        break;
-                }
-                
-                if ($isRelevant) {
-                    // Determine notification type and message
-                    $notificationType = 'info';
-                    $message = '';
-                    
-                    if ($isForDelivery) {
-                        $notificationType = 'incoming';
-                        $message = 'Serial is on the way for delivery';
-                    } elseif ($isRecentlyReceived) {
-                        $notificationType = 'received';
-                        $message = 'Serial received, pending inspection';
-                    } elseif ($isPendingInspection) {
-                        $notificationType = 'inspection';
-                        $message = 'Serial awaiting inspection';
-                    } elseif ($status === 'prepare') {
-                        $notificationType = 'prepare';
-                        $message = 'Serial being prepared for delivery';
+            $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+            $subscriptionSupplierId = (string)($subscription->supplier_id ?? '');
+            $isSupplierOwned = $currentSupplierId && $subscriptionSupplierId === $currentSupplierId;
+
+            // SerialIssue is the real source of truth for a serial's lifecycle once a
+            // subscription has been accepted and its issues generated — the embedded
+            // Subscription.serials[] array is only reliably in sync for older
+            // subscriptions that predate issue-based tracking. Prefer SerialIssue
+            // whenever it exists; fall back to the embedded array only when it doesn't
+            // (same fallback pattern used by ArchiveController/ArchiveService).
+            $issues = SerialIssue::where('subscription_id', $subscriptionId)
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($issues->isNotEmpty()) {
+                foreach ($issues as $issue) {
+                    $status = $issue->status ?? SerialIssue::STATUS_PENDING;
+                    $inspectionStatus = $issue->inspection_status ?? null;
+
+                    $isOverdue = false;
+                    if (!in_array($status, [SerialIssue::STATUS_DELIVERED, SerialIssue::STATUS_FOR_RETURN], true) && $issue->expected_delivery_date) {
+                        $isOverdue = $issue->expected_delivery_date->lt(Carbon::today());
                     }
-                    
-                    // Parse delivery date if available
-                    $timestamp = Carbon::parse(
-                        $serial['updated_at']
-                            ?? $serial['inspected_at']
-                            ?? $serial['received_at']
-                            ?? $subscription->updated_at
-                            ?? $subscription->created_at
-                    );
-                    $notificationKey = "serial:{$subscription->_id}:{$serialIndex}:{$status}:{$inspectionStatus}";
-                    
+
+                    [$isRelevant, $notificationType, $message] = $classify($status, $inspectionStatus, $isOverdue, $userRole, $isSupplierOwned);
+                    if (!$isRelevant) {
+                        continue;
+                    }
+
+                    $timestamp = $issue->updated_at
+                        ?? $issue->inspected_at
+                        ?? $issue->received_at
+                        ?? $subscription->updated_at
+                        ?? $subscription->created_at;
+                    $timestamp = $timestamp instanceof Carbon ? $timestamp : Carbon::parse($timestamp);
+
+                    $issueId = (string) ($issue->_id ?? $issue->id);
+                    $notificationKey = "issue:{$issueId}:{$status}:{$inspectionStatus}";
+
                     $notifications[] = [
                         'id' => $notificationId++,
-                        'subscription_id' => (string) ($subscription->_id ?? $subscription->id),
-                        'serial_title' => $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial',
-                        'issn' => $serial['issn'] ?? '',
+                        'subscription_id' => $subscriptionId,
+                        'serial_title' => $subscription->serial_title ?? 'Unknown Serial',
+                        'issn' => $subscription->issn ?? '',
                         'supplier_name' => $subscription->supplier_name,
                         'status' => $status,
                         'inspection_status' => $inspectionStatus,
@@ -129,6 +154,59 @@ class NotificationController extends Controller
                         'notification_key' => $notificationKey,
                     ];
                 }
+
+                continue;
+            }
+
+            // Legacy fallback: subscriptions with no SerialIssue records at all
+            // (predate issue-based generation) still carry their real state in the
+            // embedded serials[] array.
+            $serials = $subscription->activeSerials();
+
+            foreach ($serials as $serialIndex => $serial) {
+                $status = $serial['status'] ?? 'pending';
+                $inspectionStatus = $serial['inspection_status'] ?? null;
+
+                $isOverdue = false;
+                if (!in_array($status, ['delivered', 'for_return'], true)) {
+                    $deliveryDateStr = $serial['deliveryDate'] ?? $serial['expected_delivery'] ?? null;
+                    if ($deliveryDateStr) {
+                        try {
+                            $isOverdue = Carbon::parse($deliveryDateStr)->lt(Carbon::today());
+                        } catch (\Exception $e) {
+                            // Unparsable date, treat as not overdue
+                        }
+                    }
+                }
+
+                [$isRelevant, $notificationType, $message] = $classify($status, $inspectionStatus, $isOverdue, $userRole, $isSupplierOwned);
+                if (!$isRelevant) {
+                    continue;
+                }
+
+                $timestamp = Carbon::parse(
+                    $serial['updated_at']
+                        ?? $serial['inspected_at']
+                        ?? $serial['received_at']
+                        ?? $subscription->updated_at
+                        ?? $subscription->created_at
+                );
+                $notificationKey = "serial:{$subscriptionId}:{$serialIndex}:{$status}:{$inspectionStatus}";
+
+                $notifications[] = [
+                    'id' => $notificationId++,
+                    'subscription_id' => $subscriptionId,
+                    'serial_title' => $serial['serialTitle'] ?? $serial['title'] ?? 'Unknown Serial',
+                    'issn' => $serial['issn'] ?? '',
+                    'supplier_name' => $subscription->supplier_name,
+                    'status' => $status,
+                    'inspection_status' => $inspectionStatus,
+                    'notification_type' => $notificationType,
+                    'message' => $message,
+                    'timestamp' => $timestamp->toISOString(),
+                    'is_read' => $isRead($notificationKey, $timestamp),
+                    'notification_key' => $notificationKey,
+                ];
             }
         }
         
@@ -219,9 +297,11 @@ class NotificationController extends Controller
                         'status' => 'pending',
                         'inspection_status' => null,
                         'notification_type' => $notif->notification_type,
-                        'message' => $notif->notification_type === 'initial_reminder' 
-                            ? '3-day delivery reminder' 
-                            : 'Daily delivery reminder',
+                        'message' => match ($notif->notification_type) {
+                            'initial_reminder' => '3-day delivery reminder',
+                            'overdue' => 'Delivery is overdue — expected date has passed',
+                            default => 'Daily delivery reminder',
+                        },
                         'timestamp' => $notif->created_at->toISOString(),
                         'is_read' => $notif->is_read,
                         'delivery_date' => $notif->delivery_date?->toDateString(),

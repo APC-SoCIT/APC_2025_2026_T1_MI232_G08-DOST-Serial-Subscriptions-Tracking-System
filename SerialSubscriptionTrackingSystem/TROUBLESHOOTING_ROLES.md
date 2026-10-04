@@ -38,13 +38,16 @@ All supplier sub-routes are accessible:
 
 ### Login Credentials:
 
+Use the seed accounts defined in **your own local `.env` file** (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`, etc.).
+Credentials are intentionally **not** stored in this file or anywhere in the repository.
+
 | Role | Email | Password | Expected Dashboard |
 |------|-------|----------|-------------------|
-| **Admin** | `admin@dost.gov.ph` | `password123` | `/dashboard-admin` |
-| **Supplier** | `supplier@dost.gov.ph` | `password123` | `/dashboard-supplier` |
-| **TPU** | `tpu@dost.gov.ph` | `password123` | `/dashboard-tpu` |
-| **GSPS** | `gsps@dost.gov.ph` | `password123` | `/dashboard-gsps` |
-| **Inspection** | `inspection@dost.gov.ph` | `password123` | `/inspection-dashboard` |
+| **Admin** | `SEED_ADMIN_EMAIL` in `.env` | `SEED_ADMIN_PASSWORD` in `.env` | `/dashboard-admin` |
+| **Supplier** | `SEED_SUPPLIER_EMAIL` in `.env` | `SEED_SUPPLIER_PASSWORD` in `.env` | `/dashboard-supplier` |
+| **TPU** | `SEED_TPU_EMAIL` in `.env` | `SEED_TPU_PASSWORD` in `.env` | `/dashboard-tpu` |
+| **GSPS** | `SEED_GSPS_EMAIL` in `.env` | `SEED_GSPS_PASSWORD` in `.env` | `/dashboard-gsps` |
+| **Inspection** | `SEED_INSPECTION_EMAIL` in `.env` | `SEED_INSPECTION_PASSWORD` in `.env` | `/inspection-dashboard` |
 
 ### Test Steps:
 
@@ -55,7 +58,7 @@ All supplier sub-routes are accessible:
 
 2. **Test Each Role Login**:
    - Go to: `http://localhost:8000/login`
-   - Enter email and password from table above
+   - Enter the email and password for that role from your local `.env` file
    - Should redirect to the correct dashboard URL in the table
    - Verify the dashboard title/content matches the role
 

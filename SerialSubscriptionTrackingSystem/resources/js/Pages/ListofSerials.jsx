@@ -1,7 +1,7 @@
 import InspectionLayout from "@/Layouts/InspectionLayout";
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { getDateRangeParams } from '@/Utils/dateRangeParams';
+import { getdateRangeParams } from '@/utils/dateRangeParams.js';
 import { FaHistory } from "react-icons/fa";
 import { MdExpandMore, MdExpandLess, MdRefresh, MdVisibility } from "react-icons/md";
 
@@ -93,7 +93,7 @@ export default function ListOfSerials() {
       setError(null);
       
       const response = await axios.get('/api/subscriptions/inspection-tracking', {
-        params: getDateRangeParams(),
+        params: getdateRangeParams(),
       });
       
       if (response.data.success) {

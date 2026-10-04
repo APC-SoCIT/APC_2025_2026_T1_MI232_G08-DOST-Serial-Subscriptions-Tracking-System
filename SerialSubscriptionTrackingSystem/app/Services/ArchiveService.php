@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\SerialIssue;
 use App\Models\Subscription;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class ArchiveService
 {
@@ -42,11 +43,30 @@ class ArchiveService
             || in_array(strtolower((string) $inspectionStatus), self::TERMINAL_STATUSES, true);
     }
 
+    /**
+     * Who performed the archive/restore action. Falls back to a 'System' actor
+     * for console-triggered calls (e.g. the scheduled archiveEligible() sweep)
+     * where there is no authenticated user.
+     */
+    private static function actor(): array
+    {
+        $user = Auth::user();
+
+        return [
+            'archived_by' => $user ? $user->name : 'System',
+            'archived_by_role' => $user ? strtolower((string) $user->role) : 'system',
+        ];
+    }
+
     public static function archive(Subscription $subscription, int $serialIndex, ?SerialIssue $issue = null): void
     {
+        $actor = self::actor();
+
         $serials = $subscription->serials ?? [];
         if (isset($serials[$serialIndex])) {
             $serials[$serialIndex]['archived_at'] = now()->toISOString();
+            $serials[$serialIndex]['archived_by'] = $actor['archived_by'];
+            $serials[$serialIndex]['archived_by_role'] = $actor['archived_by_role'];
             $subscription->serials = $serials;
             $subscription->save();
         }
@@ -54,22 +74,46 @@ class ArchiveService
         if ($issue) {
             self::syncEmbeddedArchiveFlag($issue, true);
             $issue->archived_at = now();
+            $issue->archived_by = $actor['archived_by'];
+            $issue->archived_by_role = $actor['archived_by_role'];
             $issue->save();
         }
+
+        AuditLogService::log(
+            'archive',
+            Subscription::class,
+            (string) ($subscription->_id ?? $subscription->id),
+            "Archived serial #" . ($serialIndex + 1) . " on subscription {$subscription->_id}"
+        );
     }
 
     public static function archiveIssue(SerialIssue $issue): void
     {
+        $actor = self::actor();
+
         $issue->archived_at = now();
+        $issue->archived_by = $actor['archived_by'];
+        $issue->archived_by_role = $actor['archived_by_role'];
         $issue->save();
         self::syncEmbeddedArchiveFlag($issue, true);
+
+        AuditLogService::log(
+            'archive',
+            SerialIssue::class,
+            (string) ($issue->_id ?? $issue->id),
+            "Archived serial issue #{$issue->issue_number} for subscription {$issue->subscription_id}"
+        );
     }
 
     public static function restore(Subscription $subscription, int $serialIndex, ?SerialIssue $issue = null): void
     {
         $serials = $subscription->serials ?? [];
         if (isset($serials[$serialIndex])) {
-            unset($serials[$serialIndex]['archived_at']);
+            unset(
+                $serials[$serialIndex]['archived_at'],
+                $serials[$serialIndex]['archived_by'],
+                $serials[$serialIndex]['archived_by_role']
+            );
             $subscription->serials = $serials;
             $subscription->save();
         }
@@ -77,15 +121,33 @@ class ArchiveService
         if ($issue) {
             self::syncEmbeddedArchiveFlag($issue, false);
             $issue->archived_at = null;
+            $issue->archived_by = null;
+            $issue->archived_by_role = null;
             $issue->save();
         }
+
+        AuditLogService::log(
+            'restore',
+            Subscription::class,
+            (string) ($subscription->_id ?? $subscription->id),
+            "Restored serial #" . ($serialIndex + 1) . " on subscription {$subscription->_id}"
+        );
     }
 
     public static function restoreIssue(SerialIssue $issue): void
     {
         $issue->archived_at = null;
+        $issue->archived_by = null;
+        $issue->archived_by_role = null;
         $issue->save();
         self::syncEmbeddedArchiveFlag($issue, false);
+
+        AuditLogService::log(
+            'restore',
+            SerialIssue::class,
+            (string) ($issue->_id ?? $issue->id),
+            "Restored serial issue #{$issue->issue_number} for subscription {$issue->subscription_id}"
+        );
     }
 
     private static function syncEmbeddedArchiveFlag(SerialIssue $issue, bool $archived): void
@@ -98,9 +160,16 @@ class ArchiveService
         if (!isset($serials[$serialIndex])) return;
 
         if ($archived) {
+            $actor = self::actor();
             $serials[$serialIndex]['archived_at'] = now()->toISOString();
+            $serials[$serialIndex]['archived_by'] = $actor['archived_by'];
+            $serials[$serialIndex]['archived_by_role'] = $actor['archived_by_role'];
         } else {
-            unset($serials[$serialIndex]['archived_at']);
+            unset(
+                $serials[$serialIndex]['archived_at'],
+                $serials[$serialIndex]['archived_by'],
+                $serials[$serialIndex]['archived_by_role']
+            );
         }
 
         $subscription->serials = $serials;
