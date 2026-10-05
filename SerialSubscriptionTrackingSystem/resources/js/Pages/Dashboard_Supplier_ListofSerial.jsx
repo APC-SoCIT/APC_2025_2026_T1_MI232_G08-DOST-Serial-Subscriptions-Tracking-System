@@ -15,6 +15,7 @@ import { MdListAlt, MdViewList } from "react-icons/md";
 import ProcessMovementHistory from "@/Components/ProcessMovementHistory";
 import { getdateRangeParams } from '@/utils/dateRangeParams.js';
 import SerialsNotification from "@/Components/SerialsNotification";
+import TtsControl from "@/Components/TtsControl";
 import SupplierSerialIssues from "@/Components/SupplierSerialIssues";
 
 const sidebarItems = [
@@ -143,11 +144,12 @@ function TopBar() {
       <h2 style={{ color: '#0B4DA1', fontWeight: 600, fontSize: 20 }}>Supplier | List of Serials</h2>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
+        <TtsControl label="Read Aloud" />
         <SerialsNotification />
         {activeIcon === 'notifications' && (
           <div style={popupStyle}>
             <h4 style={{ margin: '0 0 8px' }}>Notifications</h4>
-            <p style={{ fontSize: 14, color: '#555' }}>You’re all caught up!</p>
+            <p style={{ fontSize: 14, color: '#555' }}>You're all caught up!</p>
           </div>
         )}
 
