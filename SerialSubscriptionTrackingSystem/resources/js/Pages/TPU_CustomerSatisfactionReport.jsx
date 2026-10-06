@@ -51,16 +51,65 @@ function HorizontalResponseChart({ data, title, valueSuffix = '', maxValue = nul
 
 export default function TPUPerformanceFeedbackReport() {
   const [report, setReport] = useState(null);
+  const [range, setRange] = useState({ from: '', to: '' });
+  const [downloading, setDownloading] = useState(false);
+
+  const fetchReport = (params) => {
+    axios.get('/api/customer-satisfaction/report', { params }).then(({ data }) => setReport(data));
+  };
 
   useEffect(() => {
-    axios.get('/api/customer-satisfaction/report').then(({ data }) => setReport(data));
-  }, []);
+    fetchReport(range);
+  }, [range.from, range.to]);
+
+  const updateRange = (key) => (event) => setRange((current) => ({ ...current, [key]: event.target.value }));
+
+  const downloadExcel = async () => {
+    setDownloading(true);
+    try {
+      const response = await axios.get('/api/customer-satisfaction/report/export', { params: range, responseType: 'blob' });
+      const disposition = response.headers['content-disposition'] || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : 'Performance_Feedback_Report.xlsx';
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const fieldStyle = { padding: '10px 14px', border: '1px solid #ccd3da', borderRadius: 6, boxSizing: 'border-box' };
 
   return (
     <TPULayout title="Performance Feedback Report">
       <Head title="Performance Feedback Report" />
       <div style={{ padding: '28px 32px', color: '#1f2933' }}>
-        <h1 style={{ color: '#004A98', fontSize: 24 }}>Performance Feedback Report</h1>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 14 }}>
+          <h1 style={{ color: '#004A98', fontSize: 24, margin: 0 }}>Performance Feedback Report</h1>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10 }}>
+            <label style={{ color: '#68737d', fontSize: 12 }}>
+              From
+              <input aria-label="From date" type="date" value={range.from} onChange={updateRange('from')} style={{ ...fieldStyle, display: 'block', marginTop: 4 }} />
+            </label>
+            <label style={{ color: '#68737d', fontSize: 12 }}>
+              To
+              <input aria-label="To date" type="date" value={range.to} onChange={updateRange('to')} style={{ ...fieldStyle, display: 'block', marginTop: 4 }} />
+            </label>
+            <button
+              onClick={downloadExcel}
+              disabled={downloading}
+              style={{ background: '#004A98', color: '#fff', border: 0, borderRadius: 6, padding: '10px 20px', cursor: downloading ? 'wait' : 'pointer', fontWeight: 600, opacity: downloading ? 0.7 : 1 }}
+            >
+              {downloading ? 'Preparing...' : 'Download Excel'}
+            </button>
+          </div>
+        </div>
         {!report ? <p>Loading report...</p> : (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, margin: '20px 0' }}>

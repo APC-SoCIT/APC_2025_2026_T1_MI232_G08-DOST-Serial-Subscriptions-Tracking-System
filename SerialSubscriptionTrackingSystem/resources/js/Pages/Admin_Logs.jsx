@@ -15,6 +15,8 @@ const ACTIONS = [
   { value: 'delete', label: 'Delete' },
   { value: 'approve', label: 'Approve' },
   { value: 'reject', label: 'Reject' },
+  { value: 'archive', label: 'Archive' },
+  { value: 'restore', label: 'Restore' },
 ];
 
 const ROLES = [
@@ -45,6 +47,8 @@ const getActionBadgeColor = (action) => {
     delete: 'bg-red-100 text-red-700',
     approve: 'bg-emerald-100 text-emerald-700',
     reject: 'bg-rose-100 text-rose-700',
+    archive: 'bg-indigo-100 text-indigo-700',
+    restore: 'bg-teal-100 text-teal-700',
   };
   return colors[action?.toLowerCase()] || 'bg-gray-100 text-gray-600';
 };

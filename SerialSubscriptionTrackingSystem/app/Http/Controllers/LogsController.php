@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\ProcessMovementLog;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -32,11 +33,11 @@ class LogsController extends Controller
         }
 
         // Filter by date range
-        if ($request->has('start_date')) {
-            $query->where('created_at', '>=', $request->start_date);
+        if ($request->filled('start_date')) {
+            $query->where('created_at', '>=', Carbon::parse($request->start_date)->startOfDay());
         }
-        if ($request->has('end_date')) {
-            $query->where('created_at', '<=', $request->end_date);
+        if ($request->filled('end_date')) {
+            $query->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay());
         }
 
         // Search
@@ -175,6 +176,8 @@ class LogsController extends Controller
                 'delete' => AuditLog::where('action', 'delete')->count(),
                 'approve' => AuditLog::where('action', 'approve')->count(),
                 'reject' => AuditLog::where('action', 'reject')->count(),
+                'archive' => AuditLog::where('action', 'archive')->count(),
+                'restore' => AuditLog::where('action', 'restore')->count(),
                 'login' => AuditLog::where('action', 'login')->count(),
                 'logout' => AuditLog::where('action', 'logout')->count(),
             ],
@@ -239,11 +242,11 @@ class LogsController extends Controller
         }
 
         // Filter by date range
-        if ($request->has('start_date') && $request->start_date) {
-            $query->where('created_at', '>=', $request->start_date);
+        if ($request->filled('start_date')) {
+            $query->where('created_at', '>=', Carbon::parse($request->start_date)->startOfDay());
         }
-        if ($request->has('end_date') && $request->end_date) {
-            $query->where('created_at', '<=', $request->end_date . ' 23:59:59');
+        if ($request->filled('end_date')) {
+            $query->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay());
         }
 
         // Filter by search term

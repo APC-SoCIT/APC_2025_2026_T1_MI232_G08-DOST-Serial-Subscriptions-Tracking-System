@@ -395,24 +395,36 @@ class SubscriptionController extends Controller
     /**
      * Get a specific subscription
      */
-    public function show($id)
-    {
-        $subscription = Subscription::find($id);
+public function show($id)
+{
+    $subscription = Subscription::find($id);
 
-        if (!$subscription) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Subscription not found',
-            ], 404);
-        }
-
-        $this->recalculateDeliveredCost($subscription);
-
+    if (!$subscription) {
         return response()->json([
-            'success' => true,
-            'subscription' => $subscription,
-        ]);
+            'success' => false,
+            'message' => 'Subscription not found',
+        ], 404);
     }
+
+    $this->recalculateDeliveredCost($subscription);
+
+    // Real lock signal for the frontend: whether ANY active (non-archived)
+    // SerialIssue for this subscription has progressed past 'pending'. This
+    // mirrors the exact check update() uses to reject a frequency change,
+    // instead of relying on the embedded serials[] array, which only ever
+    // reflects issue_number #1's status and goes stale for every other issue.
+    $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
+    $issues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
+    $subscription->setAttribute(
+        'any_issue_progressed',
+        $issues->contains(fn ($issue) => $issue->status !== 'pending')
+    );
+
+    return response()->json([
+        'success' => true,
+        'subscription' => $subscription,
+    ]);
+}
 
     /**
      * Accept a pending subscription (Supplier action)
@@ -728,14 +740,27 @@ class SubscriptionController extends Controller
             $subscriptionId = (string) ($subscription->_id ?? $subscription->id);
             $issues = SerialIssue::where('subscription_id', $subscriptionId)->whereNull('archived_at')->get();
             if ($issues->isNotEmpty()) {
+                // Only 'delivered' issues keep their historical cost untouched —
+                // that money has already been accounted for. Every other issue,
+                // regardless of stage (pending, prepare, for_delivery, received,
+                // AND for_return), gets re-split from whatever budget is left.
                 $deliveredCostSum = $issues->where('status', 'delivered')->sum('cost');
-                $pendingIssues = $issues->filter(fn ($issue) => !in_array($issue->status, ['delivered', 'for_return'], true));
-                $pendingCount = $pendingIssues->count();
-                if ($pendingCount > 0) {
+                $redistributableIssues = $issues->filter(fn ($issue) => $issue->status !== 'delivered');
+                $redistributableCount = $redistributableIssues->count();
+                if ($redistributableCount > 0) {
                     $remainingBudget = max(0, ($subscription->award_cost ?? 0) - $deliveredCostSum);
-                    $costPerIssue = round($remainingBudget / $pendingCount, 2);
-                    foreach ($pendingIssues as $issue) {
-                        $issue->cost = $costPerIssue;
+                    $evenCost = round($remainingBudget / $redistributableCount, 2);
+                    $runningTotal = 0;
+                    $lastIndex = $redistributableCount - 1;
+                    foreach ($redistributableIssues->values() as $index => $issue) {
+                        if ($index === $lastIndex) {
+                            // Last issue absorbs the rounding remainder so the
+                            // split always sums exactly to the remaining budget.
+                            $issue->cost = round($remainingBudget - $runningTotal, 2);
+                        } else {
+                            $issue->cost = $evenCost;
+                            $runningTotal += $evenCost;
+                        }
                         $issue->save();
                     }
                 }

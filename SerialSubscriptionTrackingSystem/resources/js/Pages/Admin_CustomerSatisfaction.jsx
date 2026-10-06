@@ -57,12 +57,35 @@ export default function AdminPerformanceFeedback() {
   const [filters, setFilters] = useState({ search: '', rating: '', from: '', to: '' });
   const [sort, setSort] = useState('submitted_at');
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   const fetchResponses = () => {
     setLoading(true);
     axios.get('/api/customer-satisfaction/responses', { params: filters })
       .then(({ data }) => setResponses(data.responses || []))
       .finally(() => setLoading(false));
+  };
+
+  // Downloads exactly what's currently filtered/visible on screen — same
+  // search, rating and date range the table itself is using.
+  const downloadExcel = async () => {
+    setDownloading(true);
+    try {
+      const response = await axios.get('/api/customer-satisfaction/responses/export', { params: filters, responseType: 'blob' });
+      const disposition = response.headers['content-disposition'] || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : 'Performance_Feedback_Responses.xlsx';
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   useEffect(fetchResponses, [filters.rating, filters.from, filters.to]);
@@ -126,6 +149,13 @@ export default function AdminPerformanceFeedback() {
               style={{ flex: '0 0 auto', background: '#004A98', color: '#fff', border: 0, borderRadius: 6, padding: '10px 20px', cursor: 'pointer' }}
             >
               Refresh
+            </button>
+            <button
+              onClick={downloadExcel}
+              disabled={downloading}
+              style={{ flex: '0 0 auto', background: '#fff', color: '#004A98', border: '1px solid #004A98', borderRadius: 6, padding: '10px 20px', cursor: downloading ? 'wait' : 'pointer', fontWeight: 600, opacity: downloading ? 0.7 : 1 }}
+            >
+              {downloading ? 'Preparing...' : 'Download Excel'}
             </button>
           </div>
           {loading ? <p>Loading responses...</p> : (

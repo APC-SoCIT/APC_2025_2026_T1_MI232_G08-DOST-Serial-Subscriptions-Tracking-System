@@ -285,12 +285,14 @@ Route::middleware(['auth'])->group(function () {
 // ===================== ADMIN-ONLY API ROUTES =====================
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/api/customer-satisfaction/responses', [CustomerSatisfactionController::class, 'adminIndex'])->name('customer-satisfaction.responses');
+    Route::get('/api/customer-satisfaction/responses/export', [CustomerSatisfactionController::class, 'exportAdminResponses'])->name('customer-satisfaction.responses.export');
 });
 
 // Performance feedback overall report — shared by Admin and TPU so both
 // views are always backed by the exact same data.
 Route::middleware(['auth', 'role:admin,tpu'])->group(function () {
     Route::get('/api/customer-satisfaction/report', [CustomerSatisfactionController::class, 'report'])->name('customer-satisfaction.report');
+    Route::get('/api/customer-satisfaction/report/export', [CustomerSatisfactionController::class, 'exportReport'])->name('customer-satisfaction.report.export');
 });
 
 Route::middleware(['auth', 'role:admin,tpu'])->group(function () {

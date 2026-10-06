@@ -440,7 +440,7 @@ function SubscriptionTracking() {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'Active': return { bg: '#fff3cd', text: '#856404' };
+      case 'Pending': return { bg: '#fff3cd', text: '#856404' };
       case 'Delivered': return { bg: '#d4edda', text: '#155724' };
       default: return { bg: '#e2e3e5', text: '#383d41' };
     }
@@ -454,7 +454,7 @@ function SubscriptionTracking() {
       return 'Delivered';
     }
     // 'accepted' or 'Active' or any other status that's not delivered = Active/Ongoing
-    return 'Active';
+    return 'Pending';
   };
 
   const getPaymentStatusTextColor = (status) => {
@@ -536,13 +536,11 @@ function SubscriptionTracking() {
     // Pending — if so, Frequency editing is locked (backend rejects it too;
     // this just disables the field up front so the person isn't surprised by
     // a save error after filling out the whole form).
-    setFrequencyLocked(false);
+     setFrequencyLocked(false);
     try {
       const response = await axios.get(`/api/subscriptions/${subscription.id}`);
       if (response.data.success) {
-        const serials = response.data.subscription.serials || [];
-        const anyProgressed = serials.some(s => s.status && s.status !== 'pending');
-        setFrequencyLocked(anyProgressed);
+        setFrequencyLocked(Boolean(response.data.subscription.any_issue_progressed));
       }
     } catch (error) {
       console.error('Error checking issue progress for frequency lock:', error);

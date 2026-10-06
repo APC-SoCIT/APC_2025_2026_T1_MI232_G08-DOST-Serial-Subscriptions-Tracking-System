@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SerialIssue;
 use App\Models\Subscription;
 use App\Services\ArchiveService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -15,7 +16,7 @@ class ArchiveController extends Controller
         return Inertia::render('Archive');
     }
 
-    public function index(Request $request)
+     public function index(Request $request)
     {
         $records = collect();
         foreach (Subscription::orderBy('created_at', 'desc')->get() as $subscription) {
@@ -35,6 +36,12 @@ class ArchiveController extends Controller
                     'inspection_status' => $issue?->inspection_status ?? ($serial['inspection_status'] ?? null),
                     'completion_date' => ArchiveService::completionDate($issue, $serial),
                     'archived_at' => $issue->archived_at,
+                    'award_cost' => $subscription->award_cost,
+                    'period' => $subscription->period,
+                    'author_publisher' => $subscription->author_publisher ?: ($serial['authorPublisher'] ?? $serial['author_publisher'] ?? ''),
+                    'language' => $serial['language'] ?? 'English',
+                    'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
+                    'category' => $subscription->category ?: ($serial['category'] ?? ''),
                 ]);
             }
 
@@ -53,6 +60,12 @@ class ArchiveController extends Controller
                         'inspection_status' => $serial['inspection_status'] ?? null,
                         'completion_date' => ArchiveService::completionDate(null, $serial),
                         'archived_at' => $serial['archived_at'],
+                        'award_cost' => $subscription->award_cost,
+                        'period' => $subscription->period,
+                        'author_publisher' => $subscription->author_publisher ?: ($serial['authorPublisher'] ?? $serial['author_publisher'] ?? ''),
+                        'language' => $serial['language'] ?? 'English',
+                        'frequency' => $subscription->frequency ?: ($serial['frequency'] ?? ''),
+                        'category' => $subscription->category ?: ($serial['category'] ?? ''),
                     ]);
                 }
             }
@@ -87,6 +100,13 @@ class ArchiveController extends Controller
         }
         ArchiveService::archiveIssue($issue);
 
+        AuditLogService::log(
+            'archive',
+            SerialIssue::class,
+            (string) ($issue->_id ?? $issue->id),
+            "Archived Issue #{$issue->issue_number} of \"{$subscription->serial_title}\" ({$subscription->supplier_name})"
+        );
+
         return response()->json(['success' => true, 'message' => 'Record archived successfully.']);
     }
 
@@ -101,8 +121,22 @@ class ArchiveController extends Controller
             ->where('issue_number', (int) $issueNumber)->first();
         if ($issue) {
             ArchiveService::restoreIssue($issue);
+
+            AuditLogService::log(
+                'restore',
+                SerialIssue::class,
+                (string) ($issue->_id ?? $issue->id),
+                "Restored Issue #{$issue->issue_number} of \"{$subscription->serial_title}\" ({$subscription->supplier_name})"
+            );
         } elseif (isset(($subscription->serials ?? [])[(int) $issueNumber - 1])) {
             ArchiveService::restore($subscription, (int) $issueNumber - 1);
+
+            AuditLogService::log(
+                'restore',
+                Subscription::class,
+                (string) ($subscription->_id ?? $subscription->id),
+                "Restored Issue #{$issueNumber} of \"{$subscription->serial_title}\" ({$subscription->supplier_name})"
+            );
         } else {
             return response()->json(['success' => false, 'message' => 'Archived issue not found.'], 404);
         }
@@ -152,6 +186,13 @@ class ArchiveController extends Controller
             ArchiveService::archiveIssue($issue);
         }
 
+        AuditLogService::log(
+            'archive',
+            Subscription::class,
+            (string) ($subscription->_id ?? $subscription->id),
+            "Archived serial title \"{$subscription->serial_title}\" ({$subscription->supplier_name}) — {$issues->count()} issue(s)"
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Serial title archived successfully.',
@@ -170,6 +211,11 @@ class ArchiveController extends Controller
                 $archived++;
             }
         }
+
+        if ($archived > 0) {
+            AuditLogService::log('archive', SerialIssue::class, null, "Bulk archived {$archived} record(s)");
+        }
+
         return response()->json(['success' => true, 'archived' => $archived]);
     }
 
@@ -184,6 +230,11 @@ class ArchiveController extends Controller
                 $restored++;
             }
         }
+
+        if ($restored > 0) {
+            AuditLogService::log('restore', SerialIssue::class, null, "Bulk restored {$restored} record(s)");
+        }
+
         return response()->json(['success' => true, 'restored' => $restored]);
     }
 }

@@ -6,9 +6,13 @@ use App\Models\CustomerSatisfaction;
 use App\Models\SupplierAccount;
 use App\Models\User;
 use App\Models\UserNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerSatisfactionController extends Controller
 {
@@ -155,7 +159,13 @@ class CustomerSatisfactionController extends Controller
         ]);
     }
 
-    public function adminIndex(Request $request)
+    /**
+     * Shared filtering for both the Admin responses table and its Excel
+     * export, and for the TPU/Admin aggregate report — one implementation
+     * so a date range (or any other filter) never behaves differently
+     * between what's shown on screen and what gets downloaded.
+     */
+    private function filteredResponses(Request $request)
     {
         $responses = CustomerSatisfaction::orderBy('submitted_at', 'desc')->get();
 
@@ -183,8 +193,15 @@ class CustomerSatisfactionController extends Controller
             $term = strtolower($request->search);
             $responses = $responses->filter(fn ($item) => str_contains(strtolower((string) $item->supplier_name), $term)
                 || str_contains(strtolower((string) $item->user_name), $term)
-                || str_contains(strtolower((string) $item->user_email), $term))->values();
+                || str_contains(strtolower((string) $item->user_email), $term));
         }
+
+        return $responses->values();
+    }
+
+    public function adminIndex(Request $request)
+    {
+        $responses = $this->filteredResponses($request);
 
         return response()->json(['success' => true, 'responses' => $responses->map(function ($item) {
             $item->summary_rating = $this->responseSummaryRating($item);
@@ -193,13 +210,68 @@ class CustomerSatisfactionController extends Controller
     }
 
     /**
+     * Excel export of the Admin "All Responses" table — same rows, same
+     * filters (search / rating / date range) as whatever is on screen when
+     * the admin clicks Download, built from the exact same filteredResponses()
+     * query the table itself uses.
+     */
+    public function exportAdminResponses(Request $request)
+    {
+        $responses = $this->filteredResponses($request);
+
+        $header = ['Supplier', 'Submitted By', 'Email', 'Delivered On Schedule', 'Completeness Of Delivery', 'Compliance (Technical Specs)', 'Quality Of Goods', 'Packaging & Handling', 'Responsiveness', 'After-Sales Support', 'Compliance (Contract Terms)', 'Summary Rating', 'Comments', 'Submitted At'];
+
+        $data = [
+            ['Performance Feedback — All Responses'],
+            ['Report Period: ' . $this->formatRange($request)],
+            ['Generated: ' . Carbon::now()->format('M d, Y g:i A')],
+            [''],
+            $header,
+        ];
+
+        foreach ($responses as $item) {
+            $data[] = [
+                $item->supplier_name ?? 'Unknown supplier',
+                $item->user_name ?: 'Anonymous',
+                $item->user_email ?? 'N/A',
+                $item->delivered_on_schedule,
+                $item->completeness_of_delivery,
+                $item->compliance_technical_specs,
+                $item->quality_of_goods,
+                $item->packaging_handling_condition,
+                $item->responsiveness,
+                $item->after_sales_support,
+                $item->compliance_contract_terms,
+                $this->responseSummaryRating($item) . ' / 5',
+                $item->comments ?: '-',
+                $item->submitted_at ? Carbon::parse($item->submitted_at)->format('M d, Y g:i A') : 'N/A',
+            ];
+        }
+
+        return $this->generateXlsxResponse($data, 'Performance_Feedback_Responses');
+    }
+
+    /**
      * Overall performance feedback report. Shared by both the TPU report
      * page and the Admin page, so the two stay in sync by construction —
      * they call the exact same endpoint and render the exact same data.
+     * Accepts the same optional from/to date range as the Admin table, so
+     * "as of" dashboards are easy to filter.
      */
-    public function report()
+    public function report(Request $request)
     {
-        $responses = CustomerSatisfaction::orderBy('submitted_at', 'desc')->get();
+        $responses = $this->filteredResponses($request);
+
+        return response()->json(['success' => true] + $this->buildReportPayload($responses));
+    }
+
+    /**
+     * The numbers behind the report() JSON, pulled into its own method so
+     * the Excel export below can build the exact same figures instead of
+     * recomputing them a second way.
+     */
+    private function buildReportPayload($responses): array
+    {
         $ratingFields = [
             'delivered_on_schedule',
             'completeness_of_delivery',
@@ -229,8 +301,7 @@ class CustomerSatisfactionController extends Controller
             return round((float) $group->map(fn ($item) => $this->responseSummaryRating($item))->avg(), 1);
         })->sortDesc()->take(10)->all();
 
-        return response()->json([
-            'success' => true,
+        return [
             'total_responses' => $responses->count(),
             'averages' => $averages,
             'average_summary_rating' => round((float) $responses->map(fn ($item) => $this->responseSummaryRating($item))->avg(), 1),
@@ -243,6 +314,123 @@ class CustomerSatisfactionController extends Controller
                 'submitted_by' => $item->user_name,
                 'submitted_at' => $item->submitted_at,
             ])->values(),
+        ];
+    }
+
+    /**
+     * Excel export of the TPU/Admin performance feedback report — same KPI
+     * cards, rating distribution, per-supplier breakdown and comments shown
+     * on screen, respecting the same optional from/to date range.
+     */
+    public function exportReport(Request $request)
+    {
+        $responses = $this->filteredResponses($request);
+        $report = $this->buildReportPayload($responses);
+
+        $data = [
+            ['Performance Feedback Report'],
+            ['Report Period: ' . $this->formatRange($request)],
+            ['Generated: ' . Carbon::now()->format('M d, Y g:i A')],
+            [''],
+            ['=== SUMMARY ==='],
+            ['Metric', 'Value'],
+            ['Total Responses', $report['total_responses']],
+            ['Average Summary Rating', $report['average_summary_rating'] . ' / 5'],
+        ];
+        foreach ($report['averages'] as $field => $value) {
+            $data[] = [$this->ratingFieldLabel($field), $value . ' / 5'];
+        }
+
+        $data[] = [''];
+        $data[] = ['=== OVERALL RATING DISTRIBUTION ==='];
+        $data[] = ['Stars', 'Responses'];
+        foreach ($report['distribution'] as $stars => $count) {
+            $data[] = [$stars . ' stars', $count];
+        }
+
+        $data[] = [''];
+        $data[] = ['=== RESPONSES BY SUPPLIER ==='];
+        $data[] = ['Supplier', 'Responses'];
+        foreach ($report['by_supplier'] as $supplier => $count) {
+            $data[] = [$supplier, $count];
+        }
+
+        $data[] = [''];
+        $data[] = ['=== AVERAGE RATING BY SUPPLIER ==='];
+        $data[] = ['Supplier', 'Average Rating'];
+        foreach ($report['supplier_ratings'] as $supplier => $rating) {
+            $data[] = [$supplier, $rating . ' / 5'];
+        }
+
+        $data[] = [''];
+        $data[] = ['=== COMMENTS ABOUT THE SUPPLIER ==='];
+        $data[] = ['Supplier', 'Submitted By', 'Submitted At', 'Comment'];
+        foreach ($report['comments'] as $comment) {
+            $data[] = [
+                $comment['supplier_name'] ?: 'Unknown supplier',
+                $comment['submitted_by'] ?: 'Anonymous',
+                $comment['submitted_at'] ? Carbon::parse($comment['submitted_at'])->format('M d, Y g:i A') : 'N/A',
+                $comment['comment'],
+            ];
+        }
+
+        return $this->generateXlsxResponse($data, 'Performance_Feedback_Report');
+    }
+
+    private function ratingFieldLabel(string $field): string
+    {
+        return match ($field) {
+            'delivered_on_schedule' => 'Delivered On Schedule',
+            'completeness_of_delivery' => 'Completeness Of Delivery',
+            'compliance_technical_specs' => 'Compliance (Technical Specs)',
+            'quality_of_goods' => 'Quality Of Goods',
+            'packaging_handling_condition' => 'Packaging & Handling',
+            'responsiveness' => 'Responsiveness',
+            'after_sales_support' => 'After-Sales Support',
+            'compliance_contract_terms' => 'Compliance (Contract Terms)',
+            default => ucfirst(str_replace('_', ' ', $field)),
+        };
+    }
+
+    private function formatRange(Request $request): string
+    {
+        $from = $request->filled('from') ? Carbon::parse($request->from)->format('M d, Y') : null;
+        $to = $request->filled('to') ? Carbon::parse($request->to)->format('M d, Y') : null;
+
+        if (!$from && !$to) {
+            return 'All time';
+        }
+        if ($from && $to) {
+            return "{$from} to {$to}";
+        }
+        return $from ? "From {$from}" : "Through {$to}";
+    }
+
+    /**
+     * Same lightweight XLSX streaming used by DashboardExportController —
+     * a flat array of rows, each cell written as-is.
+     */
+    private function generateXlsxResponse(array $data, string $filename): StreamedResponse
+    {
+        $filename = $filename . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($data) {
+            $spreadsheet = new Spreadsheet();
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            foreach ($data as $rowIndex => $row) {
+                foreach ($row as $columnIndex => $value) {
+                    $cellCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex + 1) . ($rowIndex + 1);
+                    $worksheet->setCellValue($cellCoordinate, $value);
+                }
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
 
